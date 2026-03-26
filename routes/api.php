@@ -67,6 +67,7 @@ use App\Http\Controllers\Api\Admin\servicepage\ServiceHowItWorksSectionControlle
 use App\Http\Controllers\Api\Admin\PolicySectionController;
 use App\Http\Controllers\Api\Admin\QuoteFormFieldController;
 use App\Http\Controllers\Api\Admin\SectionLabelController;
+use App\Http\Controllers\Api\Admin\ScheduleFormSubmissionController;
 
 
 /*
@@ -541,6 +542,10 @@ Route::prefix('v1')->group(function () {
     // Submit Quote Form (Public)
     Route::post('/quote-form', [QuoteFormSubmissionController::class, 'store'])
         ->name('api.v1.quote-form.store');
+
+    // Submit Schedule Form (Public)
+    Route::post('/schedule-form', [ScheduleFormSubmissionController::class, 'store'])
+        ->name('api.v1.schedule-form.store');
 
     // Get Contact Page Hero Sections (Public)
     Route::get('/contact-page-hero-sections', [ContactPageHeroSectionController::class, 'index'])
@@ -1537,6 +1542,14 @@ Route::prefix('v1')->group(function () {
         Route::get('/quote-form-fields/admin', [QuoteFormFieldController::class, 'index'])
             ->name('api.v1.quote-form-fields.index');
 
+        // Get Page Settings (contact email) (Admin Only)
+        Route::get('/quote-form-fields/page-settings', [QuoteFormFieldController::class, 'getPageSettings'])
+            ->name('api.v1.quote-form-fields.page-settings.get');
+
+        // Update Page Settings (contact email) (Admin Only)
+        Route::put('/quote-form-fields/page-settings', [QuoteFormFieldController::class, 'updatePageSettings'])
+            ->name('api.v1.quote-form-fields.page-settings.update');
+
         // Create Quote Form Field (Admin Only)
         Route::post('/quote-form-fields', [QuoteFormFieldController::class, 'store'])
             ->name('api.v1.quote-form-fields.store');
@@ -1552,6 +1565,10 @@ Route::prefix('v1')->group(function () {
         // Reorder Quote Form Fields (Admin Only)
         Route::post('/quote-form-fields/reorder', [QuoteFormFieldController::class, 'reorder'])
             ->name('api.v1.quote-form-fields.reorder');
+
+        // Reorder Sections (Admin Only)
+        Route::post('/quote-form-fields/reorder-sections', [QuoteFormFieldController::class, 'reorderSections'])
+            ->name('api.v1.quote-form-fields.reorder-sections');
 
         // Delete Quote Form Field (Admin Only)
         Route::delete('/quote-form-fields/{id}', [QuoteFormFieldController::class, 'destroy'])
@@ -2056,6 +2073,40 @@ Route::prefix('v1')->group(function () {
 
         /*
         |--------------------------------------------------------------------------
+        | Schedule Form Submissions Management Routes
+        |--------------------------------------------------------------------------
+        |
+        | These routes handle schedule form submissions management.
+        | Admin management endpoints for viewing schedule/consultation requests.
+        |
+        */
+
+        // Get Schedule Form Submissions (Admin Only)
+        Route::get('/schedule-form-submissions', [ScheduleFormSubmissionController::class, 'index'])
+            ->name('api.v1.schedule-form-submissions.index');
+
+        // Get Schedule Form Statistics (Admin Only)
+        Route::get('/schedule-form-submissions/stats', [ScheduleFormSubmissionController::class, 'getStats'])
+            ->name('api.v1.schedule-form-submissions.stats');
+
+        // Get Specific Schedule Form Submission (Admin Only)
+        Route::get('/schedule-form-submissions/{id}', [ScheduleFormSubmissionController::class, 'show'])
+            ->name('api.v1.schedule-form-submissions.show');
+
+        // Mark Schedule Form Submission as Read (Admin Only)
+        Route::post('/schedule-form-submissions/{id}/mark-read', [ScheduleFormSubmissionController::class, 'markAsRead'])
+            ->name('api.v1.schedule-form-submissions.mark-read');
+
+        // Mark Schedule Form Submission as Unread (Admin Only)
+        Route::post('/schedule-form-submissions/{id}/mark-unread', [ScheduleFormSubmissionController::class, 'markAsUnread'])
+            ->name('api.v1.schedule-form-submissions.mark-unread');
+
+        // Delete Schedule Form Submission (Admin Only)
+        Route::delete('/schedule-form-submissions/{id}', [ScheduleFormSubmissionController::class, 'destroy'])
+            ->name('api.v1.schedule-form-submissions.destroy');
+
+        /*
+        |--------------------------------------------------------------------------
         | Team Members Management Routes
         |--------------------------------------------------------------------------
         |
@@ -2211,6 +2262,10 @@ Route::prefix('v1')->group(function () {
             ->name('api.v1.footer.store');
         Route::put('/footer', [FooterController::class, 'store'])
             ->name('api.v1.footer.store.put');
+
+        // Upload payment method icon image (Admin Only)
+        Route::post('/footer/payment-icons/upload', [FooterController::class, 'uploadPaymentIcon'])
+            ->name('api.v1.footer.payment-icons.upload');
 
         // Delete single footer link (Admin Only)
         Route::delete('/footer/links/{id}', [FooterController::class, 'destroyLink'])

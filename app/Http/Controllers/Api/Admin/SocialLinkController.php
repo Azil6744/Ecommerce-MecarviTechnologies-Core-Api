@@ -218,7 +218,8 @@ class SocialLinkController extends Controller
             $validated = $request->validate([
                 'platform_name' => ['required', 'string', 'max:255'],
                 'platform_url' => ['required', 'url', 'max:500'],
-                'icon' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
+                // Allow SVG uploads in addition to raster images
+                'icon' => ['nullable', 'mimes:jpeg,png,jpg,gif,webp,svg', 'max:51200'],
                 'is_active' => ['sometimes', 'boolean', 'nullable'],
                 'sort_order' => ['sometimes', 'integer', 'min:0'],
             ]);
@@ -302,7 +303,8 @@ class SocialLinkController extends Controller
             $validated = $request->validate([
                 'platform_name' => ['sometimes', 'string', 'max:255'],
                 'platform_url' => ['sometimes', 'url', 'max:500'],
-                'icon' => ['sometimes', 'nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
+                // Allow SVG uploads in addition to raster images
+                'icon' => ['sometimes', 'nullable', 'mimes:jpeg,png,jpg,gif,webp,svg', 'max:51200'],
                 'is_active' => ['sometimes', 'boolean', 'nullable'],
                 'sort_order' => ['sometimes', 'integer', 'min:0'],
             ]);

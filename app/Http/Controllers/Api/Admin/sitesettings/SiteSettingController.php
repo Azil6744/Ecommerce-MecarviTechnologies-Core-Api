@@ -87,7 +87,7 @@ class SiteSettingController extends Controller
             $rules = [
                 'seo_site_title' => ['nullable', 'string', 'max:255'],
                 'seo_description' => ['nullable', 'string', 'max:1000'],
-                'seo_keywords' => ['nullable', 'string', 'max:1000'],
+                'seo_keywords' => ['nullable', 'string', 'max:3000'],
                 'button_name' => ['nullable', 'string', 'max:255'],
                 'button_url' => ['nullable', 'string', 'max:500'],
                 'button' => ['sometimes', 'array'],
@@ -209,7 +209,7 @@ class SiteSettingController extends Controller
             $rules = [
                 'seo_site_title' => ['sometimes', 'nullable', 'string', 'max:255'],
                 'seo_description' => ['sometimes', 'nullable', 'string', 'max:1000'],
-                'seo_keywords' => ['sometimes', 'nullable', 'string', 'max:1000'],
+                'seo_keywords' => ['sometimes', 'nullable', 'string', 'max:3000'],
                 'button_name' => ['sometimes', 'nullable', 'string', 'max:255'],
                 'button_url' => ['sometimes', 'nullable', 'string', 'max:500'],
                 'button' => ['sometimes', 'array'],

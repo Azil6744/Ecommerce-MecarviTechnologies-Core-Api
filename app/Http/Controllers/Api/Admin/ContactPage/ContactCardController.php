@@ -347,6 +347,11 @@ class ContactCardController extends Controller
             $rules['street_address'] = ['nullable', 'string', 'max:500'];
             $rules['state_postal_code'] = ['nullable', 'string', 'max:255'];
             $rules['country'] = ['nullable', 'string', 'max:255'];
+            $rules['address_type'] = ['nullable', 'string', 'in:us,other'];
+            $rules['us_state'] = ['nullable', 'string', 'max:255'];
+            $rules['phone_number_1'] = ['nullable', 'string', 'max:255'];
+            $rules['phone_number_2'] = ['nullable', 'string', 'max:255'];
+            $rules['email_address'] = ['nullable', 'email', 'max:255'];
         } elseif (in_array($cardType, ['store_hours', 'online_hours'])) {
             $rules['monday_friday_hours'] = ['nullable', 'string', 'max:255'];
             $rules['saturday_hours'] = ['nullable', 'string', 'max:255'];
@@ -374,6 +379,8 @@ class ContactCardController extends Controller
             'street_address' => $card->street_address,
             'state_postal_code' => $card->state_postal_code,
             'country' => $card->country,
+            'address_type' => $card->address_type,
+            'us_state' => $card->us_state,
             'monday_friday_hours' => $card->monday_friday_hours,
             'saturday_hours' => $card->saturday_hours,
             'sunday_hours' => $card->sunday_hours,

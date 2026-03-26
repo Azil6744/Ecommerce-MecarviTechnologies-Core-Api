@@ -7,6 +7,7 @@ use App\Models\FooterContent;
 use App\Models\FooterLink;
 use App\Models\FooterPaymentMethod;
 use App\Traits\BroadcastsContentUpdates;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
@@ -720,6 +721,56 @@ class FooterController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to delete footer payment method',
+                'error' => config('app.debug') ? $e->getMessage() : 'An error occurred.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Upload a payment method icon image (Admin only).
+     */
+    public function uploadPaymentIcon(Request $request)
+    {
+        try {
+            $currentUser = $request->user();
+            if (! $currentUser->hasAdminAccess()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized. Only admins can upload payment icons.',
+                ], 403);
+            }
+
+            $request->validate([
+                'icon' => ['required', 'file', 'image', 'mimes:jpeg,jpg,png,gif,svg,webp,ico', 'max:2048'],
+            ]);
+
+            $file = $request->file('icon');
+            $path = $file->store('payment-icons', 'public');
+
+            if (! $path) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to store the uploaded file.',
+                ], 500);
+            }
+
+            $url = '/storage/' . $path;
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment icon uploaded successfully.',
+                'data' => ['url' => $url],
+            ], 200);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to upload payment icon',
                 'error' => config('app.debug') ? $e->getMessage() : 'An error occurred.',
             ], 500);
         }

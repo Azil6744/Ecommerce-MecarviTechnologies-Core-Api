@@ -61,12 +61,14 @@ class QuoteFormFieldSeeder extends Seeder
 
         foreach ($fields as $field) {
             QuoteFormField::updateOrCreate(
-                ['name' => $field['name']],
+                ['name' => $field['name'], 'page_slug' => 'quote'],
                 array_merge([
+                    'page_slug' => 'quote',
                     'is_required' => false,
                     'is_active' => true,
                     'placeholder' => null,
                     'options' => null,
+                    'config' => null,
                     'grid_cols' => 1,
                 ], $field)
             );

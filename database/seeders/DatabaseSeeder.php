@@ -22,6 +22,11 @@ class DatabaseSeeder extends Seeder
             AdminUserSeeder::class,
         ]);
 
+        // Seed initial quote form fields
+        $this->call([
+            QuoteFormFieldSeeder::class,
+        ]);
+
         // Uncomment to create additional test users
         // \App\Models\User::factory(10)->create();
     }

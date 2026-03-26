@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\FormPageSetting;
 use App\Models\QuoteFormField;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -39,18 +40,41 @@ class QuoteFormFieldController extends Controller
             ];
         }
 
+        // Get page settings (contact email + section order)
+        $pageSetting = FormPageSetting::where('page_slug', $pageSlug)->first();
+        $contactEmail = $pageSetting->contact_email ?? 'info@mecarvi.com';
+        $sectionOrder = $pageSetting->section_order ?? [];
+
+        // Sort sections by stored order; unordered sections go to the end
+        $sectionNames = array_keys($sections);
+        usort($sectionNames, function ($a, $b) use ($sectionOrder) {
+            $posA = array_search($a, $sectionOrder);
+            $posB = array_search($b, $sectionOrder);
+            if ($posA === false) $posA = PHP_INT_MAX;
+            if ($posB === false) $posB = PHP_INT_MAX;
+            return $posA - $posB;
+        });
+
         // Convert to ordered array of section objects
         $result = [];
-        foreach ($sections as $sectionName => $sectionFields) {
+        foreach ($sectionNames as $sectionName) {
             $result[] = [
                 'section' => $sectionName,
-                'fields' => $sectionFields,
+                'fields' => $sections[$sectionName],
             ];
         }
+
+        $formTitle = $pageSetting->form_title ?? null;
+        $formDescription = $pageSetting->form_description ?? null;
+        $submitButtonText = $pageSetting->submit_button_text ?? null;
 
         return response()->json([
             'success' => true,
             'data' => $result,
+            'contact_email' => $contactEmail,
+            'form_title' => $formTitle,
+            'form_description' => $formDescription,
+            'submit_button_text' => $submitButtonText,
         ]);
     }
 
@@ -251,6 +275,71 @@ class QuoteFormFieldController extends Controller
     }
 
     /**
+     * Admin: Get page settings (contact email) for a page.
+     */
+    public function getPageSettings(Request $request)
+    {
+        $pageSlug = $request->query('page', 'quote');
+        $setting = FormPageSetting::where('page_slug', $pageSlug)->first();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'page_slug' => $pageSlug,
+                'contact_email' => $setting->contact_email ?? 'info@mecarvi.com',
+                'form_title' => $setting->form_title ?? '',
+                'form_description' => $setting->form_description ?? '',
+                'submit_button_text' => $setting->submit_button_text ?? '',
+                'section_order' => $setting->section_order ?? [],
+            ],
+        ]);
+    }
+
+    /**
+     * Admin: Update page settings for a page.
+     */
+    public function updatePageSettings(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'page_slug' => 'required|string|max:255',
+                'contact_email' => 'nullable|email|max:255',
+                'form_title' => 'nullable|string|max:255',
+                'form_description' => 'nullable|string|max:1000',
+                'submit_button_text' => 'nullable|string|max:255',
+            ]);
+
+            $setting = FormPageSetting::updateOrCreate(
+                ['page_slug' => $validated['page_slug']],
+                [
+                    'contact_email' => $validated['contact_email'] ?? null,
+                    'form_title' => $validated['form_title'] ?? null,
+                    'form_description' => $validated['form_description'] ?? null,
+                    'submit_button_text' => $validated['submit_button_text'] ?? null,
+                ]
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Page settings updated successfully',
+                'data' => $setting,
+            ]);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update page settings',
+                'error' => config('app.debug') ? $e->getMessage() : 'An error occurred.',
+            ], 500);
+        }
+    }
+
+    /**
      * Admin: Upload a single image for image choice fields.
      */
     public function uploadImage(Request $request)
@@ -280,6 +369,44 @@ class QuoteFormFieldController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Image upload failed',
+                'error' => config('app.debug') ? $e->getMessage() : 'An error occurred.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Admin: Save section display order for a page.
+     * Expects: { "page_slug": "quote", "section_order": ["Financial", "Company", ...] }
+     */
+    public function reorderSections(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'page_slug' => 'required|string|max:255',
+                'section_order' => 'required|array',
+                'section_order.*' => 'required|string|max:255',
+            ]);
+
+            $setting = FormPageSetting::updateOrCreate(
+                ['page_slug' => $validated['page_slug']],
+                ['section_order' => $validated['section_order']]
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Section order updated successfully',
+                'data' => $setting,
+            ]);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update section order',
                 'error' => config('app.debug') ? $e->getMessage() : 'An error occurred.',
             ], 500);
         }

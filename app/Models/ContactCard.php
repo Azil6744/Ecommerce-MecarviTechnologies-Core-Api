@@ -28,6 +28,8 @@ class ContactCard extends Model
         'street_address',
         'state_postal_code',
         'country',
+        'address_type',
+        'us_state',
         'monday_friday_hours',
         'saturday_hours',
         'sunday_hours',
