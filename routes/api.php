@@ -2531,3 +2531,6 @@ Route::prefix('v1')->group(function () {
     });
 
 });
+
+require base_path('routes/ecommerce.php');
+
