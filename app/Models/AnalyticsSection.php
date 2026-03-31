@@ -24,6 +24,7 @@ class AnalyticsSection extends Model
         'main_image',
         'small_image',
         'background_image',
+        'background_color',
     ];
 
     /**

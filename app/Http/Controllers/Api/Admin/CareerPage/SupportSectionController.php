@@ -23,6 +23,8 @@ class SupportSectionController extends Controller
                         'section_title' => $section->section_title,
                         'title' => $section->title,
                         'description' => $section->description,
+                        'quick_support_bg_color' => $section->quick_support_bg_color,
+                        'inquiry_form_bg_color' => $section->inquiry_form_bg_color,
                         'call_icon' => $section->call_icon,
                         'call_title' => $section->call_title,
                         'call_description' => $section->call_description,
@@ -58,6 +60,8 @@ class SupportSectionController extends Controller
                 'section_title' => ['required', 'string', 'max:255'],
                 'title' => ['required', 'string', 'max:255'],
                 'description' => ['nullable', 'string'],
+                'quick_support_bg_color' => ['nullable', 'string', 'max:50'],
+                'inquiry_form_bg_color' => ['nullable', 'string', 'max:50'],
                 'call_title' => ['nullable', 'string', 'max:255'],
                 'call_description' => ['nullable', 'string'],
                 'call_phone' => ['nullable', 'string', 'max:255'],
@@ -117,6 +121,8 @@ class SupportSectionController extends Controller
                         'section_title' => $section->section_title,
                         'title' => $section->title,
                         'description' => $section->description,
+                        'quick_support_bg_color' => $section->quick_support_bg_color,
+                        'inquiry_form_bg_color' => $section->inquiry_form_bg_color,
                         'call_icon' => $section->call_icon,
                         'call_title' => $section->call_title,
                         'call_description' => $section->call_description,
@@ -165,6 +171,8 @@ class SupportSectionController extends Controller
                     'section_title' => $section->section_title,
                     'title' => $section->title,
                     'description' => $section->description,
+                    'quick_support_bg_color' => $section->quick_support_bg_color,
+                    'inquiry_form_bg_color' => $section->inquiry_form_bg_color,
                     'call_icon' => $section->call_icon,
                     'call_title' => $section->call_title,
                     'call_description' => $section->call_description,
@@ -208,6 +216,8 @@ class SupportSectionController extends Controller
                 'section_title' => ['sometimes', 'string', 'max:255'],
                 'title' => ['sometimes', 'string', 'max:255'],
                 'description' => ['sometimes', 'string'],
+                'quick_support_bg_color' => ['nullable', 'string', 'max:50'],
+                'inquiry_form_bg_color' => ['nullable', 'string', 'max:50'],
                 'call_title' => ['sometimes', 'string', 'max:255'],
                 'call_description' => ['sometimes', 'string'],
                 'call_phone' => ['sometimes', 'string', 'max:255'],
@@ -222,13 +232,13 @@ class SupportSectionController extends Controller
             if ($request->hasFile('call_icon')) {
                 $rules['call_icon'] = ['sometimes', 'file', 'image', 'max:51200', 'mimes:jpeg,png,jpg,gif,webp'];
             } else {
-                $rules['call_icon'] = ['sometimes', 'string', 'max:255'];
+                $rules['call_icon'] = ['nullable', 'string', 'max:255'];
             }
 
             if ($request->hasFile('email_icon')) {
                 $rules['email_icon'] = ['sometimes', 'file', 'image', 'max:51200', 'mimes:jpeg,png,jpg,gif,webp'];
             } else {
-                $rules['email_icon'] = ['sometimes', 'string', 'max:255'];
+                $rules['email_icon'] = ['nullable', 'string', 'max:255'];
             }
 
             $validated = $request->validate($rules);
@@ -268,10 +278,12 @@ class SupportSectionController extends Controller
                 'data' => [
                     'support_section' => [
                         'id' => $section->id,
-                    'section_title' => $section->section_title,
-                    'title' => $section->title,
-                    'description' => $section->description,
-                    'call_icon' => $section->call_icon,
+                        'section_title' => $section->section_title,
+                        'title' => $section->title,
+                        'description' => $section->description,
+                        'quick_support_bg_color' => $section->quick_support_bg_color,
+                        'inquiry_form_bg_color' => $section->inquiry_form_bg_color,
+                        'call_icon' => $section->call_icon,
                         'call_title' => $section->call_title,
                         'call_description' => $section->call_description,
                         'call_phone' => $section->call_phone,

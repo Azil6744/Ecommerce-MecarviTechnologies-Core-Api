@@ -42,6 +42,7 @@ class FeaturesSectionController extends Controller
                 'button_text' => $section->button_text,
                 'main_image' => $section->main_image_url,
                 'small_image' => $section->small_image_url,
+                'background_color' => $section->background_color,
                 'created_at' => $section->created_at,
                 'updated_at' => $section->updated_at,
             ];
@@ -89,6 +90,7 @@ class FeaturesSectionController extends Controller
                 'button_text' => ['nullable', 'string', 'max:255'],
                 'main_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
                 'small_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
+                'background_color' => ['nullable', 'string', 'max:20'],
             ]);
 
             // Handle main image upload (only if provided)
@@ -120,6 +122,7 @@ class FeaturesSectionController extends Controller
                         'button_text' => $featuresSection->button_text,
                         'main_image' => $featuresSection->main_image_url,
                         'small_image' => $featuresSection->small_image_url,
+                        'background_color' => $featuresSection->background_color,
                         'updated_at' => $featuresSection->updated_at,
                     ],
                 ],
@@ -195,6 +198,7 @@ class FeaturesSectionController extends Controller
                 'description' => 'string',
                 'features' => 'array',
                 'button_text' => 'string|max:255',
+                'background_color' => 'string|max:20',
             ];
 
             foreach ($fields as $field => $rules) {
@@ -286,6 +290,7 @@ class FeaturesSectionController extends Controller
                         'button_text' => $featuresSection->button_text,
                         'main_image' => $featuresSection->main_image_url,
                         'small_image' => $featuresSection->small_image_url,
+                        'background_color' => $featuresSection->background_color,
                         'updated_at' => $featuresSection->updated_at,
                     ],
                 ],
@@ -339,6 +344,7 @@ class FeaturesSectionController extends Controller
                     'button_text' => $featuresSection->button_text,
                     'main_image' => $featuresSection->main_image_url,
                     'small_image' => $featuresSection->small_image_url,
+                    'background_color' => $featuresSection->background_color,
                     'created_at' => $featuresSection->created_at,
                     'updated_at' => $featuresSection->updated_at,
                 ],
@@ -482,6 +488,7 @@ class FeaturesSectionController extends Controller
                         'button_text' => $featuresSection->button_text,
                         'main_image' => $featuresSection->main_image_url,
                         'small_image' => $featuresSection->small_image_url,
+                        'background_color' => $featuresSection->background_color,
                         'updated_at' => $featuresSection->updated_at,
                     ],
                 ],

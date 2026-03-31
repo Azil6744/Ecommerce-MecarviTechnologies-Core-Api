@@ -12,10 +12,12 @@ class SiteSetting extends Model
     protected $table = 'site_settings';
 
     protected $fillable = [
+        'site_name',
         'seo_site_title',
         'seo_description',
         'seo_keywords',
         'logo',
+        'login_logo',
         'favicon',
         'button_name',
         'button_url',
@@ -53,5 +55,21 @@ class SiteSetting extends Model
         }
 
         return asset('storage/' . $favicon);
+    }
+
+    /**
+     * Login logo URL: if stored path (no leading / or http), return asset('storage/...'); otherwise return as-is.
+     */
+    public function getLoginLogoUrlAttribute(): ?string
+    {
+        if (! $this->login_logo) {
+            return null;
+        }
+        $loginLogo = $this->login_logo;
+        if (str_starts_with($loginLogo, 'http://') || str_starts_with($loginLogo, 'https://') || str_starts_with($loginLogo, '/')) {
+            return $loginLogo;
+        }
+
+        return asset('storage/' . $loginLogo);
     }
 }

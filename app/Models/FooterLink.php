@@ -11,6 +11,7 @@ class FooterLink extends Model
 
     const TYPE_COMPANY = 'company';
     const TYPE_SUPPORT = 'support';
+    const TYPE_POLICY = 'policy';
     const TYPE_POLICY_CENTER = 'policy_center';
     const TYPE_OUR_BRANDS = 'our_brands';
 

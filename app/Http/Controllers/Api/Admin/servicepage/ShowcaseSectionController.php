@@ -48,6 +48,7 @@ class ShowcaseSectionController extends Controller
                         'description' => $item->description,
                         'image' => $item->image_url,
                         'video_url' => $item->video_url,
+                        'background_color' => $item->background_color,
                         'order' => $item->order,
                     ];
                 }),
@@ -100,6 +101,7 @@ class ShowcaseSectionController extends Controller
                             'description' => $item->description,
                             'image' => $item->image_url,
                             'video_url' => $item->video_url,
+                            'background_color' => $item->background_color,
                             'order' => $item->order,
                         ];
                     }),
@@ -146,6 +148,7 @@ class ShowcaseSectionController extends Controller
                 'showcase_items.*.image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
                 'showcase_items.*.video' => ['nullable', 'file', 'mimetypes:video/mp4,video/webm,video/ogg', 'max:51200'],
                 'showcase_items.*.video_url' => ['nullable', 'string'],
+                'showcase_items.*.background_color' => ['nullable', 'string', 'max:50'],
                 'showcase_items.*.order' => ['nullable', 'integer', 'min:0'],
             ]);
 
@@ -196,6 +199,7 @@ class ShowcaseSectionController extends Controller
                             'description' => $itemData['description'] ?? null,
                             'image' => $itemImagePath,
                             'video' => $itemVideoPath,
+                            'background_color' => $itemData['background_color'] ?? null,
                             'order' => $itemData['order'] ?? $index,
                         ]);
 
@@ -205,6 +209,7 @@ class ShowcaseSectionController extends Controller
                             'description' => $item->description,
                             'image' => $item->image_url,
                             'video_url' => $item->video_url,
+                            'background_color' => $item->background_color,
                             'order' => $item->order,
                         ];
                     }
@@ -422,6 +427,7 @@ class ShowcaseSectionController extends Controller
                                 'description' => $itemData['description'] ?? $existingItem->description,
                                 'image' => $itemImagePath,
                                 'video' => $itemVideoPath,
+                                'background_color' => $itemData['background_color'] ?? $existingItem->background_color,
                                 'order' => $itemData['order'] ?? $existingItem->order,
                             ]);
                             
@@ -431,6 +437,7 @@ class ShowcaseSectionController extends Controller
                                 'description' => $existingItem->description,
                                 'image' => $existingItem->image_url,
                                 'video_url' => $existingItem->video_url,
+                                'background_color' => $existingItem->background_color,
                                 'order' => $existingItem->order,
                             ];
                         } else {
@@ -450,6 +457,7 @@ class ShowcaseSectionController extends Controller
                                 'description' => $itemData['description'] ?? null,
                                 'image' => $itemImagePath,
                                 'video' => $itemVideoPath,
+                                'background_color' => $itemData['background_color'] ?? null,
                                 'order' => $itemData['order'] ?? $index,
                             ]);
 
@@ -459,6 +467,7 @@ class ShowcaseSectionController extends Controller
                                 'description' => $item->description,
                                 'image' => $item->image_url,
                                 'video_url' => $item->video_url,
+                                'background_color' => $item->background_color,
                                 'order' => $item->order,
                             ];
                         }
@@ -660,6 +669,7 @@ class ShowcaseSectionController extends Controller
                                 'description' => $item->description,
                                 'image' => $item->image_url,
                                 'video_url' => $item->video_url,
+                                'background_color' => $item->background_color,
                                 'order' => $item->order,
                             ];
                         }),

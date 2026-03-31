@@ -23,6 +23,7 @@ class FeaturesSection extends Model
         'button_text',
         'main_image',
         'small_image',
+        'background_color',
     ];
 
     /**

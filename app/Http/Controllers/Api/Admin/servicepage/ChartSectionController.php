@@ -43,6 +43,7 @@ class ChartSectionController extends Controller
                 'button_url' => $section->button_url,
                 'main_image' => $section->main_image_url,
                 'small_image' => $section->small_image_url,
+                'background_color' => $section->background_color,
                 'created_at' => $section->created_at,
                 'updated_at' => $section->updated_at,
             ];
@@ -91,6 +92,7 @@ class ChartSectionController extends Controller
                 'button_url' => ['nullable', 'url', 'max:255'],
                 'main_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
                 'small_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
+                'background_color' => ['nullable', 'string', 'max:20'],
             ]);
 
             // Handle main image upload (only if provided)
@@ -123,6 +125,7 @@ class ChartSectionController extends Controller
                         'button_url' => $chartSection->button_url,
                         'main_image' => $chartSection->main_image_url,
                         'small_image' => $chartSection->small_image_url,
+                        'background_color' => $chartSection->background_color,
                         'updated_at' => $chartSection->updated_at,
                     ],
                 ],
@@ -199,6 +202,7 @@ class ChartSectionController extends Controller
                 'features' => 'array',
                 'button_text' => 'string|max:255',
                 'button_url' => 'url|max:255',
+                'background_color' => 'string|max:20',
             ];
 
             foreach ($fields as $field => $rules) {
@@ -291,6 +295,7 @@ class ChartSectionController extends Controller
                         'button_url' => $chartSection->button_url,
                         'main_image' => $chartSection->main_image_url,
                         'small_image' => $chartSection->small_image_url,
+                        'background_color' => $chartSection->background_color,
                         'updated_at' => $chartSection->updated_at,
                     ],
                 ],
@@ -345,6 +350,7 @@ class ChartSectionController extends Controller
                     'button_url' => $chartSection->button_url,
                     'main_image' => $chartSection->main_image_url,
                     'small_image' => $chartSection->small_image_url,
+                    'background_color' => $chartSection->background_color,
                     'created_at' => $chartSection->created_at,
                     'updated_at' => $chartSection->updated_at,
                 ],
@@ -490,6 +496,7 @@ class ChartSectionController extends Controller
                         'button_url' => $chartSection->button_url,
                         'main_image' => $chartSection->main_image_url,
                         'small_image' => $chartSection->small_image_url,
+                        'background_color' => $chartSection->background_color,
                         'updated_at' => $chartSection->updated_at,
                     ],
                 ],

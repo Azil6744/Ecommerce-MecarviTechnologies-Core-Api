@@ -31,7 +31,8 @@ class FooterController extends Controller
 
             $companyLinks = FooterLink::ofType(FooterLink::TYPE_COMPANY)->ordered()->get();
             $supportLinks = FooterLink::ofType(FooterLink::TYPE_SUPPORT)->ordered()->get();
-            $policyLinks = FooterLink::ofType(FooterLink::TYPE_POLICY_CENTER)->ordered()->get();
+            $policyLinks = FooterLink::ofType(FooterLink::TYPE_POLICY)->ordered()->get();
+            $policyCenterLinks = FooterLink::ofType(FooterLink::TYPE_POLICY_CENTER)->ordered()->get();
             $brandsLinks = FooterLink::ofType(FooterLink::TYPE_OUR_BRANDS)->ordered()->get();
             $paymentMethods = FooterPaymentMethod::ordered()->get();
 
@@ -54,9 +55,13 @@ class FooterController extends Controller
                     'section_heading' => $content->support_section_heading ?? 'SUPPORT',
                     'links' => $supportLinks->map(fn ($link) => ['id' => $link->id, 'text' => $link->label, 'path' => $link->path, 'sort_order' => $link->sort_order]),
                 ],
+                'policy' => [
+                    'section_heading' => $content->policy_section_heading ?? 'POLICY',
+                    'links' => $policyLinks->map(fn ($link) => ['id' => $link->id, 'text' => $link->label, 'path' => $link->path, 'sort_order' => $link->sort_order]),
+                ],
                 'policy_center' => [
                     'section_heading' => $content->policy_center_section_heading ?? 'POLICY CENTER',
-                    'links' => $policyLinks->map(fn ($link) => ['id' => $link->id, 'text' => $link->label, 'path' => $link->path, 'sort_order' => $link->sort_order]),
+                    'links' => $policyCenterLinks->map(fn ($link) => ['id' => $link->id, 'text' => $link->label, 'path' => $link->path, 'sort_order' => $link->sort_order]),
                 ],
                 'our_brands' => [
                     'section_heading' => $content->our_brands_section_heading ?? 'OUR BRANDS',
@@ -144,6 +149,13 @@ class FooterController extends Controller
                 'support.links.*.text' => ['required_with:support.links', 'string', 'max:255'],
                 'support.links.*.path' => ['required_with:support.links', 'string', 'max:500'],
                 'support.links.*.sort_order' => ['sometimes', 'integer', 'min:0'],
+                'policy' => ['sometimes', 'array'],
+                'policy.section_heading' => ['nullable', 'string', 'max:255'],
+                'policy.links' => ['sometimes', 'array'],
+                'policy.links.*.text' => ['required_with:policy.links', 'string', 'max:255'],
+                'policy.links.*.path' => ['required_with:policy.links', 'string', 'max:500'],
+                'policy.links.*.sort_order' => ['sometimes', 'integer', 'min:0'],
+                'policy.links.*.sort_order' => ['sometimes', 'integer', 'min:0'],
                 'policy_center' => ['sometimes', 'array'],
                 'policy_center.section_heading' => ['nullable', 'string', 'max:255'],
                 'policy_center.links' => ['sometimes', 'array'],
@@ -214,6 +226,10 @@ class FooterController extends Controller
                 $su = $request->input('support', []);
                 $content->support_section_heading = $su['section_heading'] ?? $content->support_section_heading;
             }
+            if ($request->has('policy')) {
+                $po = $request->input('policy', []);
+                $content->policy_section_heading = $po['section_heading'] ?? $content->policy_section_heading;
+            }
             if ($request->has('policy_center')) {
                 $pc = $request->input('policy_center', []);
                 $content->policy_center_section_heading = $pc['section_heading'] ?? $content->policy_center_section_heading;
@@ -270,6 +286,18 @@ class FooterController extends Controller
                 foreach ($request->input('support.links', []) as $index => $item) {
                     FooterLink::create([
                         'type' => FooterLink::TYPE_SUPPORT,
+                        'label' => $item['text'] ?? $item['label'] ?? '',
+                        'path' => $item['path'] ?? '',
+                        'sort_order' => $item['sort_order'] ?? $index,
+                    ]);
+                }
+            }
+
+            if ($request->has('policy.links')) {
+                FooterLink::ofType(FooterLink::TYPE_POLICY)->delete();
+                foreach ($request->input('policy.links', []) as $index => $item) {
+                    FooterLink::create([
+                        'type' => FooterLink::TYPE_POLICY,
                         'label' => $item['text'] ?? $item['label'] ?? '',
                         'path' => $item['path'] ?? '',
                         'sort_order' => $item['sort_order'] ?? $index,
@@ -387,6 +415,11 @@ class FooterController extends Controller
                 'support.links' => ['sometimes', 'array'],
                 'support.links.*.text' => ['required_with:support.links', 'string', 'max:255'],
                 'support.links.*.path' => ['required_with:support.links', 'string', 'max:500'],
+                'policy' => ['sometimes', 'array'],
+                'policy.section_heading' => ['nullable', 'string', 'max:255'],
+                'policy.links' => ['sometimes', 'array'],
+                'policy.links.*.text' => ['required_with:policy.links', 'string', 'max:255'],
+                'policy.links.*.path' => ['required_with:policy.links', 'string', 'max:500'],
                 'policy_center' => ['sometimes', 'array'],
                 'policy_center.section_heading' => ['nullable', 'string', 'max:255'],
                 'policy_center.links' => ['sometimes', 'array'],
@@ -437,6 +470,9 @@ class FooterController extends Controller
             if ($request->has('support')) {
                 $content->support_section_heading = $request->input('support.section_heading', $content->support_section_heading);
             }
+            if ($request->has('policy')) {
+                $content->policy_section_heading = $request->input('policy.section_heading', $content->policy_section_heading);
+            }
             if ($request->has('policy_center')) {
                 $content->policy_center_section_heading = $request->input('policy_center.section_heading', $content->policy_center_section_heading);
             }
@@ -473,6 +509,17 @@ class FooterController extends Controller
                 foreach ($request->input('support.links', []) as $index => $item) {
                     FooterLink::create([
                         'type' => FooterLink::TYPE_SUPPORT,
+                        'label' => $item['text'] ?? $item['label'] ?? '',
+                        'path' => $item['path'] ?? '',
+                        'sort_order' => $item['sort_order'] ?? $index,
+                    ]);
+                }
+            }
+            if ($request->has('policy.links')) {
+                FooterLink::ofType(FooterLink::TYPE_POLICY)->delete();
+                foreach ($request->input('policy.links', []) as $index => $item) {
+                    FooterLink::create([
+                        'type' => FooterLink::TYPE_POLICY,
                         'label' => $item['text'] ?? $item['label'] ?? '',
                         'path' => $item['path'] ?? '',
                         'sort_order' => $item['sort_order'] ?? $index,
@@ -784,7 +831,8 @@ class FooterController extends Controller
         }
         $companyLinks = FooterLink::ofType(FooterLink::TYPE_COMPANY)->ordered()->get();
         $supportLinks = FooterLink::ofType(FooterLink::TYPE_SUPPORT)->ordered()->get();
-        $policyLinks = FooterLink::ofType(FooterLink::TYPE_POLICY_CENTER)->ordered()->get();
+        $policyLinks = FooterLink::ofType(FooterLink::TYPE_POLICY)->ordered()->get();
+        $policyCenterLinks = FooterLink::ofType(FooterLink::TYPE_POLICY_CENTER)->ordered()->get();
         $brandsLinks = FooterLink::ofType(FooterLink::TYPE_OUR_BRANDS)->ordered()->get();
         $paymentMethods = FooterPaymentMethod::ordered()->get();
 
@@ -807,9 +855,13 @@ class FooterController extends Controller
                 'section_heading' => $content->support_section_heading,
                 'links' => $supportLinks->map(fn ($link) => ['id' => $link->id, 'text' => $link->label, 'path' => $link->path, 'sort_order' => $link->sort_order]),
             ],
+            'policy' => [
+                'section_heading' => $content->policy_section_heading,
+                'links' => $policyLinks->map(fn ($link) => ['id' => $link->id, 'text' => $link->label, 'path' => $link->path, 'sort_order' => $link->sort_order]),
+            ],
             'policy_center' => [
                 'section_heading' => $content->policy_center_section_heading,
-                'links' => $policyLinks->map(fn ($link) => ['id' => $link->id, 'text' => $link->label, 'path' => $link->path, 'sort_order' => $link->sort_order]),
+                'links' => $policyCenterLinks->map(fn ($link) => ['id' => $link->id, 'text' => $link->label, 'path' => $link->path, 'sort_order' => $link->sort_order]),
             ],
             'our_brands' => [
                 'section_heading' => $content->our_brands_section_heading,
@@ -853,6 +905,7 @@ class FooterController extends Controller
             ],
             'company' => ['section_heading' => 'COMPANY', 'links' => []],
             'support' => ['section_heading' => 'SUPPORT', 'links' => []],
+            'policy' => ['section_heading' => 'POLICY', 'links' => []],
             'policy_center' => ['section_heading' => 'POLICY CENTER', 'links' => []],
             'our_brands' => ['section_heading' => 'OUR BRANDS', 'links' => []],
             'social_links' => [

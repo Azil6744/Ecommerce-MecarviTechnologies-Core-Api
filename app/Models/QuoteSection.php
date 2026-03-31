@@ -26,6 +26,7 @@ class QuoteSection extends Model
         'paragraph_2',
         'image_1',
         'image_2',
+        'background_color',
         'background_image',
         'card_1_color',
         'card_2_color',

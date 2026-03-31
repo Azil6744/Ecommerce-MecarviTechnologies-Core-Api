@@ -33,11 +33,14 @@ class SiteSettingController extends Controller
             }
 
             $data = [
+                'site_name' => $settings->site_name,
                 'seo_site_title' => $settings->seo_site_title,
                 'seo_description' => $settings->seo_description,
                 'seo_keywords' => $settings->seo_keywords,
                 'logo' => $settings->logo,
                 'logo_url' => $settings->logo_url,
+                'login_logo' => $settings->login_logo,
+                'login_logo_url' => $settings->login_logo_url,
                 'favicon' => $settings->favicon,
                 'favicon_url' => $settings->favicon_url,
                 'button' => [
@@ -85,6 +88,7 @@ class SiteSettingController extends Controller
             $this->normalizeBooleanInput($request, 'header_links.*.show_in_header');
 
             $rules = [
+                'site_name' => ['nullable', 'string', 'max:255'],
                 'seo_site_title' => ['nullable', 'string', 'max:255'],
                 'seo_description' => ['nullable', 'string', 'max:1000'],
                 'seo_keywords' => ['nullable', 'string', 'max:3000'],
@@ -115,6 +119,13 @@ class SiteSettingController extends Controller
             } else {
                 $rules['favicon'] = ['nullable', 'string', 'max:2100000'];
             }
+            if ($request->hasFile('login_logo')) {
+                $rules['login_logo'] = ['nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp,svg,ico,bmp,tiff,tif', 'max:51200'];
+            } elseif ($request->hasFile('login_logo_file')) {
+                $rules['login_logo_file'] = ['sometimes', 'nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp,svg,ico,bmp,tiff,tif', 'max:51200'];
+            } else {
+                $rules['login_logo'] = ['nullable', 'string', 'max:2100000'];
+            }
             $request->validate($rules);
 
             $settings = SiteSetting::first();
@@ -124,6 +135,9 @@ class SiteSettingController extends Controller
 
             if ($request->has('seo_site_title')) {
                 $settings->seo_site_title = $request->input('seo_site_title');
+            }
+            if ($request->has('site_name')) {
+                $settings->site_name = $request->input('site_name');
             }
             if ($request->has('seo_description')) {
                 $settings->seo_description = $request->input('seo_description');
@@ -143,8 +157,12 @@ class SiteSettingController extends Controller
             if ($request->has('favicon') && ! $request->hasFile('favicon') && is_string($request->input('favicon'))) {
                 $settings->favicon = $request->input('favicon') ?: null;
             }
+            if ($request->has('login_logo') && ! $request->hasFile('login_logo') && is_string($request->input('login_logo'))) {
+                $settings->login_logo = $request->input('login_logo') ?: null;
+            }
             $this->handleLogoUpload($request, $settings);
             $this->handleFaviconUpload($request, $settings);
+            $this->handleLoginLogoUpload($request, $settings);
             $this->applyButtonFromRequest($request, $settings);
             $settings->save();
 
@@ -207,6 +225,7 @@ class SiteSettingController extends Controller
             $this->normalizeBooleanInput($request, 'header_links.*.show_in_header');
 
             $rules = [
+                'site_name' => ['sometimes', 'nullable', 'string', 'max:255'],
                 'seo_site_title' => ['sometimes', 'nullable', 'string', 'max:255'],
                 'seo_description' => ['sometimes', 'nullable', 'string', 'max:1000'],
                 'seo_keywords' => ['sometimes', 'nullable', 'string', 'max:3000'],
@@ -237,10 +256,20 @@ class SiteSettingController extends Controller
             } else {
                 $rules['favicon'] = ['sometimes', 'nullable', 'string', 'max:2100000'];
             }
+            if ($request->hasFile('login_logo')) {
+                $rules['login_logo'] = ['sometimes', 'nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp,svg,ico,bmp,tiff,tif', 'max:51200'];
+            } elseif ($request->hasFile('login_logo_file')) {
+                $rules['login_logo_file'] = ['sometimes', 'nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp,svg,ico,bmp,tiff,tif', 'max:51200'];
+            } else {
+                $rules['login_logo'] = ['sometimes', 'nullable', 'string', 'max:2100000'];
+            }
             $request->validate($rules);
 
             if ($request->has('seo_site_title')) {
                 $settings->seo_site_title = $request->input('seo_site_title');
+            }
+            if ($request->has('site_name')) {
+                $settings->site_name = $request->input('site_name');
             }
             if ($request->has('seo_description')) {
                 $settings->seo_description = $request->input('seo_description');
@@ -260,10 +289,14 @@ class SiteSettingController extends Controller
             if ($request->has('favicon') && ! $request->hasFile('favicon') && is_string($request->input('favicon'))) {
                 $settings->favicon = $request->input('favicon') ?: null;
             }
+            if ($request->has('login_logo') && ! $request->hasFile('login_logo') && is_string($request->input('login_logo'))) {
+                $settings->login_logo = $request->input('login_logo') ?: null;
+            }
             $this->applyButtonFromRequest($request, $settings);
 
             $this->handleLogoUpload($request, $settings);
             $this->handleFaviconUpload($request, $settings);
+            $this->handleLoginLogoUpload($request, $settings);
             $this->applyButtonFromRequest($request, $settings);
             $settings->save();
 
@@ -326,6 +359,9 @@ class SiteSettingController extends Controller
             if ($settings->logo && ! str_starts_with($settings->logo, 'http') && ! str_starts_with($settings->logo, '/')) {
                 Storage::disk('public')->delete($settings->logo);
             }
+            if ($settings->login_logo && ! str_starts_with($settings->login_logo, 'http') && ! str_starts_with($settings->login_logo, '/')) {
+                Storage::disk('public')->delete($settings->login_logo);
+            }
             if ($settings->favicon && ! str_starts_with($settings->favicon, 'http') && ! str_starts_with($settings->favicon, '/')) {
                 Storage::disk('public')->delete($settings->favicon);
             }
@@ -369,7 +405,7 @@ class SiteSettingController extends Controller
                 ], 404);
             }
 
-            $allowedFields = ['seo_site_title', 'seo_description', 'seo_keywords', 'logo', 'favicon', 'button_name', 'button_url'];
+            $allowedFields = ['site_name', 'seo_site_title', 'seo_description', 'seo_keywords', 'logo', 'login_logo', 'favicon', 'button_name', 'button_url'];
             if (! in_array($field, $allowedFields)) {
                 return response()->json([
                     'success' => false,
@@ -379,6 +415,9 @@ class SiteSettingController extends Controller
 
             if ($field === 'logo' && $settings->logo && ! str_starts_with($settings->logo, 'http') && ! str_starts_with($settings->logo, '/')) {
                 Storage::disk('public')->delete($settings->logo);
+            }
+            if ($field === 'login_logo' && $settings->login_logo && ! str_starts_with($settings->login_logo, 'http') && ! str_starts_with($settings->login_logo, '/')) {
+                Storage::disk('public')->delete($settings->login_logo);
             }
             if ($field === 'favicon' && $settings->favicon && ! str_starts_with($settings->favicon, 'http') && ! str_starts_with($settings->favicon, '/')) {
                 Storage::disk('public')->delete($settings->favicon);
@@ -567,6 +606,38 @@ class SiteSettingController extends Controller
         }
     }
 
+    private function handleLoginLogoUpload(Request $request, SiteSetting $settings): void
+    {
+        $file = $request->hasFile('login_logo') ? $request->file('login_logo') : ($request->hasFile('login_logo_file') ? $request->file('login_logo_file') : null);
+        if ($file) {
+            if ($settings->login_logo && ! str_starts_with($settings->login_logo, 'http') && ! str_starts_with($settings->login_logo, '/')) {
+                Storage::disk('public')->delete($settings->login_logo);
+            }
+            $path = $file->store('site-settings', 'public');
+            $settings->login_logo = $path;
+            $settings->save();
+            return;
+        }
+
+        if ($request->has('login_logo') && is_string($request->input('login_logo'))) {
+            $logoInput = $request->input('login_logo');
+            if (preg_match('/^data:image\/([\w+]+);base64,/', $logoInput, $matches)) {
+                if ($settings->login_logo && ! str_starts_with($settings->login_logo, 'http') && ! str_starts_with($settings->login_logo, '/')) {
+                    Storage::disk('public')->delete($settings->login_logo);
+                }
+                $imageType = str_replace('+xml', '', $matches[1]);
+                $imageData = base64_decode(preg_replace('/^data:image\/[\w+]+;base64,/', '', $logoInput));
+                if ($imageData !== false) {
+                    $filename = 'login_logo_' . time() . '.' . $imageType;
+                    $path = 'site-settings/' . $filename;
+                    Storage::disk('public')->put($path, $imageData);
+                    $settings->login_logo = $path;
+                    $settings->save();
+                }
+            }
+        }
+    }
+
     private function normalizeBooleanInput(Request $request, string $field): void
     {
         if (! $request->has($field)) {
@@ -617,11 +688,14 @@ class SiteSettingController extends Controller
         }
 
         return [
+            'site_name' => $settings->site_name,
             'seo_site_title' => $settings->seo_site_title,
             'seo_description' => $settings->seo_description,
             'seo_keywords' => $settings->seo_keywords,
             'logo' => $settings->logo,
             'logo_url' => $settings->logo_url,
+            'login_logo' => $settings->login_logo,
+            'login_logo_url' => $settings->login_logo_url,
             'favicon' => $settings->favicon,
             'favicon_url' => $settings->favicon_url,
             'button' => [
@@ -651,11 +725,14 @@ class SiteSettingController extends Controller
         ]) : [];
 
         return [
+            'site_name' => null,
             'seo_site_title' => null,
             'seo_description' => null,
             'seo_keywords' => null,
             'logo' => null,
             'logo_url' => null,
+            'login_logo' => null,
+            'login_logo_url' => null,
             'favicon' => null,
             'favicon_url' => null,
             'button' => ['name' => null, 'url' => null],

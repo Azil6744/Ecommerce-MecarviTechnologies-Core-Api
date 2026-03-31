@@ -17,6 +17,7 @@ class PortfolioSection extends Model
     protected $fillable = [
         'main_heading',
         'description',
+        'background_color',
         'background_image',
     ];
 
