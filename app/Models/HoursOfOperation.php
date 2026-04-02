@@ -26,6 +26,8 @@ class HoursOfOperation extends Model
         'description_1',
         'description_2',
         'background_image',
+        'background_color',
+        'section_background_color',
         'is_active',
         'sort_order',
     ];

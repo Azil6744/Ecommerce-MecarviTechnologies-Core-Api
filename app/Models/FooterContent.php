@@ -20,6 +20,7 @@ class FooterContent extends Model
         'chat_subtitle',
         'company_section_heading',
         'support_section_heading',
+        'policy_section_heading',
         'policy_center_section_heading',
         'our_brands_section_heading',
         'social_links_section_heading',

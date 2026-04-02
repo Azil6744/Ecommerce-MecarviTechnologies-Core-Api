@@ -41,6 +41,7 @@ class PortfolioSectionController extends Controller
                     'id' => $section->id,
                     'main_heading' => $section->main_heading,
                     'description' => $section->description,
+                    'background_color' => $section->background_color,
                     'background_image' => $section->background_image_url,
                     'created_at' => $section->created_at,
                     'updated_at' => $section->updated_at,
@@ -75,6 +76,7 @@ class PortfolioSectionController extends Controller
             $validated = $request->validate([
                 'main_heading' => ['nullable', 'string', 'max:255'],
                 'description' => ['nullable', 'string'],
+                'background_color' => ['nullable', 'string', 'max:20'],
                 'background_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
             ]);
 
@@ -114,6 +116,7 @@ class PortfolioSectionController extends Controller
                         'id' => $section->id,
                         'main_heading' => $section->main_heading,
                         'description' => $section->description,
+                        'background_color' => $section->background_color,
                         'background_image' => $section->background_image_url,
                         'updated_at' => $section->updated_at,
                     ],
@@ -192,6 +195,12 @@ class PortfolioSectionController extends Controller
                 $dataToUpdate['description'] = $request->input('description');
             }
 
+            if ($request->filled('background_color')) {
+                $dataToUpdate['background_color'] = $request->input('background_color');
+            } elseif ($request->has('background_color') || array_key_exists('background_color', $request->all())) {
+                $dataToUpdate['background_color'] = $request->input('background_color');
+            }
+
             // Handle background image upload and deletion
             if ($request->hasFile('background_image')) {
                 // Delete old image if exists
@@ -226,6 +235,9 @@ class PortfolioSectionController extends Controller
                 if (isset($dataToUpdate['description'])) {
                     $rules['description'] = ['nullable', 'string'];
                 }
+                if (isset($dataToUpdate['background_color'])) {
+                    $rules['background_color'] = ['nullable', 'string', 'max:20'];
+                }
                 if (isset($dataToUpdate['background_image']) && $request->hasFile('background_image')) {
                     $rules['background_image'] = ['required', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'];
                 }
@@ -258,6 +270,7 @@ class PortfolioSectionController extends Controller
                         'id' => $section->id,
                         'main_heading' => $section->main_heading,
                         'description' => $section->description,
+                        'background_color' => $section->background_color,
                         'background_image' => $section->background_image_url,
                         'updated_at' => $section->updated_at,
                     ],
@@ -373,6 +386,7 @@ class PortfolioSectionController extends Controller
             // List of all allowed fields
             $allowedFields = [
                 'background_image',
+                'background_color',
             ];
 
             // Validate field name
@@ -407,6 +421,7 @@ class PortfolioSectionController extends Controller
                         'id' => $section->id,
                         'main_heading' => $section->main_heading,
                         'description' => $section->description,
+                        'background_color' => $section->background_color,
                         'background_image' => $section->background_image_url,
                         'updated_at' => $section->updated_at,
                     ],

@@ -12,6 +12,7 @@ class SocialMediaSection extends Model
     protected $fillable = [
         'heading',
         'description',
+        'background_color',
         'is_active',
     ];
 

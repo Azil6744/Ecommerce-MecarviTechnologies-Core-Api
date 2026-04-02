@@ -19,6 +19,7 @@ class CareerCtaSection extends Model
         'description',
         'button_text',
         'button_link',
+        'background_color',
         'is_active',
         'sort_order',
     ];

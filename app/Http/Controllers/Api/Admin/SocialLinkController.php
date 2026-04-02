@@ -43,6 +43,7 @@ class SocialLinkController extends Controller
                         'id' => $section->id,
                         'heading' => $section->heading,
                         'description' => $section->description,
+                        'background_color' => $section->background_color,
                         'is_active' => $section->is_active,
                     ] : null,
                     'social_links' => $links->map(function ($link) {
@@ -114,6 +115,7 @@ class SocialLinkController extends Controller
                         'id' => $section->id,
                         'heading' => $section->heading,
                         'description' => $section->description,
+                        'background_color' => $section->background_color,
                         'is_active' => $section->is_active,
                         'created_at' => $section->created_at,
                         'updated_at' => $section->updated_at,
@@ -150,6 +152,7 @@ class SocialLinkController extends Controller
             $validated = $request->validate([
                 'heading' => ['nullable', 'string', 'max:255'],
                 'description' => ['nullable', 'string'],
+                'background_color' => ['nullable', 'string', 'max:50'],
                 'is_active' => ['sometimes', 'boolean', 'nullable'],
             ]);
 
@@ -176,6 +179,7 @@ class SocialLinkController extends Controller
                         'id' => $section->id,
                         'heading' => $section->heading,
                         'description' => $section->description,
+                        'background_color' => $section->background_color,
                         'is_active' => $section->is_active,
                         'created_at' => $section->created_at,
                         'updated_at' => $section->updated_at,

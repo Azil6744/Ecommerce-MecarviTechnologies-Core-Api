@@ -51,6 +51,7 @@ class QuoteSectionController extends Controller
                     'image_1' => $section->image_1_url,
                     'image_2' => $section->image_2_url,
                     'background_image' => $section->background_image_url,
+                    'background_color' => $section->background_color,
                     'card_1_color' => $section->card_1_color,
                     'card_2_color' => $section->card_2_color,
                     'created_at' => $section->created_at,
@@ -96,6 +97,7 @@ class QuoteSectionController extends Controller
                 'image_1' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
                 'image_2' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
                 'background_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
+                'background_color' => ['nullable', 'string', 'max:20'],
                 'card_1_color' => ['nullable', 'string', 'max:20'],
                 'card_2_color' => ['nullable', 'string', 'max:20'],
             ]);
@@ -149,6 +151,7 @@ class QuoteSectionController extends Controller
                         'image_1' => $section->image_1_url,
                         'image_2' => $section->image_2_url,
                         'background_image' => $section->background_image_url,
+                        'background_color' => $section->background_color,
                         'card_1_color' => $section->card_1_color,
                         'card_2_color' => $section->card_2_color,
                         'updated_at' => $section->updated_at,
@@ -235,6 +238,7 @@ class QuoteSectionController extends Controller
                 'paragraph_1',
                 'title_2',
                 'paragraph_2',
+                'background_color',
                 'card_1_color',
                 'card_2_color',
             ];
@@ -372,6 +376,7 @@ class QuoteSectionController extends Controller
                         'image_1' => $section->image_1_url,
                         'image_2' => $section->image_2_url,
                         'background_image' => $section->background_image_url,
+                        'background_color' => $section->background_color,
                         'card_1_color' => $section->card_1_color,
                         'card_2_color' => $section->card_2_color,
                         'updated_at' => $section->updated_at,
@@ -509,6 +514,7 @@ class QuoteSectionController extends Controller
                 'image_1',
                 'image_2',
                 'background_image',
+                'background_color',
             ];
 
             // Validate field name
@@ -553,6 +559,7 @@ class QuoteSectionController extends Controller
                         'image_1' => $section->image_1_url,
                         'image_2' => $section->image_2_url,
                         'background_image' => $section->background_image_url,
+                        'background_color' => $section->background_color,
                         'card_1_color' => $section->card_1_color,
                         'card_2_color' => $section->card_2_color,
                         'updated_at' => $section->updated_at,

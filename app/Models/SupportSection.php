@@ -13,6 +13,8 @@ class SupportSection extends Model
         'section_title',
         'title',
         'description',
+        'quick_support_bg_color',
+        'inquiry_form_bg_color',
         'call_icon',
         'call_title',
         'call_description',

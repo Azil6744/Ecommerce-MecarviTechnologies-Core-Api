@@ -34,6 +34,7 @@ class ContactCard extends Model
         'saturday_hours',
         'sunday_hours',
         'icon',
+        'background_color',
         'is_active',
         'sort_order',
     ];

@@ -24,6 +24,7 @@ class ChartSection extends Model
         'button_url',
         'main_image',
         'small_image',
+        'background_color',
     ];
 
     /**

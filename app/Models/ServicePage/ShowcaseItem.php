@@ -21,6 +21,7 @@ class ShowcaseItem extends Model
         'description',
         'image',
         'video',
+        'background_color',
         'order',
     ];
 

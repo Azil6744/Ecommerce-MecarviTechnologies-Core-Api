@@ -34,12 +34,14 @@ class HoursOfOperationController extends Controller
             // Get section-level data from first record (if exists)
             $sectionTitle = $hours->first()?->section_title;
             $backgroundImage = $hours->first()?->background_image;
+            $backgroundColor = $hours->first()?->section_background_color;
 
             return response()->json([
                 'success' => true,
                 'data' => [
                     'section_title' => $sectionTitle,
                     'background_image' => $backgroundImage,
+                    'section_background_color' => $backgroundColor,
                     'hours_of_operation' => $hours->map(function ($hour) {
                         return $this->formatHours($hour);
                     }),
@@ -292,6 +294,8 @@ class HoursOfOperationController extends Controller
             'description_1' => ['nullable', 'string'],
             'description_2' => ['nullable', 'string'],
             'background_image' => ['nullable', 'image', 'max:2048'],
+            'background_color' => ['nullable', 'string', 'max:50'],
+            'section_background_color' => ['nullable', 'string', 'max:50'],
             'is_active' => ['sometimes', 'boolean', 'nullable'],
             'sort_order' => ['sometimes', 'integer', 'min:0'],
         ];
@@ -315,6 +319,8 @@ class HoursOfOperationController extends Controller
             'description_1' => $hours->description_1,
             'description_2' => $hours->description_2,
             'background_image' => $hours->background_image,
+            'background_color' => $hours->background_color,
+            'section_background_color' => $hours->section_background_color,
             'is_active' => $hours->is_active,
             'sort_order' => $hours->sort_order,
             'created_at' => $hours->created_at,

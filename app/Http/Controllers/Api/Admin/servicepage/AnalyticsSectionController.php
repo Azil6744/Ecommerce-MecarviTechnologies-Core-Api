@@ -44,6 +44,7 @@ class AnalyticsSectionController extends Controller
                 'main_image' => $section->main_image_url,
                 'small_image' => $section->small_image_url,
                 'background_image' => $section->background_image_url,
+                'background_color' => $section->background_color,
                 'created_at' => $section->created_at,
                 'updated_at' => $section->updated_at,
             ];
@@ -93,6 +94,7 @@ class AnalyticsSectionController extends Controller
                 'main_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
                 'small_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
                 'background_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
+                'background_color' => ['nullable', 'string', 'max:20'],
             ]);
 
             // Handle main image upload (only if provided)
@@ -208,6 +210,7 @@ class AnalyticsSectionController extends Controller
                 'features' => 'array',
                 'button_text' => 'string|max:255',
                 'button_url' => 'url|max:255',
+                'background_color' => 'string|max:20',
             ];
 
             foreach ($fields as $field => $rules) {
@@ -317,6 +320,7 @@ class AnalyticsSectionController extends Controller
                         'main_image' => $analyticsSection->main_image_url,
                         'small_image' => $analyticsSection->small_image_url,
                         'background_image' => $analyticsSection->background_image_url,
+                        'background_color' => $analyticsSection->background_color,
                         'updated_at' => $analyticsSection->updated_at,
                     ],
                 ],
@@ -372,6 +376,7 @@ class AnalyticsSectionController extends Controller
                     'main_image' => $analyticsSection->main_image_url,
                     'small_image' => $analyticsSection->small_image_url,
                     'background_image' => $analyticsSection->background_image_url,
+                    'background_color' => $analyticsSection->background_color,
                     'created_at' => $analyticsSection->created_at,
                     'updated_at' => $analyticsSection->updated_at,
                 ],
@@ -525,6 +530,7 @@ class AnalyticsSectionController extends Controller
                         'main_image' => $analyticsSection->main_image_url,
                         'small_image' => $analyticsSection->small_image_url,
                         'background_image' => $analyticsSection->background_image_url,
+                        'background_color' => $analyticsSection->background_color,
                         'updated_at' => $analyticsSection->updated_at,
                     ],
                 ],
