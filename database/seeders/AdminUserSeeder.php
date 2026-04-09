@@ -26,13 +26,15 @@ class AdminUserSeeder extends Seeder
         }
 
         // Create super admin user
-        User::create([
+        $adminUser = User::create([
             'name' => 'Super Admin',
             'email' => 'admin@gmail.com',
             'password' => Hash::make('123456'),
-            'role' => 'super_admin',
             'email_verified_at' => now(),
         ]);
+
+        // Assign super_admin role
+        $adminUser->assignRole('super_admin');
 
         $this->command->info('Admin user created successfully!');
         $this->command->warn('Default credentials:');

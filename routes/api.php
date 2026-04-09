@@ -5,6 +5,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\Auth\RegisterController;
 use App\Http\Controllers\Api\Auth\LoginController;
 use App\Http\Controllers\Api\Admin\UserController;
+use App\Http\Controllers\Api\Admin\CategoryController;
+use App\Http\Controllers\Api\Admin\ProductController;
 use App\Http\Controllers\Api\Admin\HomePageController;
 use App\Http\Controllers\Api\Admin\AboutSectionController;
 use App\Http\Controllers\Api\Admin\ServiceSectionController;
@@ -68,6 +70,19 @@ use App\Http\Controllers\Api\Admin\PolicySectionController;
 use App\Http\Controllers\Api\Admin\QuoteFormFieldController;
 use App\Http\Controllers\Api\Admin\SectionLabelController;
 use App\Http\Controllers\Api\Admin\ScheduleFormSubmissionController;
+use App\Http\Controllers\Api\Admin\AdminOrderController;
+use App\Http\Controllers\Api\Admin\AdminReviewController;
+use App\Http\Controllers\Api\Admin\AdminReturnController;
+use App\Http\Controllers\Api\Admin\AdminQuotationController;
+use App\Http\Controllers\Api\Admin\AdminTicketController;
+use App\Http\Controllers\Api\Admin\AdminWalletController;
+use App\Http\Controllers\Api\Admin\ProjectController;
+use App\Http\Controllers\Api\Admin\TaskController;
+use App\Http\Controllers\Api\Admin\ClientController;
+use App\Http\Controllers\Api\Admin\DealController;
+use App\Http\Controllers\Api\Admin\EmployeeController;
+use App\Http\Controllers\Api\Admin\ChatController;
+use App\Http\Controllers\Api\Admin\CalendarController;
 
 
 /*
@@ -116,9 +131,6 @@ Route::prefix('v1')->group(function () {
     // Returns: User object with authentication token
     Route::post('/login', [LoginController::class, 'login'])
         ->name('api.v1.login');
-
-    Route::post('/login', [LoginController::class, 'login'])
-        ->name('api/v1/login');
 
     // Get Last Content Update Time (Public)
     // GET /api/v1/content-last-updated
@@ -745,23 +757,47 @@ Route::prefix('v1')->group(function () {
             ]);
         })->name('api.v1.user.show');
 
-        // Create New User with Role (Super Admin Only)
+        // Get All Users (Admin Only)
+        // GET /api/v1/users
+        // Returns: Paginated list of users with roles and permissions
+        Route::get('/users', [UserController::class, 'index'])
+            ->name('api.v1.users.index');
+
+        // Get Specific User (Admin Only)
+        // GET /api/v1/users/{id}
+        // Returns: User object with roles and permissions
+        Route::get('/users/{id}', [UserController::class, 'show'])
+            ->name('api.v1.users.show');
+
+        // Create New User with Roles (Admin Only)
         // POST /api/v1/users
-        // Returns: Created user object (only accessible by super_admin)
+        // Returns: Created user object
         Route::post('/users', [UserController::class, 'store'])
             ->name('api.v1.users.store');
 
-        // Update User (Super Admin Only)
+        // Update User (Admin Only)
         // PUT/PATCH /api/v1/users/{id}
-        // Returns: Updated user object (only accessible by super_admin)
+        // Returns: Updated user object
         Route::put('/users/{id}', [UserController::class, 'update'])
             ->name('api.v1.users.update');
         Route::patch('/users/{id}', [UserController::class, 'update'])
             ->name('api.v1.users.update');
 
-        // Delete User (Super Admin Only)
+        // Assign Roles to User (Admin Only)
+        // POST /api/v1/users/{id}/assign-roles
+        // Returns: Updated user object with new roles
+        Route::post('/users/{id}/assign-roles', [UserController::class, 'assignRoles'])
+            ->name('api.v1.users.assign-roles');
+
+        // Remove Roles from User (Admin Only)
+        // POST /api/v1/users/{id}/remove-roles
+        // Returns: Updated user object with roles removed
+        Route::post('/users/{id}/remove-roles', [UserController::class, 'removeRoles'])
+            ->name('api.v1.users.remove-roles');
+
+        // Delete User (Admin Only)
         // DELETE /api/v1/users/{id}
-        // Returns: Success message (only accessible by super_admin)
+        // Returns: Success message
         Route::delete('/users/{id}', [UserController::class, 'destroy'])
             ->name('api.v1.users.destroy');
 
@@ -2458,6 +2494,9 @@ Route::prefix('v1')->group(function () {
             'message' => 'Successfully logged out',
         ]);
     })->name('api.v1.logout');
+    
+    }); // End of auth:sanctum middleware group
+    
     /*
     |--------------------------------------------------------------------------
     | Admin Panel Routes (Future)
@@ -2468,10 +2507,9 @@ Route::prefix('v1')->group(function () {
     |
     */
 
-    // Route::middleware(['auth:sanctum', 'role:super_admin,editor'])->group(function () {
-    //     // Admin panel routes will be added here
-    // });
-
+    // Admin Panel Routes (Auth Required - Middleware added in Kernel.php)
+    // These routes require authentication and admin role verification
+    
         // Page SEO Settings (Admin Only)
         Route::post('/page-seo-settings/{pageSlug}', [PageSeoSettingController::class, 'upsert'])
             ->name('api.v1.page-seo-settings.upsert');
@@ -2512,6 +2550,12 @@ Route::prefix('v1')->group(function () {
         Route::post('/service-how-it-works-section', [ServiceHowItWorksSectionController::class, 'store'])
             ->name('api.v1.service-how-it-works-section.store');
 
+        // Categories Management (Admin Only)
+        Route::apiResource('categories', CategoryController::class);
+
+        // Products Management (Admin Only)
+        Route::apiResource('products', ProductController::class);
+
         // Policy Sections Management (Admin Only)
         Route::get('/policy-sections/admin', [PolicySectionController::class, 'adminIndex'])
             ->name('api.v1.policy-sections.admin-index');
@@ -2528,9 +2572,33 @@ Route::prefix('v1')->group(function () {
         Route::post('/section-labels', [SectionLabelController::class, 'store'])
             ->name('api.v1.section-labels.store');
 
-    });
+        // Project Management (Admin Only)
+        Route::apiResource('projects', ProjectController::class);
 
-});
+        // Task Management (Admin Only)
+        Route::apiResource('tasks', TaskController::class);
+
+        // Client Management (Admin Only)
+        Route::apiResource('clients', ClientController::class);
+
+        // Deal Management (Admin Only)
+        Route::apiResource('deals', DealController::class);
+
+        // Employee Management (Admin Only)
+        Route::apiResource('employees', EmployeeController::class);
+
+        // Team Management (Admin Only)
+        Route::apiResource('teams', TeamController::class);
+
+        // Chat Management (Admin Only)
+        Route::get('/chat/contacts', [ChatController::class, 'contacts']);
+        Route::get('/chat/{contactId}/messages', [ChatController::class, 'messages']);
+        Route::post('/chat/{contactId}/send', [ChatController::class, 'sendMessage']);
+
+        // Calendar Management (Admin Only)
+        Route::apiResource('calendar/events', CalendarController::class);
+
+}); // End of v1 prefix group
 
 require base_path('routes/ecommerce.php');
 

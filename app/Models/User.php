@@ -7,10 +7,11 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable, HasRoles;
 
     /**
      * The attributes that are mass assignable.
@@ -21,7 +22,6 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'role',
     ];
 
     /**
@@ -91,5 +91,51 @@ class User extends Authenticatable
     public static function getAvailableRoles(): array
     {
         return ['super_admin', 'editor', 'viewer'];
+    }
+
+    // Ecommerce Relationships
+    public function orders()
+    {
+        return $this->hasMany(EcommerceOrder::class);
+    }
+
+    public function addresses()
+    {
+        return $this->hasMany(EcommerceAddress::class);
+    }
+
+    public function reviews()
+    {
+        return $this->hasMany(EcommerceReview::class);
+    }
+
+    public function cart()
+    {
+        return $this->hasOne(EcommerceCart::class);
+    }
+
+    public function walletTransactions()
+    {
+        return $this->hasMany(EcommerceWalletTransaction::class);
+    }
+
+    public function quotations()
+    {
+        return $this->hasMany(EcommerceQuotation::class);
+    }
+
+    public function tickets()
+    {
+        return $this->hasMany(EcommerceTicket::class);
+    }
+
+    public function disputes()
+    {
+        return $this->hasMany(EcommerceDispute::class);
+    }
+
+    public function returns()
+    {
+        return $this->hasMany(EcommerceReturn::class);
     }
 }

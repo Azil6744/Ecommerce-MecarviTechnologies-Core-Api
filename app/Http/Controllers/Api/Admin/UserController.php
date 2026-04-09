@@ -12,23 +12,21 @@ use Illuminate\Validation\ValidationException;
 class UserController extends Controller
 {
     /**
-     * Create a new user (Super Admin only).
-     * 
-     * Allows super admin to create users with specific roles.
-     * 
+     * Create a new user (Admin only).
+     *
+     * Allows admin users to create users with specific roles.
+     *
      * @param Request $request
      * @return \Illuminate\Http\JsonResponse
      */
     public function store(Request $request)
     {
         try {
-            // Check if user is super admin
-            $currentUser = $request->user();
-            
-            if (!$currentUser->isSuperAdmin()) {
+            // Check if user has permission to create users
+            if (!$request->user()->hasPermissionTo('create users')) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Unauthorized. Only super admin can create users.',
+                    'message' => 'Unauthorized. Insufficient permissions.',
                 ], 403);
             }
 
@@ -37,7 +35,8 @@ class UserController extends Controller
                 'name' => ['required', 'string', 'max:255'],
                 'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
                 'password' => ['required', 'string', Password::defaults()],
-                'role' => ['required', 'string', 'in:super_admin,editor,viewer'],
+                'roles' => ['sometimes', 'array'],
+                'roles.*' => ['string', 'exists:roles,name'],
             ]);
 
             // Create the new user
@@ -45,8 +44,12 @@ class UserController extends Controller
                 'name' => $validated['name'],
                 'email' => $validated['email'],
                 'password' => Hash::make($validated['password']),
-                'role' => $validated['role'],
             ]);
+
+            // Assign roles if provided
+            if (isset($validated['roles']) && is_array($validated['roles'])) {
+                $user->assignRole($validated['roles']);
+            }
 
             // Return success response with user data
             return response()->json([
@@ -57,7 +60,8 @@ class UserController extends Controller
                         'id' => $user->id,
                         'name' => $user->name,
                         'email' => $user->email,
-                        'role' => $user->role,
+                        'roles' => $user->roles->pluck('name')->toArray(),
+                        'permissions' => $user->getAllPermissions()->pluck('name')->toArray(),
                         'email_verified_at' => $user->email_verified_at,
                         'created_at' => $user->created_at,
                     ],
@@ -81,10 +85,10 @@ class UserController extends Controller
     }
 
     /**
-     * Update an existing user (Super Admin only).
-     * 
-     * Allows super admin to update user information including role.
-     * 
+     * Update an existing user (Admin only).
+     *
+     * Allows admin users to update user information including roles.
+     *
      * @param Request $request
      * @param int $id
      * @return \Illuminate\Http\JsonResponse
@@ -92,13 +96,11 @@ class UserController extends Controller
     public function update(Request $request, $id)
     {
         try {
-            // Check if user is super admin
-            $currentUser = $request->user();
-            
-            if (!$currentUser->isSuperAdmin()) {
+            // Check if user has permission to edit users
+            if (!$request->user()->hasPermissionTo('edit users')) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Unauthorized. Only super admin can update users.',
+                    'message' => 'Unauthorized. Insufficient permissions.',
                 ], 403);
             }
 
@@ -117,7 +119,8 @@ class UserController extends Controller
                 'name' => ['sometimes', 'required', 'string', 'max:255'],
                 'email' => ['sometimes', 'required', 'string', 'email', 'max:255', 'unique:users,email,' . $id],
                 'password' => ['sometimes', 'nullable', 'string', Password::defaults()],
-                'role' => ['sometimes', 'required', 'string', 'in:super_admin,editor,viewer'],
+                'roles' => ['sometimes', 'array'],
+                'roles.*' => ['string', 'exists:roles,name'],
             ]);
 
             // Update user fields
@@ -130,8 +133,10 @@ class UserController extends Controller
             if (isset($validated['password'])) {
                 $user->password = Hash::make($validated['password']);
             }
-            if (isset($validated['role'])) {
-                $user->role = $validated['role'];
+
+            // Update roles if provided
+            if (isset($validated['roles'])) {
+                $user->syncRoles($validated['roles']);
             }
 
             $user->save();
@@ -145,7 +150,8 @@ class UserController extends Controller
                         'id' => $user->id,
                         'name' => $user->name,
                         'email' => $user->email,
-                        'role' => $user->role,
+                        'roles' => $user->roles->pluck('name')->toArray(),
+                        'permissions' => $user->getAllPermissions()->pluck('name')->toArray(),
                         'email_verified_at' => $user->email_verified_at,
                         'updated_at' => $user->updated_at,
                     ],
@@ -169,10 +175,10 @@ class UserController extends Controller
     }
 
     /**
-     * Delete a user (Super Admin only).
-     * 
-     * Allows super admin to delete users from the system.
-     * 
+     * Delete a user (Admin only).
+     *
+     * Allows admin users to delete users from the system.
+     *
      * @param Request $request
      * @param int $id
      * @return \Illuminate\Http\JsonResponse
@@ -180,13 +186,11 @@ class UserController extends Controller
     public function destroy(Request $request, $id)
     {
         try {
-            // Check if user is super admin
-            $currentUser = $request->user();
-            
-            if (!$currentUser->isSuperAdmin()) {
+            // Check if user has permission to delete users
+            if (!$request->user()->hasPermissionTo('delete users')) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Unauthorized. Only super admin can delete users.',
+                    'message' => 'Unauthorized. Insufficient permissions.',
                 ], 403);
             }
 
@@ -201,7 +205,7 @@ class UserController extends Controller
             }
 
             // Prevent deleting yourself
-            if ($user->id === $currentUser->id) {
+            if ($user->id === $request->user()->id) {
                 return response()->json([
                     'success' => false,
                     'message' => 'You cannot delete your own account.',
@@ -222,6 +226,234 @@ class UserController extends Controller
                 'success' => false,
                 'message' => 'User deletion failed. Please try again.',
                 'error' => config('app.debug') ? $e->getMessage() : 'An error occurred during user deletion.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Get all users (Admin only).
+     *
+     * Returns a paginated list of all users with their roles and permissions.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function index(Request $request)
+    {
+        try {
+            // Check if user has permission to view users
+            if (!$request->user()->hasPermissionTo('view users')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized. Insufficient permissions.',
+                ], 403);
+            }
+
+            $perPage = $request->get('per_page', 15);
+            $users = User::with(['roles', 'permissions'])->paginate($perPage);
+
+            // Transform the users data
+            $users->getCollection()->transform(function ($user) {
+                return [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'roles' => $user->roles->pluck('name')->toArray(),
+                    'permissions' => $user->getAllPermissions()->pluck('name')->toArray(),
+                    'email_verified_at' => $user->email_verified_at,
+                    'created_at' => $user->created_at,
+                    'updated_at' => $user->updated_at,
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Users retrieved successfully',
+                'data' => [
+                    'users' => $users,
+                ],
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve users.',
+                'error' => config('app.debug') ? $e->getMessage() : 'An error occurred.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Get a specific user (Admin only).
+     *
+     * @param Request $request
+     * @param int $id
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function show(Request $request, $id)
+    {
+        try {
+            // Check if user has permission to view users
+            if (!$request->user()->hasPermissionTo('view users')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized. Insufficient permissions.',
+                ], 403);
+            }
+
+            $user = User::with(['roles', 'permissions'])->find($id);
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found.',
+                ], 404);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'User retrieved successfully',
+                'data' => [
+                    'user' => [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'roles' => $user->roles->pluck('name')->toArray(),
+                        'permissions' => $user->getAllPermissions()->pluck('name')->toArray(),
+                        'email_verified_at' => $user->email_verified_at,
+                        'created_at' => $user->created_at,
+                        'updated_at' => $user->updated_at,
+                    ],
+                ],
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve user.',
+                'error' => config('app.debug') ? $e->getMessage() : 'An error occurred.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Assign roles to a user (Admin only).
+     *
+     * @param Request $request
+     * @param int $id
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function assignRoles(Request $request, $id)
+    {
+        try {
+            // Check if user has permission to assign roles
+            if (!$request->user()->hasPermissionTo('assign roles')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized. Insufficient permissions.',
+                ], 403);
+            }
+
+            $user = User::find($id);
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found.',
+                ], 404);
+            }
+
+            $validated = $request->validate([
+                'roles' => ['required', 'array'],
+                'roles.*' => ['string', 'exists:roles,name'],
+            ]);
+
+            $user->syncRoles($validated['roles']);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Roles assigned successfully',
+                'data' => [
+                    'user' => [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'roles' => $user->roles->pluck('name')->toArray(),
+                        'permissions' => $user->getAllPermissions()->pluck('name')->toArray(),
+                    ],
+                ],
+            ], 200);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to assign roles.',
+                'error' => config('app.debug') ? $e->getMessage() : 'An error occurred.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Remove roles from a user (Admin only).
+     *
+     * @param Request $request
+     * @param int $id
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function removeRoles(Request $request, $id)
+    {
+        try {
+            // Check if user has permission to assign roles
+            if (!$request->user()->hasPermissionTo('assign roles')) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized. Insufficient permissions.',
+                ], 403);
+            }
+
+            $user = User::find($id);
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not found.',
+                ], 404);
+            }
+
+            $validated = $request->validate([
+                'roles' => ['required', 'array'],
+                'roles.*' => ['string', 'exists:roles,name'],
+            ]);
+
+            $user->removeRole($validated['roles']);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Roles removed successfully',
+                'data' => [
+                    'user' => [
+                        'id' => $user->id,
+                        'name' => $user->name,
+                        'email' => $user->email,
+                        'roles' => $user->roles->pluck('name')->toArray(),
+                        'permissions' => $user->getAllPermissions()->pluck('name')->toArray(),
+                    ],
+                ],
+            ], 200);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to remove roles.',
+                'error' => config('app.debug') ? $e->getMessage() : 'An error occurred.',
             ], 500);
         }
     }

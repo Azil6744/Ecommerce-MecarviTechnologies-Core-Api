@@ -58,4 +58,44 @@ Route::prefix('ecommerce')->group(function () {
         Route::apiResource('affiliates', \App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class);
     });
 
+    // Admin E-Commerce Routes (Auth + Admin Role Required)
+    Route::middleware(['auth:sanctum', 'admin.only'])->group(function () {
+        // Orders Management
+        Route::get('/admin/orders', [\App\Http\Controllers\Api\Admin\AdminOrderController::class, 'index']);
+        Route::get('/admin/orders/{order}', [\App\Http\Controllers\Api\Admin\AdminOrderController::class, 'show']);
+        Route::put('/admin/orders/{order}/status', [\App\Http\Controllers\Api\Admin\AdminOrderController::class, 'updateStatus']);
+        Route::delete('/admin/orders/{order}', [\App\Http\Controllers\Api\Admin\AdminOrderController::class, 'destroy']);
+
+        // Reviews Management
+        Route::get('/admin/reviews', [\App\Http\Controllers\Api\Admin\AdminReviewController::class, 'index']);
+        Route::get('/admin/reviews/{review}', [\App\Http\Controllers\Api\Admin\AdminReviewController::class, 'show']);
+        Route::put('/admin/reviews/{review}', [\App\Http\Controllers\Api\Admin\AdminReviewController::class, 'approve']);
+        Route::delete('/admin/reviews/{review}', [\App\Http\Controllers\Api\Admin\AdminReviewController::class, 'destroy']);
+
+        // Returns Management
+        Route::get('/admin/returns', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'index']);
+        Route::get('/admin/returns/{return}', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'show']);
+        Route::put('/admin/returns/{return}/status', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'updateStatus']);
+        Route::post('/admin/returns/{return}/approve', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'approve']);
+
+        // Quotations Management
+        Route::get('/admin/quotations', [\App\Http\Controllers\Api\Admin\AdminQuotationController::class, 'index']);
+        Route::get('/admin/quotations/{quotation}', [\App\Http\Controllers\Api\Admin\AdminQuotationController::class, 'show']);
+        Route::put('/admin/quotations/{quotation}/status', [\App\Http\Controllers\Api\Admin\AdminQuotationController::class, 'updateStatus']);
+        Route::post('/admin/quotations/{quotation}/send-quote', [\App\Http\Controllers\Api\Admin\AdminQuotationController::class, 'sendQuote']);
+
+        // Support Tickets Management
+        Route::get('/admin/tickets', [\App\Http\Controllers\Api\Admin\AdminTicketController::class, 'index']);
+        Route::get('/admin/tickets/{ticket}', [\App\Http\Controllers\Api\Admin\AdminTicketController::class, 'show']);
+        Route::put('/admin/tickets/{ticket}/status', [\App\Http\Controllers\Api\Admin\AdminTicketController::class, 'updateStatus']);
+        Route::post('/admin/tickets/{ticket}/reply', [\App\Http\Controllers\Api\Admin\AdminTicketController::class, 'addReply']);
+        Route::post('/admin/tickets/{ticket}/close', [\App\Http\Controllers\Api\Admin\AdminTicketController::class, 'close']);
+
+        // Wallet Management
+        Route::get('/admin/wallet', [\App\Http\Controllers\Api\Admin\AdminWalletController::class, 'index']);
+        Route::get('/admin/wallet/{user}', [\App\Http\Controllers\Api\Admin\AdminWalletController::class, 'getUserWallet']);
+        Route::post('/admin/wallet/{user}/credit', [\App\Http\Controllers\Api\Admin\AdminWalletController::class, 'creditWallet']);
+        Route::post('/admin/wallet/{user}/debit', [\App\Http\Controllers\Api\Admin\AdminWalletController::class, 'debitWallet']);
+    });
+
 });

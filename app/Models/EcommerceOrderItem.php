@@ -5,40 +5,35 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class EcommerceReturn extends Model
+class EcommerceOrderItem extends Model
 {
     use HasFactory;
 
     protected $fillable = [
         'order_id',
-        'user_id',
         'product_id',
-        'reason',
-        'description',
-        'status',
-        'refund_amount',
-        'approved_at',
-        'completed_at',
-        'tracking_number',
-        'return_method',
+        'product_name',
+        'product_sku',
+        'quantity',
+        'unit_price',
+        'total_price',
+        'product_options',
     ];
 
     protected $casts = [
-        'refund_amount' => 'decimal:2',
-        'approved_at' => 'datetime',
-        'completed_at' => 'datetime',
+        'quantity' => 'integer',
+        'unit_price' => 'decimal:2',
+        'total_price' => 'decimal:2',
+        'product_options' => 'array',
     ];
 
+    // Relationship with order
     public function order()
     {
         return $this->belongsTo(EcommerceOrder::class);
     }
 
-    public function user()
-    {
-        return $this->belongsTo(User::class);
-    }
-
+    // Relationship with product
     public function product()
     {
         return $this->belongsTo(Product::class);
