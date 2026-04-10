@@ -35,10 +35,15 @@ class RegisterController extends Controller
                 'name' => $validated['name'],
                 'email' => $validated['email'],
                 'password' => Hash::make($validated['password']),
-                'role' => 'viewer', // Default role for new registrations
+                'role' => 'customer', // Default role for new registrations
             ]);
 
-            // Generate a Sanctum token for the newly registered user
+            // Assign the Spatie 'customer' role (if it exists)
+            try {
+                $user->assignRole('customer');
+            } catch (\Exception $e) {
+                // Role may not exist yet — skip silently
+            }
             $token = $user->createToken('auth-token')->plainTextToken;
 
             // Return success response with user data and token

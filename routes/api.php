@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\Auth\RegisterController;
 use App\Http\Controllers\Api\Auth\LoginController;
 use App\Http\Controllers\Api\Admin\UserController;
+use App\Http\Controllers\Api\Admin\RolePermissionController;
 use App\Http\Controllers\Api\Admin\CategoryController;
 use App\Http\Controllers\Api\Admin\ProductController;
 use App\Http\Controllers\Api\Admin\HomePageController;
@@ -696,66 +697,7 @@ Route::prefix('v1')->group(function () {
             ]);
         })->name('api.v1.logout');
 
-        // Get All Users (Super Admin Only)
-        // GET /api/v1/users
-        // Returns: List of all users (only accessible by super_admin)
-        Route::get('/users', function (Request $request) {
-            // Check if user is super admin (only super admin can manage users)
-            $user = $request->user();
-
-            if (!$user->isSuperAdmin()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Unauthorized. Only super admin can access this resource.',
-                ], 403);
-            }
-
-            // Get all users without password field
-            $users = \App\Models\User::select('id', 'name', 'email', 'role', 'email_verified_at', 'created_at', 'updated_at')
-                ->orderBy('created_at', 'desc')
-                ->get();
-
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'users' => $users,
-                    'total' => $users->count(),
-                ],
-            ]);
-        })->name('api.v1.users');
-
-        // Get Single User by ID (Super Admin Only)
-        // GET /api/v1/users/{id}
-        // Returns: Single user details (only accessible by super_admin)
-        Route::get('/users/{id}', function (Request $request, $id) {
-            // Check if user is super admin (only super admin can manage users)
-            $user = $request->user();
-
-            if (!$user->isSuperAdmin()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Unauthorized. Only super admin can access this resource.',
-                ], 403);
-            }
-
-            // Get single user without password field
-            $targetUser = \App\Models\User::select('id', 'name', 'email', 'role', 'email_verified_at', 'created_at', 'updated_at')
-                ->find($id);
-
-            if (!$targetUser) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'User not found.',
-                ], 404);
-            }
-
-            return response()->json([
-                'success' => true,
-                'data' => [
-                    'user' => $targetUser,
-                ],
-            ]);
-        })->name('api.v1.user.show');
+        // User management routes handled by UserController below
 
         // Get All Users (Admin Only)
         // GET /api/v1/users
@@ -800,6 +742,28 @@ Route::prefix('v1')->group(function () {
         // Returns: Success message
         Route::delete('/users/{id}', [UserController::class, 'destroy'])
             ->name('api.v1.users.destroy');
+
+        /*
+        |--------------------------------------------------------------------------
+        | Role & Permission Management Routes (Admin Only)
+        |--------------------------------------------------------------------------
+        */
+
+        // Roles CRUD
+        Route::get('/roles', [RolePermissionController::class, 'indexRoles'])
+            ->name('api.v1.roles.index');
+        Route::post('/roles', [RolePermissionController::class, 'storeRole'])
+            ->name('api.v1.roles.store');
+        Route::put('/roles/{id}', [RolePermissionController::class, 'updateRole'])
+            ->name('api.v1.roles.update');
+        Route::delete('/roles/{id}', [RolePermissionController::class, 'destroyRole'])
+            ->name('api.v1.roles.destroy');
+
+        // Permissions
+        Route::get('/permissions', [RolePermissionController::class, 'indexPermissions'])
+            ->name('api.v1.permissions.index');
+        Route::post('/permissions', [RolePermissionController::class, 'storePermission'])
+            ->name('api.v1.permissions.store');
 
         /*
         |--------------------------------------------------------------------------

@@ -22,12 +22,18 @@ class UserController extends Controller
     public function store(Request $request)
     {
         try {
-            // Check if user has permission to create users
-            if (!$request->user()->hasPermissionTo('create users')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Unauthorized. Insufficient permissions.',
-                ], 403);
+            $authUser = $request->user();
+            $isSuperAdmin = $authUser->role === 'super_admin';
+            try { $isSuperAdmin = $isSuperAdmin || $authUser->hasRole('super_admin'); } catch (\Exception $e) {}
+
+            if (!$isSuperAdmin) {
+                try {
+                    if (!$authUser->hasPermissionTo('create users')) {
+                        return response()->json(['success' => false, 'message' => 'Unauthorized. Insufficient permissions.'], 403);
+                    }
+                } catch (\Exception $e) {
+                    return response()->json(['success' => false, 'message' => 'Unauthorized. Permission not configured.'], 403);
+                }
             }
 
             // Validate the incoming request data
@@ -96,12 +102,18 @@ class UserController extends Controller
     public function update(Request $request, $id)
     {
         try {
-            // Check if user has permission to edit users
-            if (!$request->user()->hasPermissionTo('edit users')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Unauthorized. Insufficient permissions.',
-                ], 403);
+            $authUser = $request->user();
+            $isSuperAdmin = $authUser->role === 'super_admin';
+            try { $isSuperAdmin = $isSuperAdmin || $authUser->hasRole('super_admin'); } catch (\Exception $e) {}
+
+            if (!$isSuperAdmin) {
+                try {
+                    if (!$authUser->hasPermissionTo('edit users')) {
+                        return response()->json(['success' => false, 'message' => 'Unauthorized. Insufficient permissions.'], 403);
+                    }
+                } catch (\Exception $e) {
+                    return response()->json(['success' => false, 'message' => 'Unauthorized. Permission not configured.'], 403);
+                }
             }
 
             // Find the user to update
@@ -186,12 +198,18 @@ class UserController extends Controller
     public function destroy(Request $request, $id)
     {
         try {
-            // Check if user has permission to delete users
-            if (!$request->user()->hasPermissionTo('delete users')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Unauthorized. Insufficient permissions.',
-                ], 403);
+            $authUser = $request->user();
+            $isSuperAdmin = $authUser->role === 'super_admin';
+            try { $isSuperAdmin = $isSuperAdmin || $authUser->hasRole('super_admin'); } catch (\Exception $e) {}
+
+            if (!$isSuperAdmin) {
+                try {
+                    if (!$authUser->hasPermissionTo('delete users')) {
+                        return response()->json(['success' => false, 'message' => 'Unauthorized. Insufficient permissions.'], 403);
+                    }
+                } catch (\Exception $e) {
+                    return response()->json(['success' => false, 'message' => 'Unauthorized. Permission not configured.'], 403);
+                }
             }
 
             // Find the user to delete
@@ -241,15 +259,29 @@ class UserController extends Controller
     public function index(Request $request)
     {
         try {
-            // Check if user has permission to view users
-            if (!$request->user()->hasPermissionTo('view users')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Unauthorized. Insufficient permissions.',
-                ], 403);
+            $authUser = $request->user();
+
+            // Allow super_admin by role column OR Spatie role, else check permission
+            $isSuperAdmin = $authUser->role === 'super_admin';
+            try { $isSuperAdmin = $isSuperAdmin || $authUser->hasRole('super_admin'); } catch (\Exception $e) {}
+
+            if (!$isSuperAdmin) {
+                try {
+                    if (!$authUser->hasPermissionTo('view users')) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Unauthorized. Insufficient permissions.',
+                        ], 403);
+                    }
+                } catch (\Exception $e) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Unauthorized. Permission not configured.',
+                    ], 403);
+                }
             }
 
-            $perPage = $request->get('per_page', 15);
+            $perPage = $request->get('per_page', 50);
             $users = User::with(['roles', 'permissions'])->paginate($perPage);
 
             // Transform the users data
@@ -292,12 +324,18 @@ class UserController extends Controller
     public function show(Request $request, $id)
     {
         try {
-            // Check if user has permission to view users
-            if (!$request->user()->hasPermissionTo('view users')) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Unauthorized. Insufficient permissions.',
-                ], 403);
+            $authUser = $request->user();
+            $isSuperAdmin = $authUser->role === 'super_admin';
+            try { $isSuperAdmin = $isSuperAdmin || $authUser->hasRole('super_admin'); } catch (\Exception $e) {}
+
+            if (!$isSuperAdmin) {
+                try {
+                    if (!$authUser->hasPermissionTo('view users')) {
+                        return response()->json(['success' => false, 'message' => 'Unauthorized. Insufficient permissions.'], 403);
+                    }
+                } catch (\Exception $e) {
+                    return response()->json(['success' => false, 'message' => 'Unauthorized. Permission not configured.'], 403);
+                }
             }
 
             $user = User::with(['roles', 'permissions'])->find($id);
