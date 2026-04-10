@@ -495,4 +495,46 @@ class UserController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * List customers (users with role=customer).
+     */
+    public function customers(Request $request)
+    {
+        try {
+            $query = User::where('role', 'customer');
+
+            if ($request->has('search') && $request->search) {
+                $s = $request->search;
+                $query->where(function ($q) use ($s) {
+                    $q->where('name', 'like', "%{$s}%")
+                      ->orWhere('email', 'like', "%{$s}%");
+                });
+            }
+
+            if ($request->has('status') && $request->status) {
+                if ($request->status === 'banned') {
+                    $query->whereNotNull('banned_at');
+                } elseif ($request->status === 'deactivated') {
+                    $query->whereNotNull('deactivated_at');
+                } elseif ($request->status === 'active') {
+                    $query->whereNull('banned_at')->whereNull('deactivated_at');
+                }
+            }
+
+            $customers = $query->orderBy('created_at', 'desc')
+                ->paginate($request->get('per_page', 20));
+
+            return response()->json([
+                'success' => true,
+                'data' => $customers,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch customers.',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
 }

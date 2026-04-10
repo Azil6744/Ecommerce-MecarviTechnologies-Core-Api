@@ -9,32 +9,11 @@ class EcommerceOrder extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'user_id',
-        'order_number',
-        'status',
-        'total_amount',
-        'subtotal',
-        'tax_amount',
-        'shipping_amount',
-        'discount_amount',
-        'shipping_address',
-        'billing_address',
-        'payment_method',
-        'payment_status',
-        'notes',
-        'ordered_at',
-    ];
+    protected $guarded = [];
 
     protected $casts = [
         'total_amount' => 'decimal:2',
-        'subtotal' => 'decimal:2',
-        'tax_amount' => 'decimal:2',
-        'shipping_amount' => 'decimal:2',
-        'discount_amount' => 'decimal:2',
-        'shipping_address' => 'array',
-        'billing_address' => 'array',
-        'ordered_at' => 'datetime',
+        'order_date' => 'datetime',
     ];
 
     // Relationship with user

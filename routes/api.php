@@ -767,6 +767,61 @@ Route::prefix('v1')->group(function () {
 
         /*
         |--------------------------------------------------------------------------
+        | Admin E-Commerce Routes
+        |--------------------------------------------------------------------------
+        */
+
+        // Orders
+        Route::get('/admin/orders', [AdminOrderController::class, 'index']);
+        Route::get('/admin/orders/stats', [AdminOrderController::class, 'stats']);
+        Route::get('/admin/orders/{id}', [AdminOrderController::class, 'show']);
+        Route::patch('/admin/orders/{id}/status', [AdminOrderController::class, 'updateStatus']);
+        Route::delete('/admin/orders/{id}', [AdminOrderController::class, 'destroy']);
+
+        // Quotations
+        Route::get('/admin/quotations', [AdminQuotationController::class, 'index']);
+        Route::get('/admin/quotations/{quotation}', [AdminQuotationController::class, 'show']);
+        Route::patch('/admin/quotations/{quotation}/status', [AdminQuotationController::class, 'updateStatus']);
+        Route::post('/admin/quotations/{quotation}/send-quote', [AdminQuotationController::class, 'sendQuote']);
+
+        // Customers (uses UserController with role filter)
+        Route::get('/admin/customers', [UserController::class, 'customers']);
+
+        // Gift Cards
+        Route::get('/admin/gift-cards', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'index']);
+        Route::post('/admin/gift-cards', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'store']);
+        Route::get('/admin/gift-cards/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'show']);
+        Route::put('/admin/gift-cards/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'update']);
+        Route::delete('/admin/gift-cards/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'destroy']);
+
+        // Payment Gateways
+        Route::get('/admin/payment-gateways', [\App\Http\Controllers\Api\Admin\PaymentGatewayController::class, 'index']);
+        Route::post('/admin/payment-gateways', [\App\Http\Controllers\Api\Admin\PaymentGatewayController::class, 'store']);
+        Route::get('/admin/payment-gateways/{id}', [\App\Http\Controllers\Api\Admin\PaymentGatewayController::class, 'show']);
+        Route::put('/admin/payment-gateways/{id}', [\App\Http\Controllers\Api\Admin\PaymentGatewayController::class, 'update']);
+        Route::delete('/admin/payment-gateways/{id}', [\App\Http\Controllers\Api\Admin\PaymentGatewayController::class, 'destroy']);
+
+        // Shipping Methods
+        Route::get('/admin/shipping-methods', [\App\Http\Controllers\Api\Admin\ShippingMethodController::class, 'index']);
+        Route::post('/admin/shipping-methods', [\App\Http\Controllers\Api\Admin\ShippingMethodController::class, 'store']);
+        Route::put('/admin/shipping-methods/{id}', [\App\Http\Controllers\Api\Admin\ShippingMethodController::class, 'update']);
+        Route::delete('/admin/shipping-methods/{id}', [\App\Http\Controllers\Api\Admin\ShippingMethodController::class, 'destroy']);
+
+        // Email Templates
+        Route::get('/admin/email-templates', [\App\Http\Controllers\Api\Admin\EmailTemplateController::class, 'index']);
+        Route::post('/admin/email-templates', [\App\Http\Controllers\Api\Admin\EmailTemplateController::class, 'store']);
+        Route::get('/admin/email-templates/{id}', [\App\Http\Controllers\Api\Admin\EmailTemplateController::class, 'show']);
+        Route::put('/admin/email-templates/{id}', [\App\Http\Controllers\Api\Admin\EmailTemplateController::class, 'update']);
+        Route::delete('/admin/email-templates/{id}', [\App\Http\Controllers\Api\Admin\EmailTemplateController::class, 'destroy']);
+
+        // Sales Report (aggregate)
+        Route::get('/admin/sales-report', [AdminOrderController::class, 'stats']);
+
+        // Transactions (wallet)
+        Route::get('/admin/transactions', [AdminWalletController::class, 'index']);
+
+        /*
+        |--------------------------------------------------------------------------
         | Home Page Management Routes (Admin Only)
         |--------------------------------------------------------------------------
         |

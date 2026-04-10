@@ -13,58 +13,118 @@ class AdminOrderController extends Controller
      */
     public function index(Request $request)
     {
-        $query = EcommerceOrder::with('user');
+        try {
+            $query = EcommerceOrder::with('user');
 
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
+            if ($request->has('status') && $request->status) {
+                $query->where('status', $request->status);
+            }
+
+            if ($request->has('search') && $request->search) {
+                $search = $request->search;
+                $query->where(function ($q) use ($search) {
+                    $q->where('order_number', 'like', "%{$search}%")
+                      ->orWhereHas('user', function ($uq) use ($search) {
+                          $uq->where('name', 'like', "%{$search}%")
+                              ->orWhere('email', 'like', "%{$search}%");
+                      });
+                });
+            }
+
+            if ($request->has('date_from') && $request->date_from) {
+                $query->whereDate('created_at', '>=', $request->date_from);
+            }
+
+            if ($request->has('date_to') && $request->date_to) {
+                $query->whereDate('created_at', '<=', $request->date_to);
+            }
+
+            $orders = $query->orderBy('created_at', 'desc')
+                ->paginate($request->get('per_page', 20));
+
+            return response()->json([
+                'success' => true,
+                'data' => $orders,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch orders.',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
         }
-
-        if ($request->has('search')) {
-            $query->where('order_number', 'like', '%' . $request->search . '%')
-                  ->orWhere('user_id', 'like', '%' . $request->search . '%');
-        }
-
-        if ($request->has('date_from')) {
-            $query->whereDate('created_at', '>=', $request->date_from);
-        }
-
-        if ($request->has('date_to')) {
-            $query->whereDate('created_at', '<=', $request->date_to);
-        }
-
-        $orders = $query->pagination($request->get('per_page', 15));
-
-        return response()->json($orders);
     }
 
     /**
      * Get order details
      */
-    public function show(EcommerceOrder $order)
+    public function show($id)
     {
-        return response()->json($order->load('user', 'items'));
+        try {
+            $order = EcommerceOrder::with(['user', 'items'])->findOrFail($id);
+            return response()->json(['success' => true, 'data' => ['order' => $order]]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Order not found.'], 404);
+        }
     }
 
     /**
      * Update order status
      */
-    public function updateStatus(Request $request, EcommerceOrder $order)
+    public function updateStatus(Request $request, $id)
     {
-        $request->validate([
-            'status' => 'required|in:pending,processing,completed,cancelled,refunded',
-        ]);
+        try {
+            $request->validate([
+                'status' => 'required|in:pending,processing,completed,cancelled,refunded',
+            ]);
 
-        $order->update(['status' => $request->status]);
-
-        return response()->json($order);
+            $order = EcommerceOrder::findOrFail($id);
+            $order->update(['status' => $request->status]);
+            return response()->json(['success' => true, 'message' => 'Order status updated.', 'data' => ['order' => $order]]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Failed to update order.', 'error' => config('app.debug') ? $e->getMessage() : null], 500);
+        }
     }
 
     /**
      * Delete order
      */
-    public function destroy(EcommerceOrder $order)
+    public function destroy($id)
     {
-        $order->delete();
-        return response()->json(['message' => 'Order deleted successfully']);
+        try {
+            EcommerceOrder::findOrFail($id)->delete();
+            return response()->json(['success' => true, 'message' => 'Order deleted.']);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Failed to delete order.'], 500);
+        }
+    }
+
+    /**
+     * Get orders summary stats
+     */
+    public function stats()
+    {
+        try {
+            $total = EcommerceOrder::count();
+            $pending = EcommerceOrder::where('status', 'pending')->count();
+            $processing = EcommerceOrder::where('status', 'processing')->count();
+            $completed = EcommerceOrder::where('status', 'completed')->count();
+            $cancelled = EcommerceOrder::where('status', 'cancelled')->count();
+            $revenue = EcommerceOrder::where('status', 'completed')->sum('total_amount');
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'total' => $total,
+                    'pending' => $pending,
+                    'processing' => $processing,
+                    'completed' => $completed,
+                    'cancelled' => $cancelled,
+                    'revenue' => round($revenue, 2),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Failed to get stats.'], 500);
+        }
     }
 }
