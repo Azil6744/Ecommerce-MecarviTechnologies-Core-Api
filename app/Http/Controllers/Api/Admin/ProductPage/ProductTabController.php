@@ -27,7 +27,7 @@ class ProductTabController extends Controller
     public function store(Request $request)
     {
         try {
-            if (!$request->user()->hasAdminAccess()) {
+            if (!$request->user()?->hasAdminAccess()) {
                 return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
             }
 
@@ -56,7 +56,7 @@ class ProductTabController extends Controller
     public function update(Request $request, $id)
     {
         try {
-            if (!$request->user()->hasAdminAccess()) {
+            if (!$request->user()?->hasAdminAccess()) {
                 return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
             }
 
@@ -88,7 +88,7 @@ class ProductTabController extends Controller
     public function destroy(Request $request, $id)
     {
         try {
-            if (!$request->user()->hasAdminAccess()) {
+            if (!$request->user()?->hasAdminAccess()) {
                 return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
             }
 
