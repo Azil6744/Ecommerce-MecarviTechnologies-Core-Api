@@ -9,6 +9,36 @@ use Illuminate\Support\Facades\Schema;
 
 class EcommerceWalletTransactionController extends Controller
 {
+    public function summary(Request $request)
+    {
+        $user = $request->user();
+        $query = EcommerceWalletTransaction::query();
+
+        if ($user && !$user->isSuperAdmin() && Schema::hasColumn((new EcommerceWalletTransaction)->getTable(), 'user_id')) {
+            $query->where('user_id', $user->id);
+        }
+
+        $transactions = $query->latest()->get();
+        $balance = (float) ($transactions->first()?->balance_after ?? 0);
+        $credits = (float) $transactions
+            ->filter(fn ($transaction) => $this->isCredit($transaction))
+            ->sum('amount');
+        $debits = (float) $transactions
+            ->filter(fn ($transaction) => !$this->isCredit($transaction))
+            ->sum('amount');
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'balance' => $balance,
+                'credits' => $credits,
+                'debits' => $debits,
+                'transactions_count' => $transactions->count(),
+                'last_updated' => optional($transactions->first()?->updated_at ?? $transactions->first()?->created_at)?->toISOString(),
+            ],
+        ]);
+    }
+
     public function index(Request $request)
     {
         $user = $request->user();
@@ -54,5 +84,11 @@ class EcommerceWalletTransactionController extends Controller
         $item = EcommerceWalletTransaction::findOrFail($id);
         $item->delete();
         return response()->json(['success' => true, 'message' => 'Deleted successfully']);
+    }
+
+    private function isCredit(EcommerceWalletTransaction $transaction): bool
+    {
+        $type = strtolower((string) ($transaction->type ?? ''));
+        return in_array($type, ['credit', 'deposit', 'refund', 'affiliate earned', 'affiliate_earned']);
     }
 }

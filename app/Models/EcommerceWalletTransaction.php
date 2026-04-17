@@ -11,10 +11,10 @@ class EcommerceWalletTransaction extends Model
 
     protected $fillable = [
         'user_id',
-        'transaction_type',
+        'type',
         'amount',
-        'reason',
         'balance_after',
+        'description',
         'status',
         'reference_id',
     ];

@@ -22,6 +22,10 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'username',
+        'phone',
+        'pin',
+        'role',
     ];
 
     /**
@@ -31,6 +35,7 @@ class User extends Authenticatable
      */
     protected $hidden = [
         'password',
+        'pin',
         'remember_token',
     ];
 
@@ -80,7 +85,7 @@ class User extends Authenticatable
      */
     public function hasAdminAccess(): bool
     {
-        return in_array($this->role, ['super_admin', 'editor']);
+        return $this->hasAnyRole(['super_admin', 'admin', 'editor']) || in_array($this->role, ['super_admin', 'admin', 'editor']);
     }
 
     /**

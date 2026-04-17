@@ -10,25 +10,19 @@ class EcommerceQuotation extends Model
     use HasFactory;
 
     protected $fillable = [
+        'quote_number',
         'user_id',
-        'subject',
-        'description',
-        'required_quantity',
-        'required_specification',
-        'delivery_date',
+        'company_name',
+        'customer_name',
+        'contact_email',
         'status',
-        'quote_price',
-        'quote_details',
-        'quoted_at',
-        'validity_date',
-        'expires_at',
+        'total_estimated',
+        'valid_until',
     ];
 
     protected $casts = [
-        'quote_price' => 'decimal:2',
-        'quoted_at' => 'datetime',
-        'expires_at' => 'datetime',
-        'delivery_date' => 'date',
+        'total_estimated' => 'decimal:2',
+        'valid_until' => 'date',
     ];
 
     public function user()

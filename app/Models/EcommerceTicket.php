@@ -10,27 +10,17 @@ class EcommerceTicket extends Model
     use HasFactory;
 
     protected $fillable = [
+        'ticket_number',
         'user_id',
+        'customer_name',
         'subject',
-        'description',
         'priority',
         'status',
-        'category',
-        'assigned_to',
-        'closed_at',
-    ];
-
-    protected $casts = [
-        'closed_at' => 'datetime',
+        'message',
     ];
 
     public function user()
     {
         return $this->belongsTo(User::class);
-    }
-
-    public function replies()
-    {
-        return $this->hasMany(EcommerceTicketReply::class, 'ticket_id');
     }
 }

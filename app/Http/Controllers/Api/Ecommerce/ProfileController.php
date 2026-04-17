@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Ecommerce;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 
 class ProfileController extends Controller
 {
@@ -14,7 +15,10 @@ class ProfileController extends Controller
     public function show(Request $request)
     {
         $user = $request->user();
-        return response()->json($user);
+        return response()->json([
+            'success' => true,
+            'data' => $user,
+        ]);
     }
 
     /**
@@ -25,29 +29,27 @@ class ProfileController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . $request->user()->id,
+            'username' => 'nullable|string|max:255',
             'phone' => 'nullable|string|max:20',
-            'address' => 'nullable|string|max:255',
-            'city' => 'nullable|string|max:100',
-            'state' => 'nullable|string|max:100',
-            'zip' => 'nullable|string|max:20',
-            'country' => 'nullable|string|max:100',
-            'profile_picture' => 'nullable|string',
         ]);
 
         $user = $request->user();
-        $user->update($request->only([
-            'name',
-            'email',
-            'phone',
-            'address',
-            'city',
-            'state',
-            'zip',
-            'country',
-            'profile_picture',
-        ]));
+        $payload = $request->only(['name', 'email', 'username', 'phone']);
+        $allowed = [];
 
-        return response()->json($user);
+        foreach ($payload as $key => $value) {
+            if (Schema::hasColumn($user->getTable(), $key)) {
+                $allowed[$key] = $value;
+            }
+        }
+
+        $user->update($allowed);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Profile updated successfully',
+            'data' => $user->fresh(),
+        ]);
     }
 
     /**
@@ -64,13 +66,17 @@ class ProfileController extends Controller
 
         if (!Hash::check($request->current_password, $user->password)) {
             return response()->json([
+                'success' => false,
                 'message' => 'Current password is incorrect',
             ], 422);
         }
 
         $user->update(['password' => Hash::make($request->password)]);
 
-        return response()->json(['message' => 'Password updated successfully']);
+        return response()->json([
+            'success' => true,
+            'message' => 'Password updated successfully',
+        ]);
     }
 
     /**
@@ -79,13 +85,31 @@ class ProfileController extends Controller
     public function updatePin(Request $request)
     {
         $request->validate([
+            'current_pin' => 'nullable|string|size:4|regex:/^\d+$/',
             'pin' => 'required|string|size:4|regex:/^\d+$/',
             'pin_confirmation' => 'required|same:pin',
         ]);
 
         $user = $request->user();
+        if (!Schema::hasColumn($user->getTable(), 'pin')) {
+            return response()->json([
+                'success' => false,
+                'message' => 'PIN support is not available on this server yet.',
+            ], 422);
+        }
+
+        if ($user->pin && $request->filled('current_pin') && !Hash::check($request->current_pin, $user->pin)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Current PIN is incorrect',
+            ], 422);
+        }
+
         $user->update(['pin' => Hash::make($request->pin)]);
 
-        return response()->json(['message' => 'PIN updated successfully']);
+        return response()->json([
+            'success' => true,
+            'message' => 'PIN updated successfully',
+        ]);
     }
 }

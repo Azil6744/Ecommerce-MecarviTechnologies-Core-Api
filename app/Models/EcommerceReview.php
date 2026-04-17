@@ -12,17 +12,14 @@ class EcommerceReview extends Model
     protected $fillable = [
         'product_id',
         'user_id',
+        'customer_name',
         'rating',
         'title',
-        'content',
+        'comment',
         'status',
-        'verified_purchase',
-        'helpful_count',
-        'unhelpful_count',
     ];
 
     protected $casts = [
-        'verified_purchase' => 'boolean',
         'rating' => 'integer',
     ];
 

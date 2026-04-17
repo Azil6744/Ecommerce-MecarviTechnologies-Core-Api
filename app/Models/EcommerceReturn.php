@@ -10,37 +10,21 @@ class EcommerceReturn extends Model
     use HasFactory;
 
     protected $fillable = [
-        'order_id',
+        'return_number',
         'user_id',
-        'product_id',
+        'order_number',
+        'customer_name',
         'reason',
-        'description',
         'status',
         'refund_amount',
-        'approved_at',
-        'completed_at',
-        'tracking_number',
-        'return_method',
     ];
 
     protected $casts = [
         'refund_amount' => 'decimal:2',
-        'approved_at' => 'datetime',
-        'completed_at' => 'datetime',
     ];
-
-    public function order()
-    {
-        return $this->belongsTo(EcommerceOrder::class);
-    }
 
     public function user()
     {
         return $this->belongsTo(User::class);
-    }
-
-    public function product()
-    {
-        return $this->belongsTo(Product::class);
     }
 }
