@@ -15,8 +15,10 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('ecommerce')->group(function () {
 
     // Public E-Commerce Routes (No Auth Required)
+    Route::get('/categories', [\App\Http\Controllers\Api\Ecommerce\CategoryController::class, 'index']);
     Route::get('/products', [\App\Http\Controllers\Api\Ecommerce\ProductController::class, 'index']);
     Route::get('/products/{id}', [\App\Http\Controllers\Api\Ecommerce\ProductController::class, 'show']);
+    Route::post('/order-submissions', [\App\Http\Controllers\Api\Ecommerce\PublicOrderSubmissionController::class, 'store']);
     
     // Guest Cart (Session/Cookie based cart could be handled here if needed, 
     // but usually we force auth for b2b or manage via local storage on frontend)

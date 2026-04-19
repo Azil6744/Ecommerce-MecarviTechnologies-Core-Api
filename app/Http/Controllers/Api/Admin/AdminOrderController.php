@@ -14,7 +14,7 @@ class AdminOrderController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = EcommerceOrder::with('user');
+            $query = EcommerceOrder::with(['user', 'items']);
 
             if ($request->has('status') && $request->status) {
                 $query->where('status', $request->status);
@@ -24,6 +24,9 @@ class AdminOrderController extends Controller
                 $search = $request->search;
                 $query->where(function ($q) use ($search) {
                     $q->where('order_number', 'like', "%{$search}%")
+                      ->orWhere('customer_name', 'like', "%{$search}%")
+                      ->orWhere('customer_email', 'like', "%{$search}%")
+                      ->orWhere('company_name', 'like', "%{$search}%")
                       ->orWhereHas('user', function ($uq) use ($search) {
                           $uq->where('name', 'like', "%{$search}%")
                               ->orWhere('email', 'like', "%{$search}%");

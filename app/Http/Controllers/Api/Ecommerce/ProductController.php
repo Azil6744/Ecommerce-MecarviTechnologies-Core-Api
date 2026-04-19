@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Ecommerce;
 
 use App\Http\Controllers\Controller;
+use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Http\Request;
 
@@ -13,15 +14,24 @@ class ProductController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Product::with('category')->where('is_active', true);
+        $query = Product::with(['category.parent'])
+            ->where('is_active', true);
 
         if ($request->has('category_id')) {
-            $query->where('category_id', $request->category_id);
+            $category = Category::with('children')->find($request->category_id);
+
+            if ($category) {
+                $categoryIds = $category->children->pluck('id')->prepend($category->id);
+                $query->whereIn('category_id', $categoryIds);
+            } else {
+                $query->where('category_id', $request->category_id);
+            }
         }
 
         if ($request->has('search')) {
             $query->where(function($q) use ($request) {
                 $q->where('name', 'like', '%' . $request->search . '%')
+                  ->orWhere('sku', 'like', '%' . $request->search . '%')
                   ->orWhere('description', 'like', '%' . $request->search . '%')
                   ->orWhere('tags', 'like', '%' . $request->search . '%');
             });
@@ -52,6 +62,9 @@ class ProductController extends Controller
                 case 'newest':
                     $query->orderBy('created_at', 'desc');
                     break;
+                case 'oldest':
+                    $query->orderBy('created_at', 'asc');
+                    break;
                 default:
                     $query->orderBy('created_at', 'desc');
             }
@@ -59,7 +72,7 @@ class ProductController extends Controller
             $query->orderBy('created_at', 'desc');
         }
 
-        $products = $query->paginate($request->get('per_page', 12));
+        $products = $query->paginate((int) $request->get('per_page', 12));
 
         return response()->json($products);
     }

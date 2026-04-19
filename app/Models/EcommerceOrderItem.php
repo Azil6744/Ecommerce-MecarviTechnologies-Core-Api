@@ -30,7 +30,7 @@ class EcommerceOrderItem extends Model
     // Relationship with order
     public function order()
     {
-        return $this->belongsTo(EcommerceOrder::class);
+        return $this->belongsTo(EcommerceOrder::class, 'order_id');
     }
 
     // Relationship with product

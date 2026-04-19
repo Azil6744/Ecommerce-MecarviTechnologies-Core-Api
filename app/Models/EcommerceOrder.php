@@ -14,6 +14,7 @@ class EcommerceOrder extends Model
     protected $casts = [
         'total_amount' => 'decimal:2',
         'order_date' => 'datetime',
+        'metadata' => 'array',
     ];
 
     // Relationship with user
@@ -25,7 +26,7 @@ class EcommerceOrder extends Model
     // Relationship with order items
     public function items()
     {
-        return $this->hasMany(EcommerceOrderItem::class);
+        return $this->hasMany(EcommerceOrderItem::class, 'order_id');
     }
 
     // Generate order number
