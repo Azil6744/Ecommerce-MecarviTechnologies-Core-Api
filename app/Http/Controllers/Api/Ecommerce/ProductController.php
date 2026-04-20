@@ -38,20 +38,20 @@ class ProductController extends Controller
         }
 
         if ($request->has('min_price')) {
-            $query->where('price', '>=', $request->min_price);
+            $query->whereRaw('COALESCE(sale_price, price) >= ?', [$request->min_price]);
         }
 
         if ($request->has('max_price')) {
-            $query->where('price', '<=', $request->max_price);
+            $query->whereRaw('COALESCE(sale_price, price) <= ?', [$request->max_price]);
         }
 
         if ($request->has('sort')) {
             switch ($request->sort) {
                 case 'price_asc':
-                    $query->orderBy('price', 'asc');
+                    $query->orderByRaw('COALESCE(sale_price, price) asc');
                     break;
                 case 'price_desc':
-                    $query->orderBy('price', 'desc');
+                    $query->orderByRaw('COALESCE(sale_price, price) desc');
                     break;
                 case 'name_asc':
                     $query->orderBy('name', 'asc');
@@ -86,6 +86,6 @@ class ProductController extends Controller
             return response()->json(['message' => 'Product not found'], 404);
         }
 
-        return response()->json($product->load('category', 'reviews'));
+        return response()->json($product->load('category.parent'));
     }
 }
