@@ -77,6 +77,7 @@ use App\Http\Controllers\Api\Admin\AdminReturnController;
 use App\Http\Controllers\Api\Admin\AdminQuotationController;
 use App\Http\Controllers\Api\Admin\AdminTicketController;
 use App\Http\Controllers\Api\Admin\AdminWalletController;
+use App\Http\Controllers\Api\Admin\AdminFinancialTransactionController;
 use App\Http\Controllers\Api\Admin\ProjectController;
 use App\Http\Controllers\Api\Admin\TaskController;
 use App\Http\Controllers\Api\Admin\TeamController;
@@ -822,8 +823,8 @@ Route::prefix('v1')->group(function () {
         // Sales Report (aggregate)
         Route::get('/admin/sales-report', [AdminOrderController::class, 'stats']);
 
-        // Transactions (wallet)
-        Route::get('/admin/transactions', [AdminWalletController::class, 'index']);
+        // Transactions (combined financial ledger)
+        Route::get('/admin/transactions', [AdminFinancialTransactionController::class, 'index']);
 
         /*
         |--------------------------------------------------------------------------
