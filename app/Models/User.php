@@ -149,4 +149,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(EcommerceReturn::class);
     }
+
+    public function customerVerifications()
+    {
+        return $this->hasMany(EcommerceCustomerVerification::class);
+    }
 }

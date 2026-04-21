@@ -78,6 +78,7 @@ use App\Http\Controllers\Api\Admin\AdminQuotationController;
 use App\Http\Controllers\Api\Admin\AdminTicketController;
 use App\Http\Controllers\Api\Admin\AdminWalletController;
 use App\Http\Controllers\Api\Admin\AdminFinancialTransactionController;
+use App\Http\Controllers\Api\Admin\AdminSubscriptionPlanController;
 use App\Http\Controllers\Api\Admin\ProjectController;
 use App\Http\Controllers\Api\Admin\TaskController;
 use App\Http\Controllers\Api\Admin\TeamController;
@@ -780,11 +781,26 @@ Route::prefix('v1')->group(function () {
         Route::patch('/admin/orders/{id}/status', [AdminOrderController::class, 'updateStatus']);
         Route::delete('/admin/orders/{id}', [AdminOrderController::class, 'destroy']);
 
+        // Order Proofs
+        Route::get('/admin/order-proofs', [\App\Http\Controllers\Api\Admin\OrderProofController::class, 'index']);
+        Route::get('/admin/order-proofs/{orderProof}', [\App\Http\Controllers\Api\Admin\OrderProofController::class, 'show']);
+        Route::put('/admin/order-proofs/{orderProof}/status', [\App\Http\Controllers\Api\Admin\OrderProofController::class, 'updateStatus']);
+        Route::delete('/admin/order-proofs/{orderProof}', [\App\Http\Controllers\Api\Admin\OrderProofController::class, 'destroy']);
+
+        // Order Verifications
+        Route::get('/admin/order-verifications', [\App\Http\Controllers\Api\Admin\OrderVerificationController::class, 'index']);
+        Route::get('/admin/order-verifications/{orderVerification}', [\App\Http\Controllers\Api\Admin\OrderVerificationController::class, 'show']);
+        Route::put('/admin/order-verifications/{orderVerification}/status', [\App\Http\Controllers\Api\Admin\OrderVerificationController::class, 'updateStatus']);
+        Route::delete('/admin/order-verifications/{orderVerification}', [\App\Http\Controllers\Api\Admin\OrderVerificationController::class, 'destroy']);
+
         // Quotations
         Route::get('/admin/quotations', [AdminQuotationController::class, 'index']);
         Route::get('/admin/quotations/{quotation}', [AdminQuotationController::class, 'show']);
         Route::patch('/admin/quotations/{quotation}/status', [AdminQuotationController::class, 'updateStatus']);
         Route::post('/admin/quotations/{quotation}/send-quote', [AdminQuotationController::class, 'sendQuote']);
+
+        // Subscription Plans
+        Route::apiResource('/admin/subscription-plans', AdminSubscriptionPlanController::class);
 
         // Customers (uses UserController with role filter)
         Route::get('/admin/customers', [UserController::class, 'customers']);

@@ -33,8 +33,12 @@ Route::prefix('ecommerce')->group(function () {
         Route::delete('/cart/items/{id}', [\App\Http\Controllers\Api\Ecommerce\CartController::class, 'removeItem']);
         Route::delete('/cart', [\App\Http\Controllers\Api\Ecommerce\CartController::class, 'clear']);
 
-        // Checkout & Orders
+        // Checkout, Payments & Orders
         Route::post('/checkout', [\App\Http\Controllers\Api\Ecommerce\CheckoutController::class, 'process']);
+        Route::post('/payment/process', [\App\Http\Controllers\Api\Ecommerce\PaymentController::class, 'process']);
+        Route::match(['get', 'post'], '/payment/paypal/success', [\App\Http\Controllers\Api\Ecommerce\PaymentController::class, 'paypalSuccess']);
+        Route::match(['get', 'post'], '/payment/paypal/cancel', [\App\Http\Controllers\Api\Ecommerce\PaymentController::class, 'paypalCancel']);
+        
         Route::apiResource('orders', \App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class);
 
         // Account Profile & Addresses
