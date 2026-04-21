@@ -99,6 +99,15 @@ class SiteSettingController extends Controller
                 'button.url' => ['nullable', 'string', 'max:500'],
                 'theme_primary_color' => ['nullable', 'string', 'max:50'],
                 'theme_secondary_color' => ['nullable', 'string', 'max:50'],
+                'confirmation_message' => ['nullable', 'string'],
+                'default_message' => ['nullable', 'string'],
+                'loader_type' => ['nullable', 'string', 'max:50'],
+                'loader_color' => ['nullable', 'string', 'max:50'],
+                'maintenance_mode' => ['sometimes', 'boolean'],
+                'maintenance_message' => ['nullable', 'string'],
+                'contact_us_email' => ['nullable', 'email', 'max:255'],
+                'contact_us_phone' => ['nullable', 'string', 'max:50'],
+                'contact_us_address' => ['nullable', 'string'],
                 'header_links' => ['sometimes', 'array'],
                 'header_links.*.label' => ['required_with:header_links', 'string', 'max:255'],
                 'header_links.*.url' => ['required_with:header_links', 'string', 'max:500'],
@@ -150,6 +159,19 @@ class SiteSettingController extends Controller
             }
             if ($request->has('theme_secondary_color')) {
                 $settings->theme_secondary_color = $request->input('theme_secondary_color');
+            }
+            
+            $generalFields = [
+                'confirmation_message', 'default_message', 'loader_type', 'loader_color',
+                'maintenance_message', 'contact_us_email', 'contact_us_phone', 'contact_us_address'
+            ];
+            foreach ($generalFields as $field) {
+                if ($request->has($field)) {
+                    $settings->$field = $request->input($field);
+                }
+            }
+            if ($request->has('maintenance_mode')) {
+                $settings->maintenance_mode = filter_var($request->input('maintenance_mode'), FILTER_VALIDATE_BOOLEAN);
             }
             if ($request->has('logo') && ! $request->hasFile('logo') && is_string($request->input('logo'))) {
                 $settings->logo = $request->input('logo') ?: null;
@@ -236,6 +258,15 @@ class SiteSettingController extends Controller
                 'button.url' => ['nullable', 'string', 'max:500'],
                 'theme_primary_color' => ['sometimes', 'nullable', 'string', 'max:50'],
                 'theme_secondary_color' => ['sometimes', 'nullable', 'string', 'max:50'],
+                'confirmation_message' => ['sometimes', 'nullable', 'string'],
+                'default_message' => ['sometimes', 'nullable', 'string'],
+                'loader_type' => ['sometimes', 'nullable', 'string', 'max:50'],
+                'loader_color' => ['sometimes', 'nullable', 'string', 'max:50'],
+                'maintenance_mode' => ['sometimes', 'boolean'],
+                'maintenance_message' => ['sometimes', 'nullable', 'string'],
+                'contact_us_email' => ['sometimes', 'nullable', 'email', 'max:255'],
+                'contact_us_phone' => ['sometimes', 'nullable', 'string', 'max:50'],
+                'contact_us_address' => ['sometimes', 'nullable', 'string'],
                 'header_links' => ['sometimes', 'array'],
                 'header_links.*.label' => ['required_with:header_links', 'string', 'max:255'],
                 'header_links.*.url' => ['required_with:header_links', 'string', 'max:500'],
@@ -282,6 +313,19 @@ class SiteSettingController extends Controller
             }
             if ($request->has('theme_secondary_color')) {
                 $settings->theme_secondary_color = $request->input('theme_secondary_color');
+            }
+            
+            $generalFields = [
+                'confirmation_message', 'default_message', 'loader_type', 'loader_color',
+                'maintenance_message', 'contact_us_email', 'contact_us_phone', 'contact_us_address'
+            ];
+            foreach ($generalFields as $field) {
+                if ($request->has($field)) {
+                    $settings->$field = $request->input($field);
+                }
+            }
+            if ($request->has('maintenance_mode')) {
+                $settings->maintenance_mode = filter_var($request->input('maintenance_mode'), FILTER_VALIDATE_BOOLEAN);
             }
             if ($request->has('logo') && ! $request->hasFile('logo') && is_string($request->input('logo'))) {
                 $settings->logo = $request->input('logo') ?: null;
@@ -704,6 +748,15 @@ class SiteSettingController extends Controller
             ],
             'theme_primary_color' => $settings->theme_primary_color ?? '#ff6c00',
             'theme_secondary_color' => $settings->theme_secondary_color ?? '#ff00a7',
+            'confirmation_message' => $settings->confirmation_message,
+            'default_message' => $settings->default_message,
+            'loader_type' => $settings->loader_type,
+            'loader_color' => $settings->loader_color,
+            'maintenance_mode' => (bool)$settings->maintenance_mode,
+            'maintenance_message' => $settings->maintenance_message,
+            'contact_us_email' => $settings->contact_us_email,
+            'contact_us_phone' => $settings->contact_us_phone,
+            'contact_us_address' => $settings->contact_us_address,
             'header_links' => $headerLinks->map(fn ($link) => [
                 'id' => $link->id,
                 'label' => $link->label,
@@ -738,6 +791,15 @@ class SiteSettingController extends Controller
             'button' => ['name' => null, 'url' => null],
             'theme_primary_color' => '#ff6c00',
             'theme_secondary_color' => '#ff00a7',
+            'confirmation_message' => null,
+            'default_message' => null,
+            'loader_type' => null,
+            'loader_color' => null,
+            'maintenance_mode' => false,
+            'maintenance_message' => null,
+            'contact_us_email' => null,
+            'contact_us_phone' => null,
+            'contact_us_address' => null,
             'header_links' => $links,
         ];
     }
