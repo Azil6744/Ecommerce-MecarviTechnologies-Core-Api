@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
@@ -502,7 +503,15 @@ class UserController extends Controller
     public function customers(Request $request)
     {
         try {
-            $query = User::where('role', 'customer');
+            $query = User::with(['roles'])
+                ->withCount(['orders'])
+                ->withSum('orders as total_spent', 'total_amount')
+                ->where(function ($q) {
+                    $q->where('role', 'customer')
+                        ->orWhereHas('roles', function ($roleQuery) {
+                            $roleQuery->where('name', 'customer');
+                        });
+                });
 
             if ($request->has('search') && $request->search) {
                 $s = $request->search;
@@ -525,6 +534,10 @@ class UserController extends Controller
             $customers = $query->orderBy('created_at', 'desc')
                 ->paginate($request->get('per_page', 20));
 
+            $customers->getCollection()->transform(function ($user) {
+                return $this->customerPayload($user);
+            });
+
             return response()->json([
                 'success' => true,
                 'data' => $customers,
@@ -536,5 +549,178 @@ class UserController extends Controller
                 'error' => config('app.debug') ? $e->getMessage() : null,
             ], 500);
         }
+    }
+
+    public function customerStats(Request $request)
+    {
+        try {
+            $base = User::where(function ($q) {
+                $q->where('role', 'customer')
+                    ->orWhereHas('roles', function ($roleQuery) {
+                        $roleQuery->where('name', 'customer');
+                    });
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'total' => (clone $base)->count(),
+                    'active' => (clone $base)->whereNull('banned_at')->whereNull('deactivated_at')->count(),
+                    'banned' => (clone $base)->whereNotNull('banned_at')->count(),
+                    'deactivated' => (clone $base)->whereNotNull('deactivated_at')->count(),
+                    'verified' => (clone $base)->whereNotNull('email_verified_at')->count(),
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch customer stats.',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    public function storeCustomer(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'name' => ['required', 'string', 'max:255'],
+                'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
+                'phone' => ['nullable', 'string', 'max:100'],
+                'password' => ['required', 'string', Password::defaults()],
+                'email_verified' => ['sometimes', 'boolean'],
+            ]);
+
+            $user = User::create([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'phone' => $validated['phone'] ?? null,
+                'password' => Hash::make($validated['password']),
+                'role' => 'customer',
+                'email_verified_at' => !empty($validated['email_verified']) ? Carbon::now() : null,
+            ]);
+
+            try {
+                $user->assignRole('customer');
+            } catch (\Exception $e) {
+                // The role may not exist in older local databases. The role column still marks the account as a customer.
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Customer created successfully.',
+                'data' => ['customer' => $this->customerPayload($user->load('roles')->loadCount('orders'))],
+            ], 201);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Customer creation failed.',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    public function updateCustomerStatus(Request $request, $id)
+    {
+        try {
+            $validated = $request->validate([
+                'status' => ['required', 'in:active,banned,deactivated'],
+            ]);
+
+            $customer = $this->findCustomer($id);
+
+            if (!$customer) {
+                return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
+            }
+
+            $customer->banned_at = $validated['status'] === 'banned' ? Carbon::now() : null;
+            $customer->deactivated_at = $validated['status'] === 'deactivated' ? Carbon::now() : null;
+            $customer->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Customer status updated.',
+                'data' => ['customer' => $this->customerPayload($customer->load('roles')->loadCount('orders'))],
+            ]);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update customer status.',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    public function verifyCustomer(Request $request, $id)
+    {
+        try {
+            $customer = $this->findCustomer($id);
+
+            if (!$customer) {
+                return response()->json(['success' => false, 'message' => 'Customer not found.'], 404);
+            }
+
+            $customer->email_verified_at = $customer->email_verified_at ?: Carbon::now();
+            $customer->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Customer verified.',
+                'data' => ['customer' => $this->customerPayload($customer->load('roles')->loadCount('orders'))],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to verify customer.',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    private function findCustomer($id): ?User
+    {
+        return User::where('id', $id)
+            ->where(function ($q) {
+                $q->where('role', 'customer')
+                    ->orWhereHas('roles', function ($roleQuery) {
+                        $roleQuery->where('name', 'customer');
+                    });
+            })
+            ->first();
+    }
+
+    private function customerPayload(User $user): array
+    {
+        $ordersCount = $user->orders_count ?? 0;
+
+        return [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'role' => $user->role,
+            'roles' => $user->relationLoaded('roles') ? $user->roles->pluck('name')->toArray() : [],
+            'email_verified_at' => $user->email_verified_at,
+            'banned_at' => $user->banned_at,
+            'deactivated_at' => $user->deactivated_at,
+            'last_login_at' => $user->last_login_at,
+            'orders_count' => $ordersCount,
+            'total_orders' => $ordersCount,
+            'total_spent' => (float) ($user->total_spent ?? 0),
+            'created_at' => $user->created_at,
+            'updated_at' => $user->updated_at,
+        ];
     }
 }

@@ -79,6 +79,7 @@ use App\Http\Controllers\Api\Admin\AdminTicketController;
 use App\Http\Controllers\Api\Admin\AdminWalletController;
 use App\Http\Controllers\Api\Admin\ProjectController;
 use App\Http\Controllers\Api\Admin\TaskController;
+use App\Http\Controllers\Api\Admin\TeamController;
 use App\Http\Controllers\Api\Admin\ClientController;
 use App\Http\Controllers\Api\Admin\DealController;
 use App\Http\Controllers\Api\Admin\EmployeeController;
@@ -786,6 +787,10 @@ Route::prefix('v1')->group(function () {
 
         // Customers (uses UserController with role filter)
         Route::get('/admin/customers', [UserController::class, 'customers']);
+        Route::get('/admin/customers/stats', [UserController::class, 'customerStats']);
+        Route::post('/admin/customers', [UserController::class, 'storeCustomer']);
+        Route::patch('/admin/customers/{id}/status', [UserController::class, 'updateCustomerStatus']);
+        Route::post('/admin/customers/{id}/verify', [UserController::class, 'verifyCustomer']);
 
         // Gift Cards
         Route::get('/admin/gift-cards', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'index']);
@@ -2620,4 +2625,3 @@ Route::prefix('v1')->group(function () {
 }); // End of v1 prefix group
 
 require base_path('routes/ecommerce.php');
-

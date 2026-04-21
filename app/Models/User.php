@@ -26,6 +26,9 @@ class User extends Authenticatable
         'phone',
         'pin',
         'role',
+        'banned_at',
+        'deactivated_at',
+        'last_login_at',
     ];
 
     /**
@@ -46,6 +49,9 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'banned_at' => 'datetime',
+        'deactivated_at' => 'datetime',
+        'last_login_at' => 'datetime',
     ];
 
     /**
