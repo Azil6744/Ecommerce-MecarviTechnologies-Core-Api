@@ -28,11 +28,23 @@ class EcommerceGiftCardController extends Controller
 
     public function store(Request $request)
     {
-        $data = $request->all();
-        if(Schema::hasColumn((new EcommerceGiftCard)->getTable(), 'user_id')) {
-            $data['user_id'] = $request->user()->id;
-        }
-        $item = EcommerceGiftCard::create($data);
+        $request->validate([
+            'code' => 'required|string|unique:ecommerce_gift_cards,code',
+            'recipient_name' => 'required|string',
+            'amount' => 'required|numeric|min:0.01',
+        ]);
+
+        $item = EcommerceGiftCard::create([
+            'code' => $request->code,
+            'recipient_name' => $request->recipient_name,
+            'recipient_email' => $request->recipient_email ?? '',
+            'sender_name' => $request->sender_name ?? null,
+            'initial_balance' => $request->amount,
+            'current_balance' => $request->amount,
+            'status' => $request->status ?? 'active',
+            'expires_at' => $request->expires_at ?? null,
+        ]);
+
         return response()->json(['success' => true, 'data' => $item]);
     }
 

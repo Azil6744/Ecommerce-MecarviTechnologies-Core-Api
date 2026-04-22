@@ -102,6 +102,24 @@ Route::prefix('ecommerce')->group(function () {
         Route::get('/admin/wallet/{user}', [\App\Http\Controllers\Api\Admin\AdminWalletController::class, 'getUserWallet']);
         Route::post('/admin/wallet/{user}/credit', [\App\Http\Controllers\Api\Admin\AdminWalletController::class, 'creditWallet']);
         Route::post('/admin/wallet/{user}/debit', [\App\Http\Controllers\Api\Admin\AdminWalletController::class, 'debitWallet']);
+
+        // Disputes Management
+        Route::get('/admin/disputes', [\App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class, 'index']);
+        Route::get('/admin/disputes/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class, 'show']);
+        Route::put('/admin/disputes/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class, 'update']);
+        Route::delete('/admin/disputes/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class, 'destroy']);
+
+        // Memberships Management
+        Route::get('/admin/memberships', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'index']);
+        Route::get('/admin/memberships/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'show']);
+        Route::put('/admin/memberships/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'update']);
+        Route::delete('/admin/memberships/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'destroy']);
+
+        // Affiliates Management
+        Route::get('/admin/affiliates', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'index']);
+        Route::get('/admin/affiliates/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'show']);
+        Route::put('/admin/affiliates/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'update']);
+        Route::delete('/admin/affiliates/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'destroy']);
     });
 
 });
