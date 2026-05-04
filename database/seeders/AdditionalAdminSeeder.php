@@ -1,0 +1,30 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\User;
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
+
+class AdditionalAdminSeeder extends Seeder
+{
+    public function run(): void
+    {
+        $admin = User::updateOrCreate([
+            'email' => 'admin@mecarvi.com',
+        ], [
+            'name' => 'Administrator',
+            'password' => Hash::make('Admin@123456'),
+            'email_verified_at' => now(),
+            'role' => 'super_admin',
+        ]);
+
+        // Assign super_admin role
+        $admin->assignRole('super_admin');
+
+        $this->command->info('New admin user created successfully!');
+        $this->command->warn('Credentials:');
+        $this->command->line('Email: admin@mecarvi.com');
+        $this->command->line('Password: Admin@123456');
+    }
+}
