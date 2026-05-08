@@ -11,15 +11,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('about_sections', function (Blueprint $table) {
-            if (Schema::hasColumn('about_sections', 'experience_years')) {
+        if (Schema::hasColumn('about_sections', 'experience_years')) {
+            Schema::table('about_sections', function (Blueprint $table) {
                 $table->dropColumn('experience_years');
-            }
+            });
+        }
 
-            if (Schema::hasColumn('about_sections', 'experience_description')) {
+        if (Schema::hasColumn('about_sections', 'experience_description')) {
+            Schema::table('about_sections', function (Blueprint $table) {
                 $table->dropColumn('experience_description');
-            }
-        });
+            });
+        }
     }
 
     /**

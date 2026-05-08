@@ -11,41 +11,51 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('contact_form_submissions', function (Blueprint $table) {
-            // Drop fields that are not needed
-            $columns = Schema::getColumnListing('contact_form_submissions');
-            
-            if (in_array('job_location', $columns)) {
+        $columns = Schema::getColumnListing('contact_form_submissions');
+        
+        // Drop each column separately for SQLite compatibility
+        if (in_array('job_location', $columns)) {
+            Schema::table('contact_form_submissions', function (Blueprint $table) {
                 $table->dropColumn('job_location');
-            }
-            
-            if (in_array('preferred_contact_method', $columns)) {
+            });
+        }
+        
+        if (in_array('preferred_contact_method', $columns)) {
+            Schema::table('contact_form_submissions', function (Blueprint $table) {
                 $table->dropColumn('preferred_contact_method');
-            }
-            
-            if (in_array('best_time_to_contact', $columns)) {
+            });
+        }
+        
+        if (in_array('best_time_to_contact', $columns)) {
+            Schema::table('contact_form_submissions', function (Blueprint $table) {
                 $table->dropColumn('best_time_to_contact');
-            }
-            
-            if (in_array('name', $columns)) {
+            });
+        }
+        
+        if (in_array('name', $columns)) {
+            Schema::table('contact_form_submissions', function (Blueprint $table) {
                 $table->dropColumn('name');
-            }
-            
-            if (in_array('subject', $columns)) {
+            });
+        }
+        
+        if (in_array('subject', $columns)) {
+            Schema::table('contact_form_submissions', function (Blueprint $table) {
                 $table->dropColumn('subject');
-            }
-            
-            // Ensure first_name and last_name exist and are not nullable
+            });
+        }
+        
+        // Refresh column list after drops
+        $columns = Schema::getColumnListing('contact_form_submissions');
+        
+        // Add/modify columns
+        Schema::table('contact_form_submissions', function (Blueprint $table) use ($columns) {
+            // Ensure first_name and last_name exist
             if (!in_array('first_name', $columns)) {
                 $table->string('first_name')->after('id');
-            } else {
-                $table->string('first_name')->nullable(false)->change();
             }
             
             if (!in_array('last_name', $columns)) {
                 $table->string('last_name')->after('first_name');
-            } else {
-                $table->string('last_name')->nullable(false)->change();
             }
             
             // Ensure company exists (nullable)
@@ -53,18 +63,10 @@ return new class extends Migration
                 $table->string('company')->nullable()->after('email');
             }
             
-            // Ensure email is not nullable
-            $table->string('email')->nullable(false)->change();
-            
-            // Ensure phone is nullable
-            if (in_array('phone', $columns)) {
-                $table->string('phone')->nullable()->change();
-            } else {
+            // Ensure phone exists (nullable)
+            if (!in_array('phone', $columns)) {
                 $table->string('phone')->nullable()->after('email');
             }
-            
-            // Ensure message is not nullable
-            $table->text('message')->nullable(false)->change();
         });
     }
 

@@ -101,7 +101,7 @@ class User extends Authenticatable
      */
     public static function getAvailableRoles(): array
     {
-        return ['super_admin', 'editor', 'viewer'];
+        return ['super_admin', 'admin', 'editor', 'viewer', 'customer', 'seller'];
     }
 
     // Ecommerce Relationships

@@ -14,8 +14,9 @@ class RoleSeeder extends Seeder
      * Roles:
      * - super_admin: Full system access, can manage users, roles, and permissions
      * - admin: Administrative access, can manage content and orders
-     * - editor: Can create and edit content
-     * - customer: Regular customer with basic access
+    * - editor: Can create and edit content
+    * - customer: Regular customer with basic access
+    * - seller: Vendor account with product management access
      */
     public function run(): void
     {
@@ -93,6 +94,15 @@ class RoleSeeder extends Seeder
             'view products',
             'create orders',
             'view orders',
+        ]);
+
+        $sellerRole = Role::firstOrCreate(['name' => 'seller']);
+        $sellerRole->syncPermissions([
+            'view products',
+            'create products',
+            'edit products',
+            'view orders',
+            'edit orders',
         ]);
 
         $this->command->info('Roles and permissions seeded successfully!');

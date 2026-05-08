@@ -20,7 +20,7 @@ return new class extends Migration
         
         // Update existing data - split name into first_name and last_name
         \DB::table('contact_form_submissions')->get()->each(function ($record) {
-            $nameParts = explode(' ', $record->name, 2);
+            $nameParts = explode(' ', $record->name ?? '', 2);
             $firstName = $nameParts[0] ?? 'Unknown';
             $lastName = $nameParts[1] ?? '';
             
@@ -32,13 +32,12 @@ return new class extends Migration
                 ]);
         });
         
+        // SQLite requires separate schema modifications for dropColumn
         Schema::table('contact_form_submissions', function (Blueprint $table) {
-            // Make fields not nullable after data migration
-            $table->string('first_name')->nullable(false)->change();
-            $table->string('last_name')->nullable(false)->change();
-            
-            // Drop old fields
             $table->dropColumn('name');
+        });
+        
+        Schema::table('contact_form_submissions', function (Blueprint $table) {
             $table->dropColumn('subject');
         });
     }
