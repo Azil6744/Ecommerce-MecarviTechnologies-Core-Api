@@ -19,7 +19,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['http://localhost:3000', 'https://mecarvisigns.com', 'https://www.mecarvisigns.com'],
+    'allowed_origins' => ['http://localhost:3000', 'http://localhost:3001', 'https://mecarvisigns.com', 'https://www.mecarvisigns.com'],
 
     'allowed_origins_patterns' => [],
 

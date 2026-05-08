@@ -39,6 +39,7 @@ class Kernel extends HttpKernel
         ],
 
         'api' => [
+            \App\Http\Middleware\CentralAuthTokenMiddleware::class,
             // \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             \Illuminate\Routing\Middleware\ThrottleRequests::class.':api',
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
@@ -66,5 +67,6 @@ class Kernel extends HttpKernel
         'admin.only' => \App\Http\Middleware\AdminOnly::class,
         'role' => \App\Http\Middleware\RoleMiddleware::class,
         'verify.ownership' => \App\Http\Middleware\VerifyOwnership::class,
+        'central.auth' => \App\Http\Middleware\CentralAuthTokenMiddleware::class,
     ];
 }

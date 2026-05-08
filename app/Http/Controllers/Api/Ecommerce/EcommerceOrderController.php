@@ -14,16 +14,16 @@ class EcommerceOrderController extends Controller
         $user = $request->user();
         // Check if admin to return all, or just user
         if ($user && $user->isSuperAdmin()) {
-            return response()->json(['success' => true, 'data' => EcommerceOrder::all()]);
+            return response()->json(['success' => true, 'data' => EcommerceOrder::with('items.product')->latest()->get()]);
         }
         
         // Get by user_id if column exists, otherwise all
         if(Schema::hasColumn((new EcommerceOrder)->getTable(), 'user_id')) {
-            $query = EcommerceOrder::where('user_id', $user->id);
+            $query = EcommerceOrder::with('items.product')->where('user_id', $user->id)->latest();
             return response()->json(['success' => true, 'data' => $query->get()]);
         }
 
-        return response()->json(['success' => true, 'data' => EcommerceOrder::all()]);
+        return response()->json(['success' => true, 'data' => EcommerceOrder::with('items.product')->latest()->get()]);
     }
 
     public function store(Request $request)
@@ -38,7 +38,16 @@ class EcommerceOrderController extends Controller
 
     public function show(Request $request, $id)
     {
-        $item = EcommerceOrder::findOrFail($id);
+        $query = EcommerceOrder::with(['items.product', 'proofs', 'verifications']);
+        
+        if (is_numeric($id)) {
+            $query->where('id', $id)->orWhere('order_number', $id);
+        } else {
+            $query->where('order_number', $id);
+        }
+        
+        $item = $query->firstOrFail();
+            
         return response()->json(['success' => true, 'data' => $item]);
     }
 

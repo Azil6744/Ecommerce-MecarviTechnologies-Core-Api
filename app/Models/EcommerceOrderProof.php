@@ -14,6 +14,12 @@ class EcommerceOrderProof extends Model
         'proof_type',
         'file_path',
         'status',
+        'rejection_reason',
+        'metadata',
+    ];
+
+    protected $casts = [
+        'metadata' => 'array',
     ];
 
     public function order()

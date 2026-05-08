@@ -24,7 +24,7 @@ Route::prefix('ecommerce')->group(function () {
     // but usually we force auth for b2b or manage via local storage on frontend)
 
     // Protected E-Commerce Routes (Auth Required)
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['central.auth', 'auth:sanctum'])->group(function () {
         
         // Cart
         Route::get('/cart', [\App\Http\Controllers\Api\Ecommerce\CartController::class, 'index']);
@@ -62,6 +62,11 @@ Route::prefix('ecommerce')->group(function () {
         Route::apiResource('gift-cards', \App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class);
         Route::apiResource('reviews', \App\Http\Controllers\Api\Ecommerce\EcommerceReviewController::class);
         Route::apiResource('affiliates', \App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class);
+
+        // Order Proofs
+        Route::get('/orders/{orderId}/proofs', [\App\Http\Controllers\Api\Ecommerce\OrderProofController::class, 'getByOrder']);
+        Route::post('/proofs/{id}/approve', [\App\Http\Controllers\Api\Ecommerce\OrderProofController::class, 'approve']);
+        Route::post('/proofs/{id}/reject', [\App\Http\Controllers\Api\Ecommerce\OrderProofController::class, 'reject']);
     });
 
     // Admin E-Commerce Routes (Auth + Admin Role Required)

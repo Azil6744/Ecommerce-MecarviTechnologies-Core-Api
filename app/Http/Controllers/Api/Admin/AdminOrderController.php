@@ -64,7 +64,7 @@ class AdminOrderController extends Controller
     public function show($id)
     {
         try {
-            $order = EcommerceOrder::with(['user', 'items'])->findOrFail($id);
+            $order = EcommerceOrder::with(['user', 'items.product', 'proofs', 'verifications'])->findOrFail($id);
             return response()->json(['success' => true, 'data' => ['order' => $order]]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Order not found.'], 404);

@@ -12,6 +12,10 @@ class OrderProofController extends Controller
     {
         $query = EcommerceOrderProof::with(['order', 'order.user']);
 
+        if ($request->has('order_id')) {
+            $query->where('order_id', $request->order_id);
+        }
+
         if ($request->has('status') && $request->status !== '') {
             $query->where('status', $request->status);
         }
@@ -19,6 +23,29 @@ class OrderProofController extends Controller
         $proofs = $query->latest()->paginate($request->get('per_page', 15));
 
         return response()->json($proofs);
+    }
+
+    public function store(Request $request)
+    {
+        $request->validate([
+            'order_id' => 'required|exists:ecommerce_orders,id',
+            'proof_type' => 'required|string',
+            'file' => 'required|file|max:10240', // 10MB max
+        ]);
+
+        $filePath = $request->file('file')->store('order-proofs', 'public');
+
+        $proof = EcommerceOrderProof::create([
+            'order_id' => $request->order_id,
+            'proof_type' => $request->proof_type,
+            'file_path' => $filePath,
+            'status' => 'awaiting_approval',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => $proof
+        ], 201);
     }
 
     public function show(EcommerceOrderProof $orderProof)
