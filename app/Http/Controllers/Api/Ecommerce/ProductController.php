@@ -38,20 +38,20 @@ class ProductController extends Controller
         }
 
         if ($request->has('min_price')) {
-            $query->whereRaw('COALESCE(sale_price, price) >= ?', [$request->min_price]);
+            $query->whereRaw('CAST(COALESCE(sale_price, price) AS REAL) >= ?', [(float) $request->min_price]);
         }
 
         if ($request->has('max_price')) {
-            $query->whereRaw('COALESCE(sale_price, price) <= ?', [$request->max_price]);
+            $query->whereRaw('CAST(COALESCE(sale_price, price) AS REAL) <= ?', [(float) $request->max_price]);
         }
 
         if ($request->has('sort')) {
             switch ($request->sort) {
                 case 'price_asc':
-                    $query->orderByRaw('COALESCE(sale_price, price) asc');
+                    $query->orderByRaw('CAST(COALESCE(sale_price, price) AS REAL) asc');
                     break;
                 case 'price_desc':
-                    $query->orderByRaw('COALESCE(sale_price, price) desc');
+                    $query->orderByRaw('CAST(COALESCE(sale_price, price) AS REAL) desc');
                     break;
                 case 'name_asc':
                     $query->orderBy('name', 'asc');
