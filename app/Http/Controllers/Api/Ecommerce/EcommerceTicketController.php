@@ -28,17 +28,33 @@ class EcommerceTicketController extends Controller
 
     public function store(Request $request)
     {
-        $data = $request->all();
-        if(Schema::hasColumn((new EcommerceTicket)->getTable(), 'user_id')) {
-            $data['user_id'] = $request->user()->id;
-        }
+        $request->validate([
+            'subject' => 'required|string|max:255',
+            'message' => 'required|string',
+            'priority' => 'nullable|string|in:Low,Normal,High',
+        ]);
+
+        $data = $request->only(['subject', 'message', 'priority', 'customer_name']);
+        $data['user_id'] = $request->user()->id;
+        $data['customer_name'] = $data['customer_name'] ?? $request->user()->name;
+        $data['ticket_number'] = 'TKT-' . strtoupper(substr(md5(uniqid(rand(), true)), 0, 8));
+        $data['status'] = 'Open';
+        $data['priority'] = $data['priority'] ?? 'Normal';
+
         $item = EcommerceTicket::create($data);
-        return response()->json(['success' => true, 'data' => $item]);
+        return response()->json(['success' => true, 'data' => $item->load('replies')], 201);
     }
 
     public function show(Request $request, $id)
     {
-        $item = EcommerceTicket::findOrFail($id);
+        $item = EcommerceTicket::with('replies.user')->findOrFail($id);
+        
+        // Ensure user can only see their own ticket unless super admin
+        $user = $request->user();
+        if ($item->user_id !== $user->id && !$user->isSuperAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        
         return response()->json(['success' => true, 'data' => $item]);
     }
 
@@ -52,7 +68,41 @@ class EcommerceTicketController extends Controller
     public function destroy(Request $request, $id)
     {
         $item = EcommerceTicket::findOrFail($id);
+        
+        $user = $request->user();
+        if ($item->user_id !== $user->id && !$user->isSuperAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+        
         $item->delete();
         return response()->json(['success' => true, 'message' => 'Deleted successfully']);
+    }
+
+    public function addReply(Request $request, $id)
+    {
+        $request->validate([
+            'message' => 'required|string',
+        ]);
+
+        $ticket = EcommerceTicket::findOrFail($id);
+        
+        $user = $request->user();
+        if ($ticket->user_id !== $user->id && !$user->isSuperAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $reply = $ticket->replies()->create([
+            'user_id' => $user->id,
+            'admin_reply' => $user->isSuperAdmin(), // If user is admin, set to true
+            'message' => $request->message,
+            'attachments' => $request->attachments,
+        ]);
+
+        // Optionally update ticket status to "open" or "customer_replied"
+        if (!$user->isSuperAdmin()) {
+            $ticket->update(['status' => 'Open']);
+        }
+
+        return response()->json(['success' => true, 'data' => $ticket->load('replies.user')]);
     }
 }

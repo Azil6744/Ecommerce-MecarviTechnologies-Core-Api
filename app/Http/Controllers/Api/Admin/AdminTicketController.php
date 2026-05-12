@@ -33,7 +33,7 @@ class AdminTicketController extends Controller
      */
     public function show(EcommerceTicket $ticket)
     {
-        return response()->json($ticket->load('user', 'replies'));
+        return response()->json($ticket->load('user', 'replies.user'));
     }
 
     /**
