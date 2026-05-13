@@ -17,6 +17,15 @@ class EcommerceDispute extends Model
         'type',
         'status',
         'description',
+        'email',
+        'phone',
+        'amount',
+        'evidence',
+    ];
+
+    protected $casts = [
+        'amount' => 'decimal:2',
+        'evidence' => 'array',
     ];
 
     public function user()

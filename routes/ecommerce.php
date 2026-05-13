@@ -19,6 +19,8 @@ Route::prefix('ecommerce')->group(function () {
     Route::get('/products', [\App\Http\Controllers\Api\Ecommerce\ProductController::class, 'index']);
     Route::get('/products/{product}', [\App\Http\Controllers\Api\Ecommerce\ProductController::class, 'show']);
     Route::post('/order-submissions', [\App\Http\Controllers\Api\Ecommerce\PublicOrderSubmissionController::class, 'store']);
+    Route::get('/disputes', [\App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class, 'index']);
+    Route::post('/disputes', [\App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class, 'store']);
     
     // Guest Cart (Session/Cookie based cart could be handled here if needed, 
     // but usually we force auth for b2b or manage via local storage on frontend)
