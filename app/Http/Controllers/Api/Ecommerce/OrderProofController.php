@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api\Ecommerce;
 
- horror;
 use App\Http\Controllers\Controller;
 use App\Models\EcommerceOrderProof;
 use Illuminate\Http\Request;

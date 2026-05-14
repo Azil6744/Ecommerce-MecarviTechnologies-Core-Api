@@ -726,7 +726,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/users/{id}', [UserController::class, 'update'])
             ->name('api.v1.users.update');
         Route::patch('/users/{id}', [UserController::class, 'update'])
-            ->name('api.v1.users.update');
+            ->name('api.v1.users.update.patch');
 
         // Assign Roles to User (Admin Only)
         // POST /api/v1/users/{id}/assign-roles
@@ -865,7 +865,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/home-page/{id}', [HomePageController::class, 'update'])
             ->name('api.v1.home-page.update');
         Route::patch('/home-page/{id}', [HomePageController::class, 'update'])
-            ->name('api.v1.home-page.update');
+            ->name('api.v1.home-page.update.patch');
         Route::post('/home-page/{id}', [HomePageController::class, 'update'])
             ->name('api.v1.home-page.update.post');
 
@@ -894,7 +894,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/service-page/{id}', [ServicePageController::class, 'update'])
             ->name('api.v1.service-page.update');
         Route::patch('/service-page/{id}', [ServicePageController::class, 'update'])
-            ->name('api.v1.service-page.update');
+            ->name('api.v1.service-page.update.patch');
         Route::post('/service-page/{id}', [ServicePageController::class, 'update'])
             ->name('api.v1.service-page.update.post');
 
@@ -933,7 +933,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/features-sections/{id}', [FeaturesSectionController::class, 'update'])
             ->name('api.v1.features-sections.update');
         Route::patch('/features-sections/{id}', [FeaturesSectionController::class, 'update'])
-            ->name('api.v1.features-sections.update');
+            ->name('api.v1.features-sections.update.patch');
         Route::post('/features-sections/{id}', [FeaturesSectionController::class, 'update'])
             ->name('api.v1.features-sections.update.post');
 
@@ -972,7 +972,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/analytics-sections/{id}', [AnalyticsSectionController::class, 'update'])
             ->name('api.v1.analytics-sections.update');
         Route::patch('/analytics-sections/{id}', [AnalyticsSectionController::class, 'update'])
-            ->name('api.v1.analytics-sections.update');
+            ->name('api.v1.analytics-sections.update.patch');
         Route::post('/analytics-sections/{id}', [AnalyticsSectionController::class, 'update'])
             ->name('api.v1.analytics-sections.update.post');
 
@@ -1011,7 +1011,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/chart-sections/{id}', [ChartSectionController::class, 'update'])
             ->name('api.v1.chart-sections.update');
         Route::patch('/chart-sections/{id}', [ChartSectionController::class, 'update'])
-            ->name('api.v1.chart-sections.update');
+            ->name('api.v1.chart-sections.update.patch');
         Route::post('/chart-sections/{id}', [ChartSectionController::class, 'update'])
             ->name('api.v1.chart-sections.update.post');
 
@@ -1050,7 +1050,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/tab-sections/{id}', [TabSectionController::class, 'update'])
             ->name('api.v1.tab-sections.update');
         Route::patch('/tab-sections/{id}', [TabSectionController::class, 'update'])
-            ->name('api.v1.tab-sections.update');
+            ->name('api.v1.tab-sections.update.patch');
         Route::post('/tab-sections/{id}', [TabSectionController::class, 'update'])
             ->name('api.v1.tab-sections.update.post');
 
@@ -1089,7 +1089,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/showcase-sections/{id}', [ShowcaseSectionController::class, 'update'])
             ->name('api.v1.showcase-sections.update');
         Route::patch('/showcase-sections/{id}', [ShowcaseSectionController::class, 'update'])
-            ->name('api.v1.showcase-sections.update');
+            ->name('api.v1.showcase-sections.update.patch');
         Route::post('/showcase-sections/{id}', [ShowcaseSectionController::class, 'update'])
             ->name('api.v1.showcase-sections.update.post');
 
@@ -1127,7 +1127,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/about-section/{id}', [AboutSectionController::class, 'update'])
             ->name('api.v1.about-section.update');
         Route::patch('/about-section/{id}', [AboutSectionController::class, 'update'])
-            ->name('api.v1.about-section.update');
+            ->name('api.v1.about-section.update.patch');
         Route::post('/about-section/{id}', [AboutSectionController::class, 'update'])
             ->name('api.v1.about-section.update.post');
 
@@ -1165,7 +1165,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/service-section/{id}', [ServiceSectionController::class, 'update'])
             ->name('api.v1.service-section.update');
         Route::patch('/service-section/{id}', [ServiceSectionController::class, 'update'])
-            ->name('api.v1.service-section.update');
+            ->name('api.v1.service-section.update.patch');
         Route::post('/service-section/{id}', [ServiceSectionController::class, 'update'])
             ->name('api.v1.service-section.update.post');
 
@@ -1203,7 +1203,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/service-cards/{id}', [ServiceCardController::class, 'update'])
             ->name('api.v1.service-cards.update');
         Route::patch('/service-cards/{id}', [ServiceCardController::class, 'update'])
-            ->name('api.v1.service-cards.update');
+            ->name('api.v1.service-cards.update.patch');
         Route::post('/service-cards/{id}', [ServiceCardController::class, 'update'])
             ->name('api.v1.service-cards.update.post');
 
@@ -1231,7 +1231,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/what-we-create-section/{id}', [WhatWeCreateSectionController::class, 'update'])
             ->name('api.v1.what-we-create-section.update');
         Route::patch('/what-we-create-section/{id}', [WhatWeCreateSectionController::class, 'update'])
-            ->name('api.v1.what-we-create-section.update');
+            ->name('api.v1.what-we-create-section.update.patch');
         Route::post('/what-we-create-section/{id}', [WhatWeCreateSectionController::class, 'update'])
             ->name('api.v1.what-we-create-section.update.post');
 
@@ -1261,7 +1261,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/what-we-create-tabs/{id}', [WhatWeCreateTabController::class, 'update'])
             ->name('api.v1.what-we-create-tabs.update');
         Route::patch('/what-we-create-tabs/{id}', [WhatWeCreateTabController::class, 'update'])
-            ->name('api.v1.what-we-create-tabs.update');
+            ->name('api.v1.what-we-create-tabs.update.patch');
         Route::post('/what-we-create-tabs/{id}', [WhatWeCreateTabController::class, 'update'])
             ->name('api.v1.what-we-create-tabs.update.post');
 
@@ -1291,7 +1291,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/category-tabs/{id}', [CategoryTabController::class, 'update'])
             ->name('api.v1.category-tabs.update');
         Route::patch('/category-tabs/{id}', [CategoryTabController::class, 'update'])
-            ->name('api.v1.category-tabs.update');
+            ->name('api.v1.category-tabs.update.patch');
         Route::post('/category-tabs/{id}', [CategoryTabController::class, 'update'])
             ->name('api.v1.category-tabs.update.post');
 
@@ -1317,7 +1317,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/why-choose-us-section/{id}', [WhyChooseUsSectionController::class, 'update'])
             ->name('api.v1.why-choose-us-section.update');
         Route::patch('/why-choose-us-section/{id}', [WhyChooseUsSectionController::class, 'update'])
-            ->name('api.v1.why-choose-us-section.update');
+            ->name('api.v1.why-choose-us-section.update.patch');
         Route::post('/why-choose-us-section/{id}', [WhyChooseUsSectionController::class, 'update'])
             ->name('api.v1.why-choose-us-section.update.post');
 
@@ -1347,7 +1347,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/why-choose-us-tabs/{id}', [WhyChooseUsTabController::class, 'update'])
             ->name('api.v1.why-choose-us-tabs.update');
         Route::patch('/why-choose-us-tabs/{id}', [WhyChooseUsTabController::class, 'update'])
-            ->name('api.v1.why-choose-us-tabs.update');
+            ->name('api.v1.why-choose-us-tabs.update.patch');
         Route::post('/why-choose-us-tabs/{id}', [WhyChooseUsTabController::class, 'update'])
             ->name('api.v1.why-choose-us-tabs.update.post');
 
@@ -1373,7 +1373,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/our-facts-section/{id}', [OurFactsSectionController::class, 'update'])
             ->name('api.v1.our-facts-section.update');
         Route::patch('/our-facts-section/{id}', [OurFactsSectionController::class, 'update'])
-            ->name('api.v1.our-facts-section.update');
+            ->name('api.v1.our-facts-section.update.patch');
         Route::post('/our-facts-section/{id}', [OurFactsSectionController::class, 'update'])
             ->name('api.v1.our-facts-section.update.post');
 
@@ -1403,7 +1403,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/our-facts/{id}', [OurFactController::class, 'update'])
             ->name('api.v1.our-facts.update');
         Route::patch('/our-facts/{id}', [OurFactController::class, 'update'])
-            ->name('api.v1.our-facts.update');
+            ->name('api.v1.our-facts.update.patch');
         Route::post('/our-facts/{id}', [OurFactController::class, 'update'])
             ->name('api.v1.our-facts.update.post');
 
@@ -1429,7 +1429,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/our-promise/{id}', [OurPromiseController::class, 'update'])
             ->name('api.v1.our-promise.update');
         Route::patch('/our-promise/{id}', [OurPromiseController::class, 'update'])
-            ->name('api.v1.our-promise.update');
+            ->name('api.v1.our-promise.update.patch');
         Route::post('/our-promise/{id}', [OurPromiseController::class, 'update'])
             ->name('api.v1.our-promise.update.post');
 
@@ -1455,7 +1455,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/process-steps/{id}', [ProcessStepController::class, 'update'])
             ->name('api.v1.process-steps.update');
         Route::patch('/process-steps/{id}', [ProcessStepController::class, 'update'])
-            ->name('api.v1.process-steps.update');
+            ->name('api.v1.process-steps.update.patch');
         Route::post('/process-steps/{id}', [ProcessStepController::class, 'update'])
             ->name('api.v1.process-steps.update.post');
 
@@ -1481,7 +1481,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/reviews-section/{id}', [ReviewsSectionController::class, 'update'])
             ->name('api.v1.reviews-section.update');
         Route::patch('/reviews-section/{id}', [ReviewsSectionController::class, 'update'])
-            ->name('api.v1.reviews-section.update');
+            ->name('api.v1.reviews-section.update.patch');
         Route::post('/reviews-section/{id}', [ReviewsSectionController::class, 'update'])
             ->name('api.v1.reviews-section.update.post');
 
@@ -1511,7 +1511,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/reviews/{id}', [ReviewController::class, 'update'])
             ->name('api.v1.reviews.update');
         Route::patch('/reviews/{id}', [ReviewController::class, 'update'])
-            ->name('api.v1.reviews.update');
+            ->name('api.v1.reviews.update.patch');
         Route::post('/reviews/{id}', [ReviewController::class, 'update'])
             ->name('api.v1.reviews.update.post');
 
@@ -1537,7 +1537,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/portfolio-section/{id}', [PortfolioSectionController::class, 'update'])
             ->name('api.v1.portfolio-section.update');
         Route::patch('/portfolio-section/{id}', [PortfolioSectionController::class, 'update'])
-            ->name('api.v1.portfolio-section.update');
+            ->name('api.v1.portfolio-section.update.patch');
         Route::post('/portfolio-section/{id}', [PortfolioSectionController::class, 'update'])
             ->name('api.v1.portfolio-section.update.post');
 
@@ -1567,7 +1567,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/portfolio-items/{id}', [PortfolioItemController::class, 'update'])
             ->name('api.v1.portfolio-items.update');
         Route::patch('/portfolio-items/{id}', [PortfolioItemController::class, 'update'])
-            ->name('api.v1.portfolio-items.update');
+            ->name('api.v1.portfolio-items.update.patch');
         Route::post('/portfolio-items/{id}', [PortfolioItemController::class, 'update'])
             ->name('api.v1.portfolio-items.update.post');
 
@@ -1593,7 +1593,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/quote-section/{id}', [QuoteSectionController::class, 'update'])
             ->name('api.v1.quote-section.update');
         Route::patch('/quote-section/{id}', [QuoteSectionController::class, 'update'])
-            ->name('api.v1.quote-section.update');
+            ->name('api.v1.quote-section.update.patch');
         Route::post('/quote-section/{id}', [QuoteSectionController::class, 'update'])
             ->name('api.v1.quote-section.update.post');
 
@@ -1699,7 +1699,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/about-founder-section/{id}', [AboutFounderSectionController::class, 'update'])
             ->name('api.v1.about-founder-section.update');
         Route::patch('/about-founder-section/{id}', [AboutFounderSectionController::class, 'update'])
-            ->name('api.v1.about-founder-section.update');
+            ->name('api.v1.about-founder-section.update.patch');
         Route::post('/about-founder-section/{id}', [AboutFounderSectionController::class, 'update'])
             ->name('api.v1.about-founder-section.update.post');
 
@@ -1729,7 +1729,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/about-company-section/{id}', [AboutCompanySectionController::class, 'update'])
             ->name('api.v1.about-company-section.update');
         Route::patch('/about-company-section/{id}', [AboutCompanySectionController::class, 'update'])
-            ->name('api.v1.about-company-section.update');
+            ->name('api.v1.about-company-section.update.patch');
         Route::post('/about-company-section/{id}', [AboutCompanySectionController::class, 'update'])
             ->name('api.v1.about-company-section.update.post');
 
@@ -1759,7 +1759,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/mission-vision-section/{id}', [MissionVisionSectionController::class, 'update'])
             ->name('api.v1.mission-vision-section.update');
         Route::patch('/mission-vision-section/{id}', [MissionVisionSectionController::class, 'update'])
-            ->name('api.v1.mission-vision-section.update');
+            ->name('api.v1.mission-vision-section.update.patch');
         Route::post('/mission-vision-section/{id}', [MissionVisionSectionController::class, 'update'])
             ->name('api.v1.mission-vision-section.update.post');
 
@@ -1789,7 +1789,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/core-values-section/{id}', [CoreValuesSectionController::class, 'update'])
             ->name('api.v1.core-values-section.update');
         Route::patch('/core-values-section/{id}', [CoreValuesSectionController::class, 'update'])
-            ->name('api.v1.core-values-section.update');
+            ->name('api.v1.core-values-section.update.patch');
 
         /*
         |--------------------------------------------------------------------------
@@ -1809,7 +1809,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/core-values/{id}', [CoreValueController::class, 'update'])
             ->name('api.v1.core-values.update');
         Route::patch('/core-values/{id}', [CoreValueController::class, 'update'])
-            ->name('api.v1.core-values.update');
+            ->name('api.v1.core-values.update.patch');
         Route::post('/core-values/{id}', [CoreValueController::class, 'update'])
             ->name('api.v1.core-values.update.post');
 
@@ -1835,7 +1835,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/faq-hero-section/{id}', [FAQHeroSectionController::class, 'update'])
             ->name('api.v1.faq-hero-section.update');
         Route::patch('/faq-hero-section/{id}', [FAQHeroSectionController::class, 'update'])
-            ->name('api.v1.faq-hero-section.update');
+            ->name('api.v1.faq-hero-section.update.patch');
         Route::post('/faq-hero-section/{id}', [FAQHeroSectionController::class, 'update'])
             ->name('api.v1.faq-hero-section.update.post');
 
@@ -2201,7 +2201,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/team-members/{id}', [TeamMemberController::class, 'update'])
             ->name('api.v1.team-members.update');
         Route::patch('/team-members/{id}', [TeamMemberController::class, 'update'])
-            ->name('api.v1.team-members.update');
+            ->name('api.v1.team-members.update.patch');
         Route::post('/team-members/{id}', [TeamMemberController::class, 'update'])
             ->name('api.v1.team-members.update.post');
 
@@ -2414,7 +2414,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/faq-intro-paragraph/{id}', [FAQIntroParagraphController::class, 'update'])
             ->name('api.v1.faq-intro-paragraph.update');
         Route::patch('/faq-intro-paragraph/{id}', [FAQIntroParagraphController::class, 'update'])
-            ->name('api.v1.faq-intro-paragraph.update');
+            ->name('api.v1.faq-intro-paragraph.update.patch');
         Route::post('/faq-intro-paragraph/{id}', [FAQIntroParagraphController::class, 'update'])
             ->name('api.v1.faq-intro-paragraph.update.post');
 
@@ -2440,7 +2440,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/faq-categories/{id}', [FAQCategoryController::class, 'update'])
             ->name('api.v1.faq-categories.update');
         Route::patch('/faq-categories/{id}', [FAQCategoryController::class, 'update'])
-            ->name('api.v1.faq-categories.update');
+            ->name('api.v1.faq-categories.update.patch');
         Route::post('/faq-categories/{id}', [FAQCategoryController::class, 'update'])
             ->name('api.v1.faq-categories.update.post');
 
@@ -2467,7 +2467,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/faq-items/{id}', [FAQItemController::class, 'update'])
             ->name('api.v1.faq-items.update');
         Route::patch('/faq-items/{id}', [FAQItemController::class, 'update'])
-            ->name('api.v1.faq-items.update');
+            ->name('api.v1.faq-items.update.patch');
         Route::post('/faq-items/{id}', [FAQItemController::class, 'update'])
             ->name('api.v1.faq-items.update.post');
 
@@ -2493,7 +2493,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/faq-ask-question-section/{id}', [FaqAskQuestionSectionController::class, 'update'])
             ->name('api.v1.faq-ask-question-section.update');
         Route::patch('/faq-ask-question-section/{id}', [FaqAskQuestionSectionController::class, 'update'])
-            ->name('api.v1.faq-ask-question-section.update');
+            ->name('api.v1.faq-ask-question-section.update.patch');
 
         /*
         |--------------------------------------------------------------------------
@@ -2510,7 +2510,7 @@ Route::prefix('v1')->group(function () {
         Route::put('/user-submitted-questions/{id}', [UserSubmittedQuestionController::class, 'update'])
             ->name('api.v1.user-submitted-questions.update');
         Route::patch('/user-submitted-questions/{id}', [UserSubmittedQuestionController::class, 'update'])
-            ->name('api.v1.user-submitted-questions.update');
+            ->name('api.v1.user-submitted-questions.update.patch');
         Route::post('/user-submitted-questions/{id}', [UserSubmittedQuestionController::class, 'update'])
             ->name('api.v1.user-submitted-questions.update.post');
 
@@ -2524,18 +2524,6 @@ Route::prefix('v1')->group(function () {
             ContactPageHeroSectionController::class
         );
 
-        // Logout (Revoke Current Token)
-    // POST /api/v1/logout
-    // Revokes current access token
-    Route::post('/logout', function (Request $request) {
-        $request->user()->currentAccessToken()->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Successfully logged out',
-        ]);
-    })->name('api.v1.logout');
-    
     }); // End of auth:sanctum middleware group
     
     /*
@@ -2642,3 +2630,4 @@ Route::prefix('v1')->group(function () {
 }); // End of v1 prefix group
 
 require base_path('routes/ecommerce.php');
+

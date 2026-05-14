@@ -26,7 +26,7 @@ Route::prefix('ecommerce')->group(function () {
     // but usually we force auth for b2b or manage via local storage on frontend)
 
     // Protected E-Commerce Routes (Auth Required)
-    Route::middleware(['central.auth', 'auth:sanctum'])->group(function () {
+    Route::middleware(['central.auth'])->group(function () {
         
         // Cart
         Route::get('/cart', [\App\Http\Controllers\Api\Ecommerce\CartController::class, 'index']);
