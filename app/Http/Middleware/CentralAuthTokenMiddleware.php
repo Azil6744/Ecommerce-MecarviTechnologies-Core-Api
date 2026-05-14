@@ -21,10 +21,15 @@ class CentralAuthTokenMiddleware
      */
     public function handle(Request $request, Closure $next)
     {
-        $token = $request->bearerToken();
+        $token = $this->extractBearerToken($request);
 
         if (! $token) {
-            \Log::info('CentralAuthTokenMiddleware: No token found in request');
+            \Log::info('CentralAuthTokenMiddleware: No token found in request', [
+                'authorization_header_present' => $request->headers->has('Authorization'),
+                'x_central_auth_token_present' => $request->headers->has('X-Central-Auth-Token'),
+                'http_authorization' => $request->server('HTTP_AUTHORIZATION') ? 'present' : 'missing',
+                'redirect_http_authorization' => $request->server('REDIRECT_HTTP_AUTHORIZATION') ? 'present' : 'missing',
+            ]);
             return response()->json([
                 'message' => 'Unauthenticated. Please provide a valid central auth token.',
             ], 401);
@@ -74,6 +79,41 @@ class CentralAuthTokenMiddleware
         }
 
         return $next($request);
+    }
+
+    private function extractBearerToken(Request $request): ?string
+    {
+        $candidates = [
+            $request->bearerToken(),
+            $this->parseBearerValue($request->header('Authorization')),
+            $this->parseBearerValue($request->server('HTTP_AUTHORIZATION')),
+            $this->parseBearerValue($request->server('REDIRECT_HTTP_AUTHORIZATION')),
+            $this->parseBearerValue($request->server('Authorization')),
+            $request->header('X-Central-Auth-Token'),
+            $request->header('X-Auth-Token'),
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (is_string($candidate) && trim($candidate) !== '') {
+                return trim($candidate);
+            }
+        }
+
+        return null;
+    }
+
+    private function parseBearerValue(?string $headerValue): ?string
+    {
+        if (! $headerValue) {
+            return null;
+        }
+
+        if (preg_match('/Bearer\s+(.+)/i', $headerValue, $matches) !== 1) {
+            return null;
+        }
+
+        $token = trim($matches[1]);
+        return $token !== '' ? $token : null;
     }
 
     private function validateAgainstCentralAuth(string $token): ?array

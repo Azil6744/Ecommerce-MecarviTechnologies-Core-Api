@@ -260,12 +260,13 @@
     array (
       0 => 'http://localhost:3000',
       1 => 'http://localhost:3001',
-      2 => 'https://mecarvisigns.com',
-      3 => 'https://www.mecarvisigns.com',
-      4 => 'https://mecarvi.com',
-      5 => 'https://www.mecarvi.com',
-      6 => 'https://mecarviembroidery.com',
-      7 => 'https://www.mecarviembroidery.com',
+      2 => 'https://user.mecarvi.com',
+      3 => 'https://mecarvisigns.com',
+      4 => 'https://www.mecarvisigns.com',
+      5 => 'https://mecarvi.com',
+      6 => 'https://www.mecarvi.com',
+      7 => 'https://mecarviembroidery.com',
+      8 => 'https://www.mecarviembroidery.com',
     ),
     'allowed_origins_patterns' => 
     array (
