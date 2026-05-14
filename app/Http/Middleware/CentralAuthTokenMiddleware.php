@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Str;
 
 class CentralAuthTokenMiddleware
@@ -32,27 +33,14 @@ class CentralAuthTokenMiddleware
         \Log::info('CentralAuthTokenMiddleware: Token found in request');
 
         try {
-            // Validate token with Central Auth API
-            $centralAuthUrl = rtrim(env('CENTRAL_AUTH_INTERNAL_URL', 'http://127.0.0.1:8001/api'), '/');
-            \Log::info('CentralAuthTokenMiddleware: Validating token against ' . $centralAuthUrl);
+            $centralUser = $this->validateAgainstCentralAuth($token);
 
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $token,
-                'Accept' => 'application/json',
-            ])->post($centralAuthUrl . '/auth/validate-token');
-
-            if (! $response->successful() || ! $response->json('valid')) {
-                \Log::warning('CentralAuthTokenMiddleware: Token validation failed or invalid response', [
-                    'status' => $response->status(),
-                    'body' => $response->json()
-                ]);
-
+            if (! $centralUser) {
                 return response()->json([
-                    'message' => 'Unauthenticated. Central auth token is invalid.',
+                    'message' => 'Unauthenticated. Central auth token is invalid or could not be verified.',
                 ], 401);
             }
 
-            $centralUser = $response->json();
             \Log::info('CentralAuthTokenMiddleware: Token valid for ' . $centralUser['email']);
 
             // Find local user by email
@@ -86,5 +74,93 @@ class CentralAuthTokenMiddleware
         }
 
         return $next($request);
+    }
+
+    private function validateAgainstCentralAuth(string $token): ?array
+    {
+        foreach ($this->centralAuthBaseUrls() as $centralAuthUrl) {
+            \Log::info('CentralAuthTokenMiddleware: Validating token against ' . $centralAuthUrl);
+
+            try {
+                $client = Http::withHeaders([
+                    'Authorization' => 'Bearer ' . $token,
+                    'Accept' => 'application/json',
+                ])->timeout(10);
+
+                $validateResponse = $client->post($centralAuthUrl . '/auth/validate-token');
+                $validatedUser = $this->extractValidatedUser($validateResponse);
+                if ($validatedUser) {
+                    return $validatedUser;
+                }
+
+                $meResponse = $client->get($centralAuthUrl . '/auth/me');
+                $meUser = $this->extractMeUser($meResponse);
+                if ($meUser) {
+                    return $meUser;
+                }
+
+                \Log::warning('CentralAuthTokenMiddleware: Central auth rejected token', [
+                    'url' => $centralAuthUrl,
+                    'validate_status' => $validateResponse->status(),
+                    'validate_body' => $validateResponse->json(),
+                    'me_status' => $meResponse->status(),
+                    'me_body' => $meResponse->json(),
+                ]);
+            } catch (\Throwable $e) {
+                \Log::warning('CentralAuthTokenMiddleware: Central auth request failed', [
+                    'url' => $centralAuthUrl,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return null;
+    }
+
+    private function centralAuthBaseUrls(): array
+    {
+        $candidates = [
+            env('CENTRAL_AUTH_INTERNAL_URL'),
+            env('CENTRAL_AUTH_URL'),
+            env('CENTRAL_AUTH_API_URL'),
+            'https://mecarvi.com/auth-api/api',
+            'http://127.0.0.1:8001/api',
+        ];
+
+        return array_values(array_unique(array_filter(array_map(function (?string $url) {
+            if (! $url) {
+                return null;
+            }
+
+            return rtrim($url, '/');
+        }, $candidates))));
+    }
+
+    private function extractValidatedUser(Response $response): ?array
+    {
+        if (! $response->successful() || ! $response->json('valid')) {
+            return null;
+        }
+
+        $payload = $response->json();
+        if (empty($payload['email'])) {
+            return null;
+        }
+
+        return $payload;
+    }
+
+    private function extractMeUser(Response $response): ?array
+    {
+        if (! $response->successful()) {
+            return null;
+        }
+
+        $payload = $response->json();
+        if (empty($payload['email'])) {
+            return null;
+        }
+
+        return $payload;
     }
 }
