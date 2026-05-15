@@ -41,4 +41,10 @@ return [
         'mode' => env('PAYPAL_MODE', 'sandbox'), // Can be 'sandbox' or 'live'
     ],
 
+    'central_auth' => [
+        'internal_url' => env('CENTRAL_AUTH_INTERNAL_URL'),
+        'url' => env('CENTRAL_AUTH_URL', 'https://auth-api.mecarvi.com/api'),
+        'api_url' => env('CENTRAL_AUTH_API_URL'),
+    ],
+
 ];

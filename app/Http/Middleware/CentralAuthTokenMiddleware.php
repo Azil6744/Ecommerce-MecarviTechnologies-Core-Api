@@ -191,10 +191,10 @@ class CentralAuthTokenMiddleware
     private function centralAuthBaseUrls(): array
     {
         $candidates = [
-            env('CENTRAL_AUTH_INTERNAL_URL'),
-            env('CENTRAL_AUTH_URL'),
-            env('CENTRAL_AUTH_API_URL'),
-            'https://mecarvi.com/auth-api/api',
+            config('services.central_auth.internal_url'),
+            config('services.central_auth.url'),
+            config('services.central_auth.api_url'),
+            'https://auth-api.mecarvi.com/api',
             'http://127.0.0.1:8001/api',
         ];
 
