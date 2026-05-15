@@ -156,7 +156,9 @@ class CentralAuthTokenMiddleware
                     'Accept' => 'application/json',
                 ])->timeout(10);
 
-                $validateResponse = $client->post($centralAuthUrl . '/auth/validate-token');
+                $validateResponse = $client->post($centralAuthUrl . '/auth/validate-token', [
+                    'token' => $token,
+                ]);
                 $validatedUser = $this->extractValidatedUser($validateResponse);
                 if ($validatedUser) {
                     return $validatedUser;
