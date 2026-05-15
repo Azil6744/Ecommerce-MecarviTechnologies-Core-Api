@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Str;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class CentralAuthTokenMiddleware
 {
@@ -41,6 +42,14 @@ class CentralAuthTokenMiddleware
             $centralUser = $this->validateAgainstCentralAuth($token);
 
             if (! $centralUser) {
+                $localUser = $this->validateAgainstLocalSanctum($token);
+                if ($localUser) {
+                    $this->authenticateRequestAs($request, $localUser);
+                    \Log::info('CentralAuthTokenMiddleware: Token valid as local Sanctum token for ' . $localUser->email);
+
+                    return $next($request);
+                }
+
                 return response()->json([
                     'message' => 'Unauthenticated. Central auth token is invalid or could not be verified.',
                 ], 401);
@@ -63,13 +72,8 @@ class CentralAuthTokenMiddleware
                 ]);
             }
 
-            Auth::setUser($user);
-            Auth::guard('sanctum')->setUser($user);
+            $this->authenticateRequestAs($request, $user);
             \Log::info('CentralAuthTokenMiddleware: User authenticated for request');
-
-            $request->setUserResolver(function () use ($user) {
-                return $user;
-            });
         } catch (\Exception $e) {
             \Log::error('CentralAuthTokenMiddleware: Exception during validation: ' . $e->getMessage());
 
@@ -79,6 +83,16 @@ class CentralAuthTokenMiddleware
         }
 
         return $next($request);
+    }
+
+    private function authenticateRequestAs(Request $request, User $user): void
+    {
+        Auth::setUser($user);
+        Auth::guard('sanctum')->setUser($user);
+
+        $request->setUserResolver(function () use ($user) {
+            return $user;
+        });
     }
 
     private function extractBearerToken(Request $request): ?string
@@ -100,6 +114,21 @@ class CentralAuthTokenMiddleware
         }
 
         return null;
+    }
+
+    private function validateAgainstLocalSanctum(string $token): ?User
+    {
+        $accessToken = PersonalAccessToken::findToken($token);
+
+        if (! $accessToken || ! $accessToken->tokenable instanceof User) {
+            return null;
+        }
+
+        if ($accessToken->expires_at && $accessToken->expires_at->isPast()) {
+            return null;
+        }
+
+        return $accessToken->tokenable;
     }
 
     private function parseBearerValue(?string $headerValue): ?string
@@ -172,7 +201,8 @@ class CentralAuthTokenMiddleware
                 return null;
             }
 
-            return rtrim($url, '/');
+            $normalized = rtrim($url, '/');
+            return str_ends_with($normalized, '/api') ? $normalized : $normalized . '/api';
         }, $candidates))));
     }
 
