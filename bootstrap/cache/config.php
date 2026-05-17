@@ -10,7 +10,7 @@
     'locale' => 'en',
     'fallback_locale' => 'en',
     'faker_locale' => 'en_US',
-    'key' => 'base64:/L4DUdhlvi5QnU5pze6OZVAtjoJuf+PI7fYkIowR78o=',
+    'key' => 'base64:rQWeEwgC6VXf5QnTsOJesFpEn73hsl1QCtbRiAm4Qyg=',
     'cipher' => 'AES-256-CBC',
     'maintenance' => 
     array (
@@ -198,7 +198,7 @@
       'file' => 
       array (
         'driver' => 'file',
-        'path' => 'M:\\mecarvi-embo\\Ecommerce-MecarviTechnologies-Core-Api\\storage\\framework/cache/data',
+        'path' => 'K:\\Working\\Azil\\Ecommerce-MecarviTechnologies-Core-Api\\storage\\framework/cache/data',
       ),
       'memcached' => 
       array (
@@ -290,7 +290,7 @@
       array (
         'driver' => 'sqlite',
         'url' => NULL,
-        'database' => 'M:/mecarvi-embo/Ecommerce-MecarviTechnologies-Core-Api/database/database.sqlite',
+        'database' => 'k:\\Working\\Azil\\Ecommerce-MecarviTechnologies-Core-Api\\database\\database.sqlite',
         'prefix' => '',
         'foreign_key_constraints' => true,
       ),
@@ -299,10 +299,10 @@
         'driver' => 'mysql',
         'url' => NULL,
         'host' => '127.0.0.1',
-        'port' => '3306',
-        'database' => 'M:/mecarvi-embo/Ecommerce-MecarviTechnologies-Core-Api/database/database.sqlite',
-        'username' => 'forge',
-        'password' => '',
+        'port' => '5432',
+        'database' => 'k:\\Working\\Azil\\Ecommerce-MecarviTechnologies-Core-Api\\database\\database.sqlite',
+        'username' => 'postgres',
+        'password' => '123456',
         'unix_socket' => '',
         'charset' => 'utf8mb4',
         'collation' => 'utf8mb4_unicode_ci',
@@ -320,9 +320,9 @@
         'url' => NULL,
         'host' => '127.0.0.1',
         'port' => '5432',
-        'database' => 'M:/mecarvi-embo/Ecommerce-MecarviTechnologies-Core-Api/database/database.sqlite',
-        'username' => 'forge',
-        'password' => '',
+        'database' => 'k:\\Working\\Azil\\Ecommerce-MecarviTechnologies-Core-Api\\database\\database.sqlite',
+        'username' => 'postgres',
+        'password' => '123456',
         'charset' => 'utf8',
         'prefix' => '',
         'prefix_indexes' => true,
@@ -333,11 +333,11 @@
       array (
         'driver' => 'sqlsrv',
         'url' => NULL,
-        'host' => 'localhost',
-        'port' => '1433',
-        'database' => 'M:/mecarvi-embo/Ecommerce-MecarviTechnologies-Core-Api/database/database.sqlite',
-        'username' => 'forge',
-        'password' => '',
+        'host' => '127.0.0.1',
+        'port' => '5432',
+        'database' => 'k:\\Working\\Azil\\Ecommerce-MecarviTechnologies-Core-Api\\database\\database.sqlite',
+        'username' => 'postgres',
+        'password' => '123456',
         'charset' => 'utf8',
         'prefix' => '',
         'prefix_indexes' => true,
@@ -380,13 +380,13 @@
       'local' => 
       array (
         'driver' => 'local',
-        'root' => 'M:\\mecarvi-embo\\Ecommerce-MecarviTechnologies-Core-Api\\storage\\app',
+        'root' => 'K:\\Working\\Azil\\Ecommerce-MecarviTechnologies-Core-Api\\storage\\app',
         'throw' => false,
       ),
       'public' => 
       array (
         'driver' => 'local',
-        'root' => 'M:\\mecarvi-embo\\Ecommerce-MecarviTechnologies-Core-Api\\storage\\app/public',
+        'root' => 'K:\\Working\\Azil\\Ecommerce-MecarviTechnologies-Core-Api\\storage\\app/public',
         'url' => 'http://localhost/storage',
         'visibility' => 'public',
         'throw' => false,
@@ -406,7 +406,7 @@
     ),
     'links' => 
     array (
-      'M:\\mecarvi-embo\\Ecommerce-MecarviTechnologies-Core-Api\\public\\storage' => 'M:\\mecarvi-embo\\Ecommerce-MecarviTechnologies-Core-Api\\storage\\app/public',
+      'K:\\Working\\Azil\\Ecommerce-MecarviTechnologies-Core-Api\\public\\storage' => 'K:\\Working\\Azil\\Ecommerce-MecarviTechnologies-Core-Api\\storage\\app/public',
     ),
   ),
   'hashing' => 
@@ -445,13 +445,13 @@
       'single' => 
       array (
         'driver' => 'single',
-        'path' => 'M:\\mecarvi-embo\\Ecommerce-MecarviTechnologies-Core-Api\\storage\\logs/laravel.log',
+        'path' => 'storage/logs/laravel.log',
         'level' => 'debug',
       ),
       'daily' => 
       array (
         'driver' => 'daily',
-        'path' => 'M:\\mecarvi-embo\\Ecommerce-MecarviTechnologies-Core-Api\\storage\\logs/laravel.log',
+        'path' => 'storage/logs/laravel.log',
         'level' => 'debug',
         'days' => 14,
       ),
@@ -503,7 +503,7 @@
       ),
       'emergency' => 
       array (
-        'path' => 'M:\\mecarvi-embo\\Ecommerce-MecarviTechnologies-Core-Api\\storage\\logs/laravel.log',
+        'path' => 'storage/logs/laravel.log',
       ),
     ),
   ),
@@ -569,7 +569,7 @@
       'theme' => 'default',
       'paths' => 
       array (
-        0 => 'M:\\mecarvi-embo\\Ecommerce-MecarviTechnologies-Core-Api\\resources\\views/vendor/mail',
+        0 => 'K:\\Working\\Azil\\Ecommerce-MecarviTechnologies-Core-Api\\resources\\views/vendor/mail',
       ),
     ),
   ),
@@ -721,6 +721,12 @@
       'secret' => NULL,
       'mode' => 'sandbox',
     ),
+    'central_auth' => 
+    array (
+      'internal_url' => NULL,
+      'url' => 'https://auth-api.mecarvi.com/api',
+      'api_url' => NULL,
+    ),
   ),
   'session' => 
   array (
@@ -728,7 +734,7 @@
     'lifetime' => '120',
     'expire_on_close' => false,
     'encrypt' => false,
-    'files' => 'M:\\mecarvi-embo\\Ecommerce-MecarviTechnologies-Core-Api\\storage\\framework/sessions',
+    'files' => 'K:\\Working\\Azil\\Ecommerce-MecarviTechnologies-Core-Api\\storage\\framework/sessions',
     'connection' => NULL,
     'table' => 'sessions',
     'store' => NULL,
@@ -748,9 +754,9 @@
   array (
     'paths' => 
     array (
-      0 => 'M:\\mecarvi-embo\\Ecommerce-MecarviTechnologies-Core-Api\\resources\\views',
+      0 => 'K:\\Working\\Azil\\Ecommerce-MecarviTechnologies-Core-Api\\resources\\views',
     ),
-    'compiled' => 'M:\\mecarvi-embo\\Ecommerce-MecarviTechnologies-Core-Api\\storage\\framework\\views',
+    'compiled' => 'K:\\Working\\Azil\\Ecommerce-MecarviTechnologies-Core-Api\\storage\\framework\\views',
   ),
   'flare' => 
   array (
@@ -836,7 +842,7 @@
     array (
     ),
     'enable_runnable_solutions' => NULL,
-    'remote_sites_path' => 'M:\\mecarvi-embo\\Ecommerce-MecarviTechnologies-Core-Api',
+    'remote_sites_path' => 'K:\\Working\\Azil\\Ecommerce-MecarviTechnologies-Core-Api',
     'local_sites_path' => '',
     'housekeeping_endpoint_prefix' => '_ignition',
     'settings_file_path' => '',
