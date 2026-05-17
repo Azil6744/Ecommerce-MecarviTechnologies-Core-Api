@@ -19,7 +19,10 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['http://localhost:3000', 'http://localhost:3001', 'https://user.mecarvi.com', 'https://mecarvisigns.com', 'https://www.mecarvisigns.com', 'https://mecarvi.com', 'https://www.mecarvi.com', 'https://mecarviembroidery.com', 'https://www.mecarviembroidery.com'],
+    'allowed_origins' => array_filter(array_map('trim', explode(',', env(
+        'CORS_ALLOWED_ORIGINS',
+        'http://localhost:3000,http://localhost:3001,https://user.mecarvi.com,https://my.mecarvi.com,https://mecarvi.com,https://www.mecarvi.com,https://mecarviembroidery.com,https://www.mecarviembroidery.com,https://embroidery.mecarvi.com'
+    )))),
 
     'allowed_origins_patterns' => [],
 
