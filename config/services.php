@@ -45,7 +45,9 @@ return [
         'internal_url' => env('CENTRAL_AUTH_INTERNAL_URL'),
         'url' => env(
             'CENTRAL_AUTH_URL',
-            app()->environment('local') ? 'http://127.0.0.1:8001/api' : 'https://auth-api.mecarvi.com/api'
+            env('APP_ENV', 'production') === 'local'
+                ? 'http://127.0.0.1:8001/api'
+                : 'https://auth-api.mecarvi.com/api'
         ),
         'api_url' => env('CENTRAL_AUTH_API_URL'),
     ],
