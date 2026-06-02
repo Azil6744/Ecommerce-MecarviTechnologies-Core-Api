@@ -60,6 +60,12 @@ class Product extends Model
         return $this->hasMany(EcommerceReview::class);
     }
 
+    public function approvedReviews()
+    {
+        return $this->hasMany(EcommerceReview::class)
+            ->whereIn('status', ['approved', 'Approved']);
+    }
+
     // Relationship with cart items
     public function cartItems()
     {

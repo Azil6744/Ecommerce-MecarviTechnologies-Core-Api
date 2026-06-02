@@ -27,6 +27,11 @@ class DatabaseSeeder extends Seeder
             QuoteFormFieldSeeder::class,
         ]);
 
+        // Seed demo storefront products, categories, gallery images, and reviews
+        $this->call([
+            DemoProductSeeder::class,
+        ]);
+
         // Uncomment to create additional test users
         // \App\Models\User::factory(10)->create();
     }

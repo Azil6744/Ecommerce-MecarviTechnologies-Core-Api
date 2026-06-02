@@ -56,9 +56,20 @@ class ProductController extends Controller
                 'id',
                 'name',
                 'sku',
+                'description',
                 'short_description',
                 'price',
                 'sale_price',
+                'cost_price',
+                'weight',
+                'dimensions',
+                'images',
+                'tags',
+                'attributes',
+                'variants',
+                'download_url',
+                'seo_title',
+                'seo_description',
                 'stock_quantity',
                 'low_stock_threshold',
                 'category_id',
@@ -86,6 +97,14 @@ class ProductController extends Controller
 
         if ($request->has('is_active')) {
             $query->where('is_active', $request->boolean('is_active'));
+        }
+
+        if ($request->has('is_digital')) {
+            $query->where('is_digital', $request->boolean('is_digital'));
+        }
+
+        if ($request->filled('product_type')) {
+            $query->where('attributes->product_type', $request->get('product_type'));
         }
 
         if ($request->has('sort')) {

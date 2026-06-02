@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Ecommerce;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
+use App\Models\EcommerceReview;
 use App\Models\Product;
 use Illuminate\Http\Request;
 
@@ -86,6 +87,13 @@ class ProductController extends Controller
             return response()->json(['message' => 'Product not found'], 404);
         }
 
-        return response()->json($product->load('category.parent'));
+        $product->load('category.parent');
+        $product->setRelation('reviews', EcommerceReview::query()
+            ->where('product_id', (string) $product->id)
+            ->whereIn('status', ['approved', 'Approved'])
+            ->latest()
+            ->get());
+
+        return response()->json($product);
     }
 }
