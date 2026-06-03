@@ -10,17 +10,30 @@ use Illuminate\Http\Request;
 
 class CartController extends Controller
 {
+    private function activeCartFor(Request $request): EcommerceCart
+    {
+        $user = $request->user();
+
+        return EcommerceCart::firstOrCreate(
+            ['user_id' => $user->id, 'status' => 'active'],
+            ['total_amount' => 0]
+        );
+    }
+
+    private function refreshCartTotals(EcommerceCart $cart): EcommerceCart
+    {
+        $total = $cart->items()->sum('total_price');
+        $cart->forceFill(['total_amount' => $total])->save();
+
+        return $cart->load('items.product');
+    }
+
     /**
      * Get user's cart
      */
     public function index(Request $request)
     {
-        $user = $request->user();
-        $cart = EcommerceCart::where('user_id', $user->id)->with('items.product')->first();
-
-        if (!$cart) {
-            $cart = EcommerceCart::create(['user_id' => $user->id]);
-        }
+        $cart = $this->activeCartFor($request)->load('items.product');
 
         return response()->json($cart);
     }
@@ -34,28 +47,39 @@ class CartController extends Controller
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|integer|min:1',
             'attributes' => 'nullable|array',
+            'options' => 'nullable|array',
         ]);
 
-        $user = $request->user();
         $product = Product::findOrFail($request->product_id);
+        $quantity = (int) $request->quantity;
+        $unitPrice = (float) ($product->sale_price ?? $product->price ?? 0);
+        $options = $request->input('options', $request->input('attributes', []));
 
-        $cart = EcommerceCart::firstOrCreate(['user_id' => $user->id]);
+        $cart = $this->activeCartFor($request);
 
-        // Check if item already in cart
-        $cartItem = $cart->items()->where('product_id', $product->id)->first();
+        $cartItem = $cart->items()
+            ->where('product_id', $product->id)
+            ->where('options', json_encode($options))
+            ->first();
 
         if ($cartItem) {
-            $cartItem->update(['quantity' => $cartItem->quantity + $request->quantity]);
+            $nextQuantity = $cartItem->quantity + $quantity;
+            $cartItem->update([
+                'quantity' => $nextQuantity,
+                'unit_price' => $unitPrice,
+                'total_price' => round($unitPrice * $nextQuantity, 2),
+            ]);
         } else {
             $cart->items()->create([
                 'product_id' => $product->id,
-                'quantity' => $request->quantity,
-                'price' => $product->sale_price ?? $product->price,
-                'attributes' => $request->attributes,
+                'quantity' => $quantity,
+                'unit_price' => $unitPrice,
+                'total_price' => round($unitPrice * $quantity, 2),
+                'options' => $options,
             ]);
         }
 
-        return response()->json($cart->load('items.product'), 201);
+        return response()->json($this->refreshCartTotals($cart), 201);
     }
 
     /**
@@ -72,7 +96,13 @@ class CartController extends Controller
             $q->where('user_id', $user->id);
         })->findOrFail($itemId);
 
-        $cartItem->update(['quantity' => $request->quantity]);
+        $quantity = (int) $request->quantity;
+        $cartItem->update([
+            'quantity' => $quantity,
+            'total_price' => round((float) $cartItem->unit_price * $quantity, 2),
+        ]);
+
+        $this->refreshCartTotals($cartItem->cart);
 
         return response()->json($cartItem->load('product'));
     }
@@ -89,8 +119,11 @@ class CartController extends Controller
 
         $cartItem->delete();
 
-        $cart = EcommerceCart::where('user_id', $user->id)->with('items.product')->first();
-        return response()->json($cart);
+        $cart = EcommerceCart::where('user_id', $user->id)
+            ->where('status', 'active')
+            ->first();
+
+        return response()->json($cart ? $this->refreshCartTotals($cart) : null);
     }
 
     /**
@@ -99,10 +132,13 @@ class CartController extends Controller
     public function clear(Request $request)
     {
         $user = $request->user();
-        $cart = EcommerceCart::where('user_id', $user->id)->first();
+        $cart = EcommerceCart::where('user_id', $user->id)
+            ->where('status', 'active')
+            ->first();
 
         if ($cart) {
             $cart->items()->delete();
+            $cart->forceFill(['total_amount' => 0])->save();
         }
 
         return response()->json(['message' => 'Cart cleared successfully']);

@@ -9,26 +9,44 @@ class EcommerceCartItem extends Model
 {
     use HasFactory;
 
+    protected $appends = [
+        'price',
+        'total',
+    ];
+
     protected $fillable = [
-        'cart_id',
+        'ecommerce_cart_id',
         'product_id',
         'quantity',
-        'price',
-        'attributes',
+        'unit_price',
+        'total_price',
+        'options',
     ];
 
     protected $casts = [
-        'price' => 'decimal:2',
-        'attributes' => 'array',
+        'unit_price' => 'decimal:2',
+        'total_price' => 'decimal:2',
+        'options' => 'array',
     ];
 
     public function cart()
     {
-        return $this->belongsTo(EcommerceCart::class);
+        return $this->belongsTo(EcommerceCart::class, 'ecommerce_cart_id');
     }
 
     public function product()
     {
         return $this->belongsTo(Product::class);
     }
+
+    public function getPriceAttribute()
+    {
+        return $this->unit_price;
+    }
+
+    public function getTotalAttribute()
+    {
+        return $this->total_price;
+    }
+
 }

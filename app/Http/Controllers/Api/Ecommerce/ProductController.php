@@ -15,7 +15,10 @@ class ProductController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Product::with(['category.parent'])
+        $query = Product::with([
+                'category.parent',
+                'previewAssets' => fn ($assetQuery) => $assetQuery->where('is_active', true),
+            ])
             ->where('is_active', true);
 
         if ($request->has('category_id')) {
@@ -74,6 +77,8 @@ class ProductController extends Controller
         }
 
         $products = $query->paginate((int) $request->get('per_page', 12));
+        $this->attachReviewStats($products->getCollection());
+        $this->attachFrontendAliases($products->getCollection());
 
         return response()->json($products);
     }
@@ -87,13 +92,92 @@ class ProductController extends Controller
             return response()->json(['message' => 'Product not found'], 404);
         }
 
-        $product->load('category.parent');
+        $product->load([
+            'category.parent',
+            'previewAssets' => fn ($query) => $query->where('is_active', true),
+            'coupons' => fn ($query) => $query->where('is_active', true),
+            'customizationOptions' => fn ($query) => $query->where('is_active', true),
+            'pricingRules' => fn ($query) => $query->where('is_active', true),
+        ]);
         $product->setRelation('reviews', EcommerceReview::query()
             ->where('product_id', (string) $product->id)
-            ->whereIn('status', ['approved', 'Approved'])
+            ->whereRaw('LOWER(status) = ?', ['approved'])
             ->latest()
             ->get());
 
+        $relatedProducts = $this->relationProducts($product, 'related', 8, true);
+        $recentWorkProducts = $this->relationProducts($product, 'recent_work', 5, true);
+        $featuredProducts = $this->relationProducts($product, 'featured', 8, true);
+        $this->attachReviewStats($relatedProducts);
+        $this->attachReviewStats($recentWorkProducts);
+        $this->attachReviewStats($featuredProducts);
+
+        $this->attachReviewStats(collect([$product]));
+        $this->attachFrontendAliases(collect([$product]));
+        $product->setAttribute('customization_options_grouped', $product->customizationOptions->groupBy('option_type')->values());
+        $product->setAttribute('related_products', $relatedProducts);
+        $product->setAttribute('recent_work_products', $recentWorkProducts);
+        $product->setAttribute('featured_products', $featuredProducts);
+
         return response()->json($product);
+    }
+
+    private function relationProducts(Product $product, string $type, int $limit, bool $fallback = false)
+    {
+        $products = $product->relatedProducts()
+            ->where('is_active', true)
+            ->wherePivot('relation_type', $type)
+            ->orderBy('product_related_products.sort_order')
+            ->limit($limit)
+            ->get();
+
+        if ($products->isNotEmpty() || ! $fallback) {
+            return $products;
+        }
+
+        return Product::query()
+            ->where('is_active', true)
+            ->where('id', '!=', $product->id)
+            ->where('category_id', $product->category_id)
+            ->latest()
+            ->limit($limit)
+            ->get();
+    }
+
+    private function attachReviewStats($products): void
+    {
+        $products->each(function (Product $product) {
+            $reviews = $product->relationLoaded('reviews')
+                ? $product->reviews
+                : EcommerceReview::query()
+                    ->where('product_id', (string) $product->id)
+                    ->whereRaw('LOWER(status) = ?', ['approved'])
+                    ->get();
+
+            $reviewValues = $reviews->pluck('rating')->map(fn ($rating) => (int) $rating)->filter();
+            $averageRating = $reviewValues->isNotEmpty() ? round($reviewValues->avg(), 1) : null;
+            $distribution = collect([5, 4, 3, 2, 1])->mapWithKeys(function ($score) use ($reviewValues) {
+                return [$score => $reviewValues->filter(fn ($rating) => $rating === $score)->count()];
+            });
+
+            $product->setAttribute('review_stats', [
+                'average_rating' => $averageRating,
+                'review_count' => $reviews->count(),
+                'rating_distribution' => $distribution,
+            ]);
+        });
+    }
+
+    private function attachFrontendAliases($products): void
+    {
+        $products->each(function (Product $product) {
+            if ($product->relationLoaded('previewAssets')) {
+                $product->setAttribute('previewAssets', $product->previewAssets);
+            }
+
+            if ($product->relationLoaded('customizationOptions')) {
+                $product->setAttribute('customizationOptions', $product->customizationOptions);
+            }
+        });
     }
 }

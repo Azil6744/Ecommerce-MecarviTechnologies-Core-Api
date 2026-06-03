@@ -63,7 +63,7 @@ class Product extends Model
     public function approvedReviews()
     {
         return $this->hasMany(EcommerceReview::class)
-            ->whereIn('status', ['approved', 'Approved']);
+            ->whereRaw('LOWER(status) = ?', ['approved']);
     }
 
     // Relationship with cart items
@@ -76,5 +76,37 @@ class Product extends Model
     public function orderItems()
     {
         return $this->hasMany(EcommerceOrderItem::class);
+    }
+
+    public function customizationDrafts()
+    {
+        return $this->hasMany(ProductCustomizationDraft::class);
+    }
+
+    public function previewAssets()
+    {
+        return $this->hasMany(ProductPreviewAsset::class)->orderBy('sort_order');
+    }
+
+    public function customizationOptions()
+    {
+        return $this->hasMany(ProductCustomizationOption::class)->orderBy('sort_order');
+    }
+
+    public function pricingRules()
+    {
+        return $this->hasMany(ProductPricingRule::class)->orderBy('sort_order');
+    }
+
+    public function coupons()
+    {
+        return $this->belongsToMany(EcommerceCoupon::class, 'ecommerce_coupon_product', 'product_id', 'coupon_id');
+    }
+
+    public function relatedProducts()
+    {
+        return $this->belongsToMany(Product::class, 'product_related_products', 'product_id', 'related_product_id')
+            ->withPivot(['relation_type', 'sort_order'])
+            ->withTimestamps();
     }
 }

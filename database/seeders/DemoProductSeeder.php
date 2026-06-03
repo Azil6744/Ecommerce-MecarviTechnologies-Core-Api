@@ -3,10 +3,16 @@
 namespace Database\Seeders;
 
 use App\Models\Category;
+use App\Models\EcommerceCoupon;
 use App\Models\EcommerceReview;
 use App\Models\Product;
+use App\Models\ProductCustomizationOption;
+use App\Models\ProductPreviewAsset;
+use App\Models\ProductPricingRule;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -82,6 +88,8 @@ class DemoProductSeeder extends Seeder
             ],
         ];
 
+        $seededProducts = collect();
+
         foreach ($products as $index => $demo) {
             $images = $this->generateProductImages($demo['sku'], $demo['colors'], $index);
 
@@ -116,34 +124,57 @@ class DemoProductSeeder extends Seeder
             );
 
             $this->seedReviews($product);
+            $this->seedPreviewAssets($product, $images);
+            $this->seedCustomizationOptions($product);
+            $this->seedPricingRules($product);
+            $seededProducts->push($product);
         }
+
+        $this->seedProductRelations($seededProducts);
+        $this->seedCoupons($seededProducts);
     }
 
     private function seedCategories(): array
     {
+        $hasParentId = Schema::hasColumn('categories', 'parent_id');
+        $hasSortOrder = Schema::hasColumn('categories', 'sort_order');
+
+        $rootData = [
+            'name' => 'Demo Embroidered Products',
+            'description' => 'Seeded demo categories for storefront catalog testing.',
+            'is_active' => true,
+        ];
+
+        if ($hasSortOrder) {
+            $rootData['sort_order'] = 1;
+        }
+
         $root = Category::updateOrCreate(
             ['slug' => 'demo-embroidered-products'],
-            [
-                'name' => 'Demo Embroidered Products',
-                'description' => 'Seeded demo categories for storefront catalog testing.',
-                'is_active' => true,
-                'sort_order' => 1,
-            ]
+            $rootData
         );
 
         $names = ['Polos', 'Hoodies', 'Headwear', 'Jackets', 'Bags', 'Workwear'];
         $categories = [];
 
         foreach ($names as $index => $name) {
+            $categoryData = [
+                'name' => $name,
+                'description' => "Demo {$name} products.",
+                'is_active' => true,
+            ];
+
+            if ($hasParentId) {
+                $categoryData['parent_id'] = $root->id;
+            }
+
+            if ($hasSortOrder) {
+                $categoryData['sort_order'] = $index + 1;
+            }
+
             $categories[$name] = Category::updateOrCreate(
                 ['slug' => 'demo-' . Str::slug($name)],
-                [
-                    'name' => $name,
-                    'description' => "Demo {$name} products.",
-                    'parent_id' => $root->id,
-                    'is_active' => true,
-                    'sort_order' => $index + 1,
-                ]
+                $categoryData
             );
         }
 
@@ -364,6 +395,143 @@ class DemoProductSeeder extends Seeder
                     'status' => 'Approved',
                 ]
             );
+        }
+    }
+
+    private function seedPreviewAssets(Product $product, array $images): void
+    {
+        $sides = ['front', 'back', 'left', 'right'];
+
+        foreach ($images as $index => $image) {
+            ProductPreviewAsset::updateOrCreate(
+                [
+                    'product_id' => $product->id,
+                    'side' => $sides[$index] ?? 'front',
+                    'sort_order' => $index,
+                ],
+                [
+                    'image_path' => $image,
+                    'is_active' => true,
+                    'metadata' => ['label' => ucfirst($sides[$index] ?? 'front')],
+                ]
+            );
+        }
+    }
+
+    private function seedCustomizationOptions(Product $product): void
+    {
+        $options = [
+            ['embroidery_type', 'embroidery', 'Embroidery', 0],
+            ['embroidery_type', 'premium_embroidery', 'Premium Embroidery', 4],
+            ['placement', 'left_chest', 'Left Chest', 0],
+            ['placement', 'full_back', 'Full Back', 8],
+            ['size', 'standard_4_wide', 'Standard (4" Wide)', 0],
+            ['size', 'large_8_wide', 'Large (8" Wide)', 6],
+            ['thread_colors', 'three_colors', '3 Colors', 0],
+            ['thread_colors', 'six_colors', '6 Colors', 5],
+        ];
+
+        foreach ($options as $index => [$type, $key, $label, $modifier]) {
+            ProductCustomizationOption::updateOrCreate(
+                [
+                    'product_id' => $product->id,
+                    'option_type' => $type,
+                    'option_key' => $key,
+                ],
+                [
+                    'label' => $label,
+                    'price_modifier' => $modifier,
+                    'sort_order' => $index,
+                    'is_active' => true,
+                    'metadata' => [],
+                ]
+            );
+        }
+    }
+
+    private function seedPricingRules(Product $product): void
+    {
+        $rules = [
+            ['min' => 50, 'max' => 99, 'type' => 'percentage', 'value' => -5],
+            ['min' => 100, 'max' => null, 'type' => 'percentage', 'value' => -10],
+        ];
+
+        foreach ($rules as $index => $rule) {
+            ProductPricingRule::updateOrCreate(
+                [
+                    'product_id' => $product->id,
+                    'rule_type' => 'quantity',
+                    'min_quantity' => $rule['min'],
+                    'max_quantity' => $rule['max'],
+                ],
+                [
+                    'adjustment_type' => $rule['type'],
+                    'adjustment_value' => $rule['value'],
+                    'sort_order' => $index,
+                    'is_active' => true,
+                    'metadata' => ['label' => "{$rule['value']}% bulk adjustment"],
+                ]
+            );
+        }
+    }
+
+    private function seedProductRelations($products): void
+    {
+        $ids = $products->pluck('id')->values();
+
+        foreach ($products as $product) {
+            $relatedIds = $ids->filter(fn ($id) => $id !== $product->id)->values();
+
+            foreach (['related', 'recent_work', 'featured'] as $type) {
+                foreach ($relatedIds->take($type === 'featured' ? 8 : 5) as $index => $relatedId) {
+                    DB::table('product_related_products')->updateOrInsert(
+                        [
+                            'product_id' => $product->id,
+                            'related_product_id' => $relatedId,
+                            'relation_type' => $type,
+                        ],
+                        [
+                            'relation_type' => $type,
+                            'sort_order' => $index,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]
+                    );
+                }
+            }
+        }
+    }
+
+    private function seedCoupons($products): void
+    {
+        $mecarvi10 = EcommerceCoupon::updateOrCreate(
+            ['code' => 'MECARVI10'],
+            [
+                'title' => '10% OFF',
+                'subtitle' => 'ON ALL ORDERS',
+                'discount_type' => 'percentage',
+                'discount_value' => 10,
+                'min_order_amount' => 0,
+                'is_active' => true,
+                'metadata' => ['side' => 'pink', 'note' => 'Valid demo coupon'],
+            ]
+        );
+
+        $save15 = EcommerceCoupon::updateOrCreate(
+            ['code' => 'SAVE15'],
+            [
+                'title' => 'GBP15 OFF',
+                'subtitle' => 'ORDERS OVER GBP150',
+                'discount_type' => 'fixed',
+                'discount_value' => 15,
+                'min_order_amount' => 150,
+                'is_active' => true,
+                'metadata' => ['side' => 'blue', 'note' => 'Valid demo coupon'],
+            ]
+        );
+
+        foreach ($products as $product) {
+            $product->coupons()->syncWithoutDetaching([$mecarvi10->id, $save15->id]);
         }
     }
 }

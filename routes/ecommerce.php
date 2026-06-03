@@ -17,8 +17,18 @@ Route::prefix('ecommerce')->group(function () {
     // Public E-Commerce Routes (No Auth Required)
     Route::get('/categories', [\App\Http\Controllers\Api\Ecommerce\CategoryController::class, 'index']);
     Route::get('/products', [\App\Http\Controllers\Api\Ecommerce\ProductController::class, 'index']);
+    Route::post('/products/{product}/price-preview', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'pricePreview']);
+    Route::post('/products/{product}/customization-drafts', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'storeDraft']);
+    Route::get('/products/{product}/coupons', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'coupons']);
+    Route::get('/products/{product}/related', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'related']);
     Route::get('/products/{product}', [\App\Http\Controllers\Api\Ecommerce\ProductController::class, 'show']);
+    Route::put('/customization-drafts/{draft}', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'updateDraft']);
+    Route::post('/customization-drafts/{draft}/files', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'uploadFile']);
+    Route::post('/customization-drafts/{draft}/submit-order', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'submitOrder']);
+    Route::post('/customization-drafts/{draft}/submit-quote', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'submitQuote']);
     Route::post('/order-submissions', [\App\Http\Controllers\Api\Ecommerce\PublicOrderSubmissionController::class, 'store']);
+    Route::post('/support-tickets', [\App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class, 'publicStore']);
+    Route::post('/product-reviews', [\App\Http\Controllers\Api\Ecommerce\EcommerceReviewController::class, 'publicStore']);
     Route::get('/disputes', [\App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class, 'index']);
     Route::post('/disputes', [\App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class, 'store']);
     
@@ -73,7 +83,7 @@ Route::prefix('ecommerce')->group(function () {
     });
 
     // Admin E-Commerce Routes (Auth + Admin Role Required)
-    Route::middleware(['auth:sanctum', 'admin.only'])->group(function () {
+    Route::middleware(['central.auth', 'admin.only'])->group(function () {
         // Orders Management
         Route::get('/admin/orders', [\App\Http\Controllers\Api\Admin\AdminOrderController::class, 'index']);
         Route::get('/admin/orders/{order}', [\App\Http\Controllers\Api\Admin\AdminOrderController::class, 'show']);

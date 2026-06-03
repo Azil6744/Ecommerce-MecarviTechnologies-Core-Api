@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\Admin\RolePermissionController;
 use App\Http\Controllers\Api\Admin\CategoryController;
 use App\Http\Controllers\Api\Admin\ProductController;
+use App\Http\Controllers\Api\Admin\ProductDetailDataController;
 use App\Http\Controllers\Api\Admin\HomePageController;
 use App\Http\Controllers\Api\Admin\AboutSectionController;
 use App\Http\Controllers\Api\Admin\ServiceSectionController;
@@ -2584,6 +2585,10 @@ Route::prefix('v1')->group(function () {
 
         // Products Management (Admin Only)
         Route::apiResource('products', ProductController::class);
+        Route::get('/products/{product}/detail-data', [ProductDetailDataController::class, 'show'])
+            ->name('api.v1.products.detail-data.show');
+        Route::put('/products/{product}/detail-data', [ProductDetailDataController::class, 'update'])
+            ->name('api.v1.products.detail-data.update');
 
         // Policy Sections Management (Admin Only)
         Route::get('/policy-sections/admin', [PolicySectionController::class, 'adminIndex'])
@@ -2630,4 +2635,3 @@ Route::prefix('v1')->group(function () {
 }); // End of v1 prefix group
 
 require base_path('routes/ecommerce.php');
-

@@ -4,8 +4,12 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Product;
+use App\Models\ProductCustomizationOption;
+use App\Models\ProductPreviewAsset;
+use App\Models\ProductPricingRule;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
 
 class ProductController extends Controller
 {
@@ -170,6 +174,7 @@ class ProductController extends Controller
         )));
 
         $product = Product::create($data);
+        $this->syncProductDetailRecords($product);
 
         return response()->json($product->load('category'), 201);
     }
@@ -227,6 +232,7 @@ class ProductController extends Controller
         )));
 
         $product->update($data);
+        $this->syncProductDetailRecords($product->fresh());
 
         return response()->json($product->load('category.parent'));
     }
@@ -238,5 +244,88 @@ class ProductController extends Controller
     {
         $product->delete();
         return response()->json(['message' => 'Product deleted successfully']);
+    }
+
+    protected function syncProductDetailRecords(Product $product): void
+    {
+        $attributes = $product->attributes ?? [];
+        $images = Arr::wrap($product->images ?? []);
+        $sides = ['front', 'back', 'left', 'right'];
+
+        foreach ($images as $index => $image) {
+            if (! $image) {
+                continue;
+            }
+
+            ProductPreviewAsset::updateOrCreate(
+                [
+                    'product_id' => $product->id,
+                    'side' => $sides[$index] ?? 'front',
+                    'sort_order' => $index,
+                ],
+                [
+                    'image_path' => $image,
+                    'is_active' => true,
+                    'metadata' => ['label' => ucfirst($sides[$index] ?? 'front')],
+                ]
+            );
+        }
+
+        $this->upsertCustomizationOption($product, 'embroidery_type', $attributes['embroidery_type'] ?? 'Embroidery', 0);
+        $this->upsertCustomizationOption($product, 'placement', $attributes['placement'] ?? 'Left Chest', 0);
+        $this->upsertCustomizationOption($product, 'size', $attributes['size_label'] ?? 'Standard (4" Wide)', 0);
+
+        $threadColors = Arr::wrap($attributes['thread_colors'] ?? []);
+        if (count($threadColors) > 0) {
+            $this->upsertCustomizationOption($product, 'thread_colors', count($threadColors) . ' Colors', 0);
+        }
+
+        foreach (Arr::wrap($attributes['product_labels'] ?? []) as $index => $label) {
+            $this->upsertCustomizationOption($product, 'product_style', (string) $label, $index);
+        }
+
+        if (! empty($attributes['product_label'])) {
+            $this->upsertCustomizationOption($product, 'product_style', (string) $attributes['product_label'], 0);
+        }
+
+        ProductPricingRule::firstOrCreate(
+            [
+                'product_id' => $product->id,
+                'rule_type' => 'quantity',
+                'min_quantity' => 100,
+                'option_type' => null,
+                'option_key' => null,
+            ],
+            [
+                'adjustment_type' => 'percentage',
+                'adjustment_value' => -10,
+                'sort_order' => 100,
+                'is_active' => true,
+                'metadata' => ['label' => 'Bulk order discount'],
+            ]
+        );
+    }
+
+    protected function upsertCustomizationOption(Product $product, string $type, string $label, int $sortOrder): void
+    {
+        $label = trim($label);
+        if ($label === '') {
+            return;
+        }
+
+        ProductCustomizationOption::updateOrCreate(
+            [
+                'product_id' => $product->id,
+                'option_type' => $type,
+                'option_key' => Str::of($label)->lower()->slug('_')->toString(),
+            ],
+            [
+                'label' => $label,
+                'price_modifier' => 0,
+                'sort_order' => $sortOrder,
+                'is_active' => true,
+                'metadata' => [],
+            ]
+        );
     }
 }

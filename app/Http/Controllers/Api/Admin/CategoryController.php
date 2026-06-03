@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class CategoryController extends Controller
@@ -14,7 +16,48 @@ class CategoryController extends Controller
      */
     public function index()
     {
-        $categories = Category::with('children')->whereNull('parent_id')->get();
+        $hasParentId = Schema::hasColumn('categories', 'parent_id');
+        $hasSortOrder = Schema::hasColumn('categories', 'sort_order');
+        $columns = collect([
+            'id',
+            'name',
+            'slug',
+            'description',
+            'image',
+            'parent_id',
+            'is_active',
+            'sort_order',
+            'created_at',
+            'updated_at',
+        ])->filter(fn ($column) => Schema::hasColumn('categories', $column))->values()->all();
+
+        $rows = DB::table('categories')
+            ->select($columns)
+            ->when($hasSortOrder, fn ($query) => $query->orderBy('sort_order'))
+            ->orderBy('name')
+            ->get()
+            ->map(function ($category) use ($hasParentId) {
+                $category = (array) $category;
+                $category['parent_id'] = $hasParentId ? ($category['parent_id'] ?? null) : null;
+                $category['children'] = [];
+
+                return $category;
+            });
+
+        if (! $hasParentId) {
+            return response()->json($rows->values());
+        }
+
+        $childrenByParent = $rows->groupBy('parent_id');
+        $categories = $rows
+            ->whereNull('parent_id')
+            ->map(function (array $category) use ($childrenByParent) {
+                $category['children'] = $childrenByParent->get($category['id'], collect())->values();
+
+                return $category;
+            })
+            ->values();
+
         return response()->json($categories);
     }
 

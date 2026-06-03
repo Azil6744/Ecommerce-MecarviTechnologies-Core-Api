@@ -3,11 +3,14 @@
 namespace App\Http\Controllers\Api\Ecommerce;
 
 use App\Http\Controllers\Controller;
+use App\Models\EcommerceCoupon;
 use App\Models\EcommerceOrder;
 use App\Models\EcommerceOrderItem;
+use App\Models\EcommerceQuotation;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 class PublicOrderSubmissionController extends Controller
 {
@@ -30,13 +33,61 @@ class PublicOrderSubmissionController extends Controller
             'customization.thread_colors.*' => ['nullable', 'string', 'max:50'],
             'customization.logo_url' => ['nullable', 'string', 'max:1000'],
             'customization.additional_details' => ['nullable', 'string'],
+            'coupon_code' => ['nullable', 'string', 'max:100'],
             'page_context' => ['nullable', 'array'],
         ]);
 
         $product = Product::where('is_active', true)->findOrFail($validated['product_id']);
-        $unitPrice = (float) ($product->sale_price ?? $product->price ?? 0);
-        $quantity = (int) $validated['quantity'];
-        $total = round($unitPrice * $quantity, 2);
+        $pricing = app(ProductCustomizationController::class)->calculatePrice($product, [
+            'quantity' => $validated['quantity'],
+            'selected_options' => $validated['customization'] ?? [],
+            'coupon_code' => $validated['coupon_code'] ?? null,
+        ]);
+        $unitPrice = $pricing['unit_price'];
+        $quantity = $pricing['quantity'];
+        $total = $pricing['total_price'];
+
+        if (data_get($validated, 'page_context.intent') === 'quote') {
+            $quote = EcommerceQuotation::create([
+                'quote_number' => 'QUO-' . now()->format('Y') . '-' . strtoupper(Str::random(6)),
+                'user_id' => optional($request->user())->id,
+                'product_id' => $product->id,
+                'company_name' => $validated['company_name'] ?? null,
+                'customer_name' => $validated['customer_name'],
+                'contact_email' => $validated['customer_email'],
+                'customer_email' => $validated['customer_email'],
+                'customer_phone' => $validated['customer_phone'] ?? null,
+                'quantity' => $quantity,
+                'customization' => $validated['customization'] ?? [],
+                'metadata' => [
+                    'notes' => $validated['notes'] ?? null,
+                    'page_context' => $validated['page_context'] ?? [],
+                    'pricing' => $pricing,
+                    'product_snapshot' => [
+                        'name' => $product->name,
+                        'sku' => $product->sku,
+                        'category' => $product->category?->name,
+                        'images' => $product->images ?? [],
+                        'attributes' => $product->attributes ?? [],
+                    ],
+                ],
+            'status' => 'pending',
+            'total_estimated' => $total,
+            'valid_until' => now()->addDays(14)->toDateString(),
+        ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Quote request submitted successfully.',
+                'data' => [
+                    'quotation' => $quote,
+                    'order' => [
+                        'id' => null,
+                        'order_number' => $quote->quote_number,
+                    ],
+                ],
+            ], 201);
+        }
 
         $order = EcommerceOrder::create([
             'order_number' => EcommerceOrder::generateOrderNumber(),
@@ -46,10 +97,13 @@ class PublicOrderSubmissionController extends Controller
             'customer_email' => $validated['customer_email'],
             'customer_phone' => $validated['customer_phone'] ?? null,
             'status' => 'pending',
+            'payment_status' => 'unpaid',
             'notes' => $validated['notes'] ?? null,
+            'discount_amount' => $pricing['discount_amount'],
             'metadata' => [
                 'customization' => $validated['customization'] ?? [],
                 'page_context' => $validated['page_context'] ?? [],
+                'pricing' => $pricing,
                 'product_snapshot' => [
                     'category' => $product->category?->name,
                     'images' => $product->images ?? [],
@@ -70,6 +124,10 @@ class PublicOrderSubmissionController extends Controller
             'total_price' => $total,
             'product_options' => $validated['customization'] ?? [],
         ]);
+
+        if ($pricing['coupon_code']) {
+            EcommerceCoupon::where('code', $pricing['coupon_code'])->increment('used_count');
+        }
 
         return response()->json([
             'success' => true,

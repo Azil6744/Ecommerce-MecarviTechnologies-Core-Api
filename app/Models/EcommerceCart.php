@@ -11,6 +11,9 @@ class EcommerceCart extends Model
 
     protected $fillable = [
         'user_id',
+        'session_id',
+        'status',
+        'total_amount',
         'expires_at',
     ];
 
@@ -25,6 +28,6 @@ class EcommerceCart extends Model
 
     public function items()
     {
-        return $this->hasMany(EcommerceCartItem::class);
+        return $this->hasMany(EcommerceCartItem::class, 'ecommerce_cart_id');
     }
 }

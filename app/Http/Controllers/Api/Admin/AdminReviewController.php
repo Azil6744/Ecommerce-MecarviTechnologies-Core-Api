@@ -15,8 +15,8 @@ class AdminReviewController extends Controller
     {
         $query = EcommerceReview::with('product', 'user');
 
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
+        if ($request->filled('status')) {
+            $query->whereRaw('LOWER(status) = ?', [strtolower($request->status)]);
         }
 
         if ($request->has('rating')) {

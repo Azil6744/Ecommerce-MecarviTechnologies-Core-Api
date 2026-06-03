@@ -36,6 +36,29 @@ class EcommerceReviewController extends Controller
         return response()->json(['success' => true, 'data' => $item]);
     }
 
+    public function publicStore(Request $request)
+    {
+        $validated = $request->validate([
+            'product_id' => ['required', 'integer', 'exists:products,id'],
+            'customer_name' => ['nullable', 'string', 'max:255'],
+            'rating' => ['required', 'integer', 'min:1', 'max:5'],
+            'title' => ['nullable', 'string', 'max:255'],
+            'comment' => ['nullable', 'string'],
+        ]);
+
+        $review = EcommerceReview::create([
+            'product_id' => (string) $validated['product_id'],
+            'user_id' => optional($request->user())->id,
+            'customer_name' => $validated['customer_name'] ?? 'Verified Buyer',
+            'rating' => $validated['rating'],
+            'title' => $validated['title'] ?? null,
+            'comment' => $validated['comment'] ?? null,
+            'status' => 'pending',
+        ]);
+
+        return response()->json(['success' => true, 'data' => $review], 201);
+    }
+
     public function show(Request $request, $id)
     {
         $item = EcommerceReview::findOrFail($id);

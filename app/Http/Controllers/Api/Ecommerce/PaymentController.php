@@ -14,6 +14,10 @@ class PaymentController extends Controller
 
     public function __construct()
     {
+        if (! class_exists(Omnipay::class)) {
+            return;
+        }
+
         // Stripe initialization
         $this->stripeGateway = Omnipay::create('Stripe');
         $this->stripeGateway->setApiKey(config('services.stripe.secret'));
@@ -46,8 +50,22 @@ class PaymentController extends Controller
         }
 
         if ($request->payment_method === 'stripe') {
+            if (! $this->stripeGateway) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Stripe payment gateway is not configured.',
+                ], 503);
+            }
+
             return $this->processStripe($order, $request->payment_token);
         } else if ($request->payment_method === 'paypal') {
+            if (! $this->paypalGateway) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'PayPal payment gateway is not configured.',
+                ], 503);
+            }
+
             return $this->processPayPal($order);
         }
     }
@@ -70,6 +88,7 @@ class PaymentController extends Controller
 
             if ($response->isSuccessful()) {
                 $order->status = 'paid';
+                $order->payment_status = 'paid';
                 $order->save();
 
                 return response()->json([
@@ -150,6 +169,7 @@ class PaymentController extends Controller
 
             if ($response->isSuccessful()) {
                 $order->status = 'paid';
+                $order->payment_status = 'paid';
                 $order->save();
 
                 return response()->json([

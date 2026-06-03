@@ -13,6 +13,9 @@ class EcommerceOrder extends Model
 
     protected $casts = [
         'total_amount' => 'decimal:2',
+        'shipping_amount' => 'decimal:2',
+        'discount_amount' => 'decimal:2',
+        'tax_amount' => 'decimal:2',
         'order_date' => 'datetime',
         'metadata' => 'array',
     ];
