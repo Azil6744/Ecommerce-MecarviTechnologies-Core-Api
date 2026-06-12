@@ -8,6 +8,22 @@ use Illuminate\Http\Request;
 
 class AdminOrderController extends Controller
 {
+    private const ORDER_STATUSES = [
+        'pending',
+        'payment_pending',
+        'confirmed',
+        'processing',
+        'proof_ready',
+        'proof_revision',
+        'approved',
+        'in_production',
+        'shipped',
+        'delivered',
+        'completed',
+        'cancelled',
+        'refunded',
+    ];
+
     /**
      * Display all orders (admin only)
      */
@@ -43,7 +59,8 @@ class AdminOrderController extends Controller
             }
 
             $orders = $query->orderBy('created_at', 'desc')
-                ->paginate($request->get('per_page', 20));
+                ->paginate(min((int) $request->get('per_page', 20), 100));
+            $orders->getCollection()->transform(fn (EcommerceOrder $order) => $this->orderPayload($order));
 
             return response()->json([
                 'success' => true,
@@ -64,8 +81,8 @@ class AdminOrderController extends Controller
     public function show($id)
     {
         try {
-            $order = EcommerceOrder::with(['user', 'items.product', 'proofs', 'verifications'])->findOrFail($id);
-            return response()->json(['success' => true, 'data' => ['order' => $order]]);
+            $order = EcommerceOrder::with(['user', 'items.product', 'proofs', 'verifications', 'statusEvents'])->findOrFail($id);
+            return response()->json(['success' => true, 'data' => ['order' => $this->orderPayload($order)]]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Order not found.'], 404);
         }
@@ -78,12 +95,46 @@ class AdminOrderController extends Controller
     {
         try {
             $request->validate([
-                'status' => 'required|in:pending,processing,completed,cancelled,refunded',
+                'status' => 'required|in:' . implode(',', self::ORDER_STATUSES),
+                'payment_status' => 'nullable|in:unpaid,paid,failed,refunded,partially_refunded',
+                'tracking_carrier' => 'nullable|string|max:255',
+                'tracking_number' => 'nullable|string|max:255',
+                'tracking_url' => 'nullable|string|max:1000',
+                'estimated_delivery_at' => 'nullable|date',
+                'note' => 'nullable|string',
             ]);
 
             $order = EcommerceOrder::findOrFail($id);
-            $order->update(['status' => $request->status]);
-            return response()->json(['success' => true, 'message' => 'Order status updated.', 'data' => ['order' => $order]]);
+            $payload = $request->only([
+                'status',
+                'payment_status',
+                'tracking_carrier',
+                'tracking_number',
+                'tracking_url',
+                'estimated_delivery_at',
+            ]);
+
+            if ($request->status === 'shipped' && ! $order->shipped_at) {
+                $payload['shipped_at'] = now();
+            }
+
+            if (in_array($request->status, ['delivered', 'completed'], true) && ! $order->delivered_at) {
+                $payload['delivered_at'] = now();
+            }
+
+            $order->update($payload);
+            $order->statusEvents()->create([
+                'user_id' => optional($request->user())->id,
+                'status' => $request->status,
+                'label' => 'Status updated to ' . str_replace('_', ' ', $request->status),
+                'note' => $request->note,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Order status updated.',
+                'data' => ['order' => $this->orderPayload($order->fresh(['user', 'items.product', 'proofs', 'verifications', 'statusEvents']))],
+            ]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Failed to update order.', 'error' => config('app.debug') ? $e->getMessage() : null], 500);
         }
@@ -129,5 +180,49 @@ class AdminOrderController extends Controller
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Failed to get stats.'], 500);
         }
+    }
+
+    private function orderPayload(EcommerceOrder $order): array
+    {
+        $order->loadMissing(['user', 'items.product', 'proofs', 'verifications', 'statusEvents']);
+        $subtotal = (float) ($order->subtotal ?: $order->items->sum('total_price'));
+
+        return [
+            'id' => $order->id,
+            'order_number' => $order->order_number,
+            'user_id' => $order->user_id,
+            'user' => $order->user,
+            'customer_name' => $order->customer_name,
+            'customer_email' => $order->customer_email,
+            'customer_phone' => $order->customer_phone,
+            'company_name' => $order->company_name,
+            'status' => strtolower($order->status),
+            'payment_status' => $order->payment_status,
+            'payment_method' => $order->payment_method,
+            'shipping_method' => $order->shipping_method,
+            'currency' => $order->currency ?? 'USD',
+            'subtotal' => round($subtotal, 2),
+            'shipping_amount' => (float) ($order->shipping_amount ?? 0),
+            'discount_amount' => (float) ($order->discount_amount ?? 0),
+            'tax_amount' => (float) ($order->tax_amount ?? 0),
+            'total_amount' => (float) $order->total_amount,
+            'shipping_address' => $order->shipping_address,
+            'billing_address' => $order->billing_address,
+            'tracking_carrier' => $order->tracking_carrier,
+            'tracking_number' => $order->tracking_number,
+            'tracking_url' => $order->tracking_url,
+            'estimated_delivery_at' => optional($order->estimated_delivery_at)->toIso8601String(),
+            'shipped_at' => optional($order->shipped_at)->toIso8601String(),
+            'delivered_at' => optional($order->delivered_at)->toIso8601String(),
+            'notes' => $order->notes,
+            'metadata' => $order->metadata,
+            'order_date' => optional($order->order_date)->toIso8601String(),
+            'created_at' => optional($order->created_at)->toIso8601String(),
+            'updated_at' => optional($order->updated_at)->toIso8601String(),
+            'items' => $order->items,
+            'proofs' => $order->proofs,
+            'verifications' => $order->verifications,
+            'status_events' => $order->statusEvents,
+        ];
     }
 }

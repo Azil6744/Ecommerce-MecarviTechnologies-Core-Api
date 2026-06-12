@@ -31,4 +31,9 @@ class EcommerceTicketReply extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function attachments()
+    {
+        return $this->hasMany(EcommerceTicketAttachment::class, 'ecommerce_ticket_reply_id');
+    }
 }

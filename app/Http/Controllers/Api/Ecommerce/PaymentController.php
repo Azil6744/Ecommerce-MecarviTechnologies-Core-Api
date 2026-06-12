@@ -29,6 +29,35 @@ class PaymentController extends Controller
         $this->paypalGateway->setTestMode(config('services.paypal.mode') === 'sandbox');
     }
 
+    public function showOrder($order)
+    {
+        $query = EcommerceOrder::query();
+
+        if (is_numeric($order)) {
+            $query->where(function ($q) use ($order) {
+                $q->where('id', $order)->orWhere('order_number', $order);
+            });
+        } else {
+            $query->where('order_number', $order);
+        }
+
+        $item = $query->firstOrFail();
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'id' => $item->id,
+                'order_number' => $item->order_number,
+                'status' => strtolower((string) $item->status),
+                'payment_status' => $item->payment_status,
+                'payment_method' => $item->payment_method,
+                'currency' => $item->currency ?? 'USD',
+                'total_amount' => (float) $item->total_amount,
+                'created_at' => optional($item->created_at)->toIso8601String(),
+            ],
+        ]);
+    }
+
     /**
      * Process a payment using token or redirect.
      */
@@ -75,6 +104,10 @@ class PaymentController extends Controller
      */
     private function processStripe(EcommerceOrder $order, $token)
     {
+        if ($this->shouldUseStripeTestMode()) {
+            return $this->processStripeTestPayment($order, $token);
+        }
+
         try {
             $response = $this->stripeGateway->purchase([
                 'amount' => $order->total_amount,
@@ -108,6 +141,36 @@ class PaymentController extends Controller
                 'message' => $e->getMessage()
             ], 500);
         }
+    }
+
+    private function shouldUseStripeTestMode(): bool
+    {
+        return app()->environment(['local', 'testing']) && blank(config('services.stripe.secret'));
+    }
+
+    private function processStripeTestPayment(EcommerceOrder $order, string $token)
+    {
+        $allowedPrefixes = ['test_card_4242424242424242', 'tok_visa'];
+        $isApprovedToken = collect($allowedPrefixes)->contains(fn ($prefix) => str_starts_with($token, $prefix));
+
+        if (! $isApprovedToken) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Local Stripe test mode only accepts the 4242 4242 4242 4242 test card.',
+            ], 400);
+        }
+
+        $order->status = 'paid';
+        $order->payment_status = 'paid';
+        $order->payment_method = 'stripe';
+        $order->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Test payment successful.',
+            'transaction_reference' => 'test_stripe_' . $order->id . '_' . now()->timestamp,
+            'test_mode' => true,
+        ]);
     }
 
     /**

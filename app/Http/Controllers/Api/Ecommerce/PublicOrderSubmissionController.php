@@ -100,6 +100,7 @@ class PublicOrderSubmissionController extends Controller
             'payment_status' => 'unpaid',
             'notes' => $validated['notes'] ?? null,
             'discount_amount' => $pricing['discount_amount'],
+            'subtotal' => $pricing['subtotal'] ?? $total,
             'metadata' => [
                 'customization' => $validated['customization'] ?? [],
                 'page_context' => $validated['page_context'] ?? [],
@@ -112,6 +113,11 @@ class PublicOrderSubmissionController extends Controller
             ],
             'total_amount' => $total,
             'order_date' => Carbon::today(),
+        ]);
+        $order->statusEvents()->create([
+            'user_id' => optional($request->user())->id,
+            'status' => 'pending',
+            'label' => 'Order submitted',
         ]);
 
         EcommerceOrderItem::create([

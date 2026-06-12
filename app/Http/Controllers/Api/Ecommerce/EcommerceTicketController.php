@@ -3,46 +3,112 @@
 namespace App\Http\Controllers\Api\Ecommerce;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
+use App\Http\Controllers\Api\Ecommerce\Concerns\FormatsTicketPayloads;
 use App\Models\EcommerceTicket;
-use Illuminate\Support\Facades\Schema;
+use App\Models\EcommerceTicketAttachment;
+use App\Models\EcommerceTicketNote;
+use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Str;
 
 class EcommerceTicketController extends Controller
 {
+    use FormatsTicketPayloads;
+
+    private const CUSTOMER_STATUSES = ['open', 'in_progress', 'waiting_customer', 'resolved', 'closed'];
+    private const PRIORITIES = ['low', 'normal', 'high'];
+
     public function index(Request $request)
     {
-        $user = $request->user();
-        // Check if admin to return all, or just user
-        if ($user && $user->isSuperAdmin()) {
-            return response()->json(['success' => true, 'data' => EcommerceTicket::all()]);
-        }
-        
-        // Get by user_id if column exists, otherwise all
-        if(Schema::hasColumn((new EcommerceTicket)->getTable(), 'user_id')) {
-            $query = EcommerceTicket::where('user_id', $user->id);
-            return response()->json(['success' => true, 'data' => $query->get()]);
+        $query = EcommerceTicket::query()
+            ->with(['user:id,name,email', 'replies:id,ecommerce_ticket_id'])
+            ->withCount(['replies', 'attachments'])
+            ->where('user_id', $request->user()->id);
+
+        if ($status = $this->normalizeStatus($request->query('status'))) {
+            if ($status !== 'all') {
+                $query->where('status', $status);
+            }
         }
 
-        return response()->json(['success' => true, 'data' => EcommerceTicket::all()]);
+        if ($priority = $this->normalizePriority($request->query('priority'))) {
+            $query->where('priority', $priority);
+        }
+
+        if ($search = trim((string) $request->query('search', ''))) {
+            $query->where(function ($q) use ($search) {
+                $q->where('ticket_number', 'like', "%{$search}%")
+                    ->orWhere('subject', 'like', "%{$search}%")
+                    ->orWhere('message', 'like', "%{$search}%");
+            });
+        }
+
+        $sort = (string) $request->query('sort', 'latest');
+        match ($sort) {
+            'oldest' => $query->oldest(),
+            'updated' => $query->latest('updated_at'),
+            default => $query->latest(),
+        };
+
+        $perPage = min(max((int) $request->query('per_page', 15), 1), 50);
+        $tickets = $query->paginate($perPage);
+
+        return response()->json([
+            'success' => true,
+            'data' => $tickets->through(fn (EcommerceTicket $ticket) => $this->ticketPayload($ticket)),
+            'summary' => $this->summaryForUser($request),
+        ]);
     }
 
     public function store(Request $request)
     {
-        $request->validate([
-            'subject' => 'required|string|max:255',
-            'message' => 'required|string',
-            'priority' => 'nullable|string|in:Low,Normal,High',
+        $validated = $request->validate([
+            'subject' => ['required', 'string', 'max:255'],
+            'message' => ['required', 'string'],
+            'category' => ['nullable', 'string', 'max:255'],
+            'priority' => ['nullable', 'string'],
+            'customer_name' => ['nullable', 'string', 'max:255'],
+            'contact_email' => ['nullable', 'email', 'max:255'],
+            'contact_phone' => ['nullable', 'string', 'max:50'],
+            'preferred_contact_method' => ['nullable', 'in:email,phone'],
+            'is_urgent' => ['sometimes', 'boolean'],
+            'isUrgent' => ['sometimes', 'boolean'],
+            'attachments' => ['sometimes', 'array'],
+            'attachments.*' => ['file', 'max:20480'],
         ]);
 
-        $data = $request->only(['subject', 'message', 'priority', 'customer_name']);
-        $data['user_id'] = $request->user()->id;
-        $data['customer_name'] = $data['customer_name'] ?? $request->user()->name;
-        $data['ticket_number'] = 'TKT-' . strtoupper(substr(md5(uniqid(rand(), true)), 0, 8));
-        $data['status'] = 'Open';
-        $data['priority'] = $data['priority'] ?? 'Normal';
+        $user = $request->user();
+        $priority = $this->normalizePriority($validated['priority'] ?? null) ?: 'normal';
+        $isUrgent = (bool) ($validated['isUrgent'] ?? $validated['is_urgent'] ?? false);
+        if ($isUrgent) {
+            $priority = 'high';
+        }
 
-        $item = EcommerceTicket::create($data);
-        return response()->json(['success' => true, 'data' => $item->load('replies')], 201);
+        $ticket = EcommerceTicket::create([
+            'ticket_number' => $this->nextTicketNumber(),
+            'user_id' => $user->id,
+            'customer_name' => $validated['customer_name'] ?? $user->name,
+            'contact_email' => $validated['contact_email'] ?? $user->email,
+            'contact_phone' => $validated['contact_phone'] ?? $user->phone ?? null,
+            'preferred_contact_method' => $validated['preferred_contact_method'] ?? 'email',
+            'subject' => $validated['subject'],
+            'category' => $validated['category'] ?? null,
+            'priority' => $priority,
+            'is_urgent' => $isUrgent,
+            'status' => 'open',
+            'message' => $validated['message'],
+            'source_page' => 'user_panel',
+            'last_customer_reply_at' => now(),
+        ]);
+
+        $this->recordActivity($ticket, $user->id, 'created', 'Ticket created', $ticket->subject);
+        $this->storeUploadedAttachments($request, $ticket);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Ticket created successfully.',
+            'data' => $this->ticketPayload($ticket->fresh()->load($this->detailRelations())),
+        ], 201);
     }
 
     public function publicStore(Request $request)
@@ -58,81 +124,264 @@ class EcommerceTicketController extends Controller
         ]);
 
         $ticket = EcommerceTicket::create([
-            'ticket_number' => 'TKT-' . strtoupper(substr(md5(uniqid(rand(), true)), 0, 8)),
+            'ticket_number' => $this->nextTicketNumber(),
             'user_id' => optional($request->user())->id,
             'product_id' => $validated['product_id'] ?? null,
             'customer_name' => $validated['customer_name'] ?? 'Product detail visitor',
+            'contact_email' => $validated['customer_email'] ?? null,
             'subject' => $validated['subject'] ?? 'Product support request',
             'message' => $validated['message'] ?? 'Customer requested help from the product detail page.',
             'source_page' => $validated['source_page'] ?? 'product_detail',
-            'status' => 'Open',
-            'priority' => 'Normal',
+            'status' => 'open',
+            'priority' => 'normal',
             'metadata' => array_merge($validated['metadata'] ?? [], [
                 'customer_email' => $validated['customer_email'] ?? null,
             ]),
         ]);
 
-        return response()->json(['success' => true, 'data' => $ticket], 201);
+        $this->recordActivity($ticket, optional($request->user())->id, 'created', 'Ticket created', $ticket->subject);
+
+        return response()->json(['success' => true, 'data' => $this->ticketPayload($ticket)], 201);
     }
 
-    public function show(Request $request, $id)
+    public function show(Request $request, EcommerceTicket $ticket)
     {
-        $item = EcommerceTicket::with('replies.user')->findOrFail($id);
-        
-        // Ensure user can only see their own ticket unless super admin
-        $user = $request->user();
-        if ($item->user_id !== $user->id && !$user->isSuperAdmin()) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
-        
-        return response()->json(['success' => true, 'data' => $item]);
+        $this->authorizeTicket($request, $ticket);
+
+        return response()->json([
+            'success' => true,
+            'data' => $this->ticketPayload($ticket->load($this->detailRelations()), true),
+        ]);
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, EcommerceTicket $ticket)
     {
-        $item = EcommerceTicket::findOrFail($id);
-        $item->update($request->all());
-        return response()->json(['success' => true, 'data' => $item]);
-    }
+        $this->authorizeTicket($request, $ticket);
 
-    public function destroy(Request $request, $id)
-    {
-        $item = EcommerceTicket::findOrFail($id);
-        
-        $user = $request->user();
-        if ($item->user_id !== $user->id && !$user->isSuperAdmin()) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
-        }
-        
-        $item->delete();
-        return response()->json(['success' => true, 'message' => 'Deleted successfully']);
-    }
-
-    public function addReply(Request $request, $id)
-    {
-        $request->validate([
-            'message' => 'required|string',
+        $validated = $request->validate([
+            'status' => ['sometimes', 'string'],
+            'priority' => ['sometimes', 'string'],
         ]);
 
-        $ticket = EcommerceTicket::findOrFail($id);
-        
-        $user = $request->user();
-        if ($ticket->user_id !== $user->id && !$user->isSuperAdmin()) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        $updates = [];
+
+        if (array_key_exists('status', $validated)) {
+            $status = $this->normalizeStatus($validated['status']);
+            abort_if(! in_array($status, ['closed', 'resolved'], true), 422, 'Customers can only close or resolve tickets.');
+            $updates['status'] = $status;
+            $updates['closed_at'] = in_array($status, ['closed', 'resolved'], true) ? now() : null;
         }
 
+        if (array_key_exists('priority', $validated)) {
+            $priority = $this->normalizePriority($validated['priority']);
+            abort_if(! $priority, 422, 'Invalid priority.');
+            $updates['priority'] = $priority;
+        }
+
+        if ($updates) {
+            $ticket->update($updates);
+            $this->recordActivity($ticket, $request->user()->id, 'updated', 'Ticket updated', 'Customer updated the ticket.');
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $this->ticketPayload($ticket->fresh()->load($this->detailRelations()), true),
+        ]);
+    }
+
+    public function destroy(Request $request, EcommerceTicket $ticket)
+    {
+        $this->authorizeTicket($request, $ticket);
+        $ticket->delete();
+
+        return response()->json(['success' => true, 'message' => 'Ticket deleted successfully.']);
+    }
+
+    public function addReply(Request $request, EcommerceTicket $ticket)
+    {
+        $this->authorizeTicket($request, $ticket);
+
+        $validated = $request->validate([
+            'message' => ['required', 'string'],
+            'attachments' => ['sometimes', 'array'],
+            'attachments.*' => ['file', 'max:20480'],
+        ]);
+
+        $user = $request->user();
         $reply = $ticket->replies()->create([
             'user_id' => $user->id,
-            'admin_reply' => $user->isSuperAdmin(), // If user is admin, set to true
-            'message' => $request->message,
-            'attachments' => $request->attachments,
+            'admin_reply' => false,
+            'message' => $validated['message'],
+            'attachments' => null,
         ]);
 
-        // Optionally update ticket status to "open" or "customer_replied"
-        if (!$user->isSuperAdmin()) {
-            $ticket->update(['status' => 'Open']);
+        $ticket->update([
+            'status' => 'open',
+            'last_customer_reply_at' => now(),
+        ]);
+
+        $this->storeUploadedAttachments($request, $ticket, $reply->id);
+        $this->recordActivity($ticket, $user->id, 'customer_reply', 'Customer replied', Str::limit($validated['message'], 140));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Reply added successfully.',
+            'data' => $this->ticketPayload($ticket->fresh()->load($this->detailRelations()), true),
+        ]);
+    }
+
+    public function uploadAttachment(Request $request, EcommerceTicket $ticket)
+    {
+        $this->authorizeTicket($request, $ticket);
+
+        $request->validate([
+            'attachments' => ['required', 'array', 'min:1'],
+            'attachments.*' => ['file', 'max:20480'],
+        ]);
+
+        $attachments = $this->storeUploadedAttachments($request, $ticket);
+        $this->recordActivity($ticket, $request->user()->id, 'attachment_added', 'Attachment uploaded', count($attachments) . ' file(s) uploaded.');
+
+        return response()->json([
+            'success' => true,
+            'data' => $attachments->map(fn (EcommerceTicketAttachment $attachment) => $this->attachmentPayload($attachment)),
+        ], 201);
+    }
+
+    public function notes(Request $request, EcommerceTicket $ticket)
+    {
+        $this->authorizeTicket($request, $ticket);
+
+        return response()->json([
+            'success' => true,
+            'data' => $ticket->notes()->with('user:id,name,email')->where('visibility', 'public')->latest()->get()
+                ->map(fn (EcommerceTicketNote $note) => $this->notePayload($note)),
+        ]);
+    }
+
+    public function addNote(Request $request, EcommerceTicket $ticket)
+    {
+        $this->authorizeTicket($request, $ticket);
+
+        $validated = $request->validate([
+            'note' => ['required', 'string'],
+        ]);
+
+        $note = $ticket->notes()->create([
+            'user_id' => $request->user()->id,
+            'note' => $validated['note'],
+            'visibility' => 'public',
+        ]);
+
+        $this->recordActivity($ticket, $request->user()->id, 'note_added', 'Note added', Str::limit($validated['note'], 140));
+
+        return response()->json([
+            'success' => true,
+            'data' => $this->notePayload($note->load('user:id,name,email')),
+        ], 201);
+    }
+
+    private function storeUploadedAttachments(Request $request, EcommerceTicket $ticket, ?int $replyId = null)
+    {
+        $files = $request->file('attachments', []);
+        if ($files instanceof UploadedFile) {
+            $files = [$files];
         }
 
-        return response()->json(['success' => true, 'data' => $ticket->load('replies.user')]);
+        return collect($files)->map(function (UploadedFile $file) use ($request, $ticket, $replyId) {
+            $path = $file->store('ticket-attachments/' . $ticket->id, 'public');
+
+            return $ticket->attachments()->create([
+                'ecommerce_ticket_reply_id' => $replyId,
+                'user_id' => $request->user()?->id,
+                'original_name' => $file->getClientOriginalName(),
+                'path' => $path,
+                'mime_type' => $file->getClientMimeType(),
+                'size' => $file->getSize() ?: 0,
+            ]);
+        });
+    }
+
+    private function recordActivity(EcommerceTicket $ticket, ?int $userId, string $type, string $title, ?string $description = null, array $metadata = []): void
+    {
+        $ticket->activities()->create([
+            'user_id' => $userId,
+            'type' => $type,
+            'title' => $title,
+            'description' => $description,
+            'metadata' => $metadata ?: null,
+        ]);
+    }
+
+    private function summaryForUser(Request $request): array
+    {
+        $counts = EcommerceTicket::where('user_id', $request->user()->id)
+            ->selectRaw('LOWER(status) as status_key, COUNT(*) as total')
+            ->groupBy('status_key')
+            ->pluck('total', 'status_key');
+
+        $open = (int) ($counts['open'] ?? 0);
+        $inProgress = (int) ($counts['in_progress'] ?? 0);
+        $waitingCustomer = (int) ($counts['waiting_customer'] ?? 0);
+        $resolved = (int) ($counts['resolved'] ?? 0);
+        $closed = (int) ($counts['closed'] ?? 0);
+
+        return [
+            'open' => $open,
+            'in_progress' => $inProgress,
+            'waiting_customer' => $waitingCustomer,
+            'resolved' => $resolved,
+            'closed' => $closed,
+            'total' => $open + $inProgress + $waitingCustomer + $resolved + $closed,
+        ];
+    }
+
+    private function authorizeTicket(Request $request, EcommerceTicket $ticket): void
+    {
+        abort_if($ticket->user_id !== $request->user()->id && ! $request->user()->isSuperAdmin(), 403, 'Unauthorized');
+    }
+
+    private function nextTicketNumber(): string
+    {
+        do {
+            $number = 'SUP-' . now()->format('Y') . '-' . strtoupper(Str::random(6));
+        } while (EcommerceTicket::where('ticket_number', $number)->exists());
+
+        return $number;
+    }
+
+    private function normalizeStatus(mixed $status): ?string
+    {
+        if ($status === null || $status === '') {
+            return null;
+        }
+
+        $normalized = strtolower(trim((string) $status));
+        $normalized = str_replace([' ', '-'], '_', $normalized);
+
+        return $normalized === 'all' || in_array($normalized, self::CUSTOMER_STATUSES, true)
+            ? $normalized
+            : null;
+    }
+
+    private function normalizePriority(mixed $priority): ?string
+    {
+        if ($priority === null || $priority === '') {
+            return null;
+        }
+
+        $normalized = strtolower(trim((string) $priority));
+
+        return in_array($normalized, self::PRIORITIES, true) ? $normalized : null;
+    }
+
+    private function displayStatus(?string $status): string
+    {
+        return str((string) ($this->normalizeStatus($status) ?: 'open'))->replace('_', ' ')->title()->toString();
+    }
+
+    private function displayPriority(?string $priority): string
+    {
+        return str((string) ($this->normalizePriority($priority) ?: 'normal'))->title()->toString();
     }
 }

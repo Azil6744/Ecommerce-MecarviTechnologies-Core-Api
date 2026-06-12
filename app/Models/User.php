@@ -130,6 +130,11 @@ class User extends Authenticatable
         return $this->hasMany(EcommerceWalletTransaction::class);
     }
 
+    public function paymentMethods()
+    {
+        return $this->hasMany(EcommercePaymentMethod::class);
+    }
+
     public function quotations()
     {
         return $this->hasMany(EcommerceQuotation::class);

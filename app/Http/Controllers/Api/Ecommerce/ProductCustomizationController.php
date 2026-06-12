@@ -142,8 +142,14 @@ class ProductCustomizationController extends Controller
                     'draft_id' => $draft->id,
                 ],
                 'total_amount' => $draft->total_price,
+                'subtotal' => $draft->total_price + $draft->discount_amount,
                 'discount_amount' => $draft->discount_amount,
                 'order_date' => Carbon::today(),
+            ]);
+            $order->statusEvents()->create([
+                'user_id' => optional($request->user())->id ?? $draft->user_id,
+                'status' => 'pending',
+                'label' => 'Order submitted',
             ]);
 
             EcommerceOrderItem::create([

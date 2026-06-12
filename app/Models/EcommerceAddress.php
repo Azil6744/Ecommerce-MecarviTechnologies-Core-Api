@@ -12,15 +12,20 @@ class EcommerceAddress extends Model
     protected $fillable = [
         'user_id',
         'type',
+        'title',
         'first_name',
         'last_name',
+        'company',
         'phone',
         'email',
         'country',
         'state',
         'city',
         'address',
+        'address_line_1',
+        'address_line_2',
         'zip_code',
+        'postal_code',
         'is_default',
     ];
 

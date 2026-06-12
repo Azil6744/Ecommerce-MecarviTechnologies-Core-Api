@@ -10,6 +10,8 @@ use App\Http\Controllers\Api\Admin\CategoryController;
 use App\Http\Controllers\Api\Admin\ProductController;
 use App\Http\Controllers\Api\Admin\ProductDetailDataController;
 use App\Http\Controllers\Api\Admin\HomePageController;
+use App\Http\Controllers\Api\Admin\MembershipPageController;
+use App\Http\Controllers\Api\Admin\GiftCardPageController;
 use App\Http\Controllers\Api\Admin\AboutSectionController;
 use App\Http\Controllers\Api\Admin\ServiceSectionController;
 use App\Http\Controllers\Api\Admin\ServiceCardController;
@@ -88,6 +90,7 @@ use App\Http\Controllers\Api\Admin\DealController;
 use App\Http\Controllers\Api\Admin\EmployeeController;
 use App\Http\Controllers\Api\Admin\ChatController;
 use App\Http\Controllers\Api\Admin\CalendarController;
+use App\Http\Controllers\Api\Admin\FileManagerController;
 
 
 /*
@@ -142,6 +145,9 @@ Route::prefix('v1')->group(function () {
     // Returns: Last content update timestamp for polling
     Route::get('/content-last-updated', [\App\Http\Controllers\Api\ContentUpdateController::class, 'getLastUpdateTime'])
         ->name('api.v1.content-last-updated');
+
+    Route::get('/public/home-payload', [\App\Http\Controllers\Api\PublicHomePayloadController::class, 'show'])
+        ->name('api.v1.public.home-payload.show');
 
     // Get Home Page Content (Public)
     // GET /api/v1/home-page
@@ -664,6 +670,14 @@ Route::prefix('v1')->group(function () {
     Route::get('/section-labels/{pageSlug}', [SectionLabelController::class, 'show'])
         ->name('api.v1.section-labels.show');
 
+    // Get Membership Page Content (Public)
+    Route::get('/membership-page', [MembershipPageController::class, 'index'])
+        ->name('api.v1.membership-page.index');
+
+    // Get Gift Card Page Content (Public)
+    Route::get('/gift-card-page', [GiftCardPageController::class, 'index'])
+        ->name('api.v1.gift-card-page.index');
+
 
     /*
      |--------------------------------------------------------------------------
@@ -881,6 +895,24 @@ Route::prefix('v1')->group(function () {
         // Sets specific field to null and removes associated images if applicable
         Route::delete('/home-page/{id}/field/{field}', [HomePageController::class, 'deleteField'])
             ->name('api.v1.home-page.delete-field');
+
+        // Membership Page Content (Admin Only)
+        Route::post('/membership-page', [MembershipPageController::class, 'store'])
+            ->name('api.v1.membership-page.store');
+        Route::put('/membership-page/{id}', [MembershipPageController::class, 'update'])
+            ->name('api.v1.membership-page.update');
+        Route::patch('/membership-page/{id}', [MembershipPageController::class, 'update'])
+            ->name('api.v1.membership-page.update.patch');
+        Route::delete('/membership-page/{id}', [MembershipPageController::class, 'destroy'])
+            ->name('api.v1.membership-page.destroy');
+
+        // Gift Card Page Content (Admin Only)
+        Route::post('/gift-card-page', [GiftCardPageController::class, 'store'])
+            ->name('api.v1.gift-card-page.store');
+        Route::put('/gift-card-page/{id}', [GiftCardPageController::class, 'update'])
+            ->name('api.v1.gift-card-page.update');
+        Route::patch('/gift-card-page/{id}', [GiftCardPageController::class, 'update'])
+            ->name('api.v1.gift-card-page.update.patch');
 
         // Create or Update Service Page Content (Admin Only)
         // POST /api/v1/service-page
@@ -2526,20 +2558,19 @@ Route::prefix('v1')->group(function () {
         );
 
     }); // End of auth:sanctum middleware group
-    
+
     /*
     |--------------------------------------------------------------------------
-    | Admin Panel Routes (Future)
+    | Additional Authenticated Admin Routes
     |--------------------------------------------------------------------------
     |
-    | These routes will be used for admin panel and staff-facing features.
-    | They require authentication and appropriate role permissions.
+    | These routes were previously declared outside the authenticated group,
+    | which left them publicly accessible. Keep them protected here so the
+    | frontend can safely wire against them.
     |
     */
+    Route::middleware('auth:sanctum')->group(function () {
 
-    // Admin Panel Routes (Auth Required - Middleware added in Kernel.php)
-    // These routes require authentication and admin role verification
-    
         // Page SEO Settings (Admin Only)
         Route::post('/page-seo-settings/{pageSlug}', [PageSeoSettingController::class, 'upsert'])
             ->name('api.v1.page-seo-settings.upsert');
@@ -2631,6 +2662,14 @@ Route::prefix('v1')->group(function () {
 
         // Calendar Management (Admin Only)
         Route::apiResource('calendar/events', CalendarController::class);
+
+        // File Manager (Admin Only)
+        Route::get('/files/dashboard', [FileManagerController::class, 'dashboard']);
+        Route::get('/files', [FileManagerController::class, 'index']);
+        Route::post('/files/upload', [FileManagerController::class, 'upload']);
+        Route::post('/files/verify-password', [FileManagerController::class, 'verifyPassword']);
+
+    });
 
 }); // End of v1 prefix group
 

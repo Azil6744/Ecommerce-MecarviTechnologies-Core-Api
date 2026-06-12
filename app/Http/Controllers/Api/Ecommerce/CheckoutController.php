@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 
 use App\Models\EcommerceCart;
+use App\Models\EcommerceAddress;
 use App\Models\EcommerceOrder;
 use App\Models\EcommerceOrderItem;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +21,8 @@ class CheckoutController extends Controller
     {
         $validated = $request->validate([
             'items' => 'nullable|array',
+            'shipping_address_id' => 'nullable',
+            'billing_address_id' => 'nullable',
             'shipping_method' => 'nullable|string|max:255',
             'payment_method' => 'required|string|max:255',
             'shipping_amount' => 'nullable|numeric|min:0',
@@ -57,6 +60,8 @@ class CheckoutController extends Controller
                 ? (float) $cartItems->sum('total_price')
                 : (float) $requestItems->sum(fn ($item) => (float) ($item['total_price'] ?? (($item['unit_price'] ?? $item['price'] ?? 0) * ($item['quantity'] ?? 1))));
             $totalAmount = round((float) ($validated['total_amount'] ?? ($itemsSubtotal + $shippingAmount + $taxAmount - $discountAmount)), 2);
+            $shippingAddress = $this->addressForUser($user?->id, $validated['shipping_address_id'] ?? null);
+            $billingAddress = $this->addressForUser($user?->id, $validated['billing_address_id'] ?? $validated['shipping_address_id'] ?? null);
 
             $orderData = [
                 'user_id' => $user?->id,
@@ -65,9 +70,12 @@ class CheckoutController extends Controller
                 'status' => 'pending',
                 'payment_status' => 'unpaid',
                 'total_amount' => $totalAmount,
+                'subtotal' => round($itemsSubtotal, 2),
                 'shipping_amount' => $shippingAmount,
                 'discount_amount' => $discountAmount,
                 'tax_amount' => $taxAmount,
+                'shipping_address' => EcommerceOrderController::formatAddress($shippingAddress),
+                'billing_address' => EcommerceOrderController::formatAddress($billingAddress),
                 'payment_method' => $validated['payment_method'],
                 'shipping_method' => $validated['shipping_method'] ?? null,
                 'notes' => $validated['notes'] ?? null,
@@ -81,6 +89,11 @@ class CheckoutController extends Controller
             ];
 
             $order = EcommerceOrder::create($orderData);
+            $order->statusEvents()->create([
+                'user_id' => $user?->id,
+                'status' => 'pending',
+                'label' => 'Order placed',
+            ]);
 
             if ($cartItems->isNotEmpty()) {
                 foreach ($cartItems as $cartItem) {
@@ -129,5 +142,14 @@ class CheckoutController extends Controller
                 'message' => 'Failed to process checkout: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    private function addressForUser(?int $userId, mixed $addressId): ?EcommerceAddress
+    {
+        if (! $userId || ! is_numeric($addressId)) {
+            return null;
+        }
+
+        return EcommerceAddress::where('user_id', $userId)->whereKey((int) $addressId)->first();
     }
 }

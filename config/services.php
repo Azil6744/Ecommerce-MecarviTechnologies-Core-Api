@@ -52,4 +52,8 @@ return [
         'api_url' => env('CENTRAL_AUTH_API_URL'),
     ],
 
+    'mccarvy_site' => [
+        'slug' => env('MCCARVY_SITE_SLUG', env('SITE_SLUG', 'embroidery')),
+    ],
+
 ];

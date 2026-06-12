@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\PersonalAccessToken;
 
 class CentralAuthTokenMiddleware
@@ -57,22 +58,24 @@ class CentralAuthTokenMiddleware
 
             \Log::info('CentralAuthTokenMiddleware: Token valid for ' . $centralUser['email']);
 
-            // Find local user by email
-            $user = User::where('email', $centralUser['email'])->first();
+            $email = strtolower(trim((string) $centralUser['email']));
+            $user = User::whereRaw('LOWER(email) = ?', [$email])->first();
 
             if (! $user) {
-                \Log::info('CentralAuthTokenMiddleware: Creating new local user for ' . $centralUser['email']);
-                // Create local user if it doesn't exist
+                \Log::info('CentralAuthTokenMiddleware: Creating new local user for ' . $email);
                 $user = User::create([
-                    'name' => $centralUser['name'],
-                    'email' => $centralUser['email'],
-                    'username' => $centralUser['username'] ?? Str::before($centralUser['email'], '@'),
+                    'name' => $centralUser['name'] ?? 'User',
+                    'email' => $email,
+                    'username' => $this->availableUsername($centralUser['username'] ?? Str::before($email, '@')),
                     'password' => bcrypt(Str::random(16)),
-                    'role' => 'viewer',
+                    'role' => $this->localRole($centralUser['role'] ?? null),
                 ]);
+            } else {
+                $this->syncLocalUserProfile($user, $centralUser);
             }
 
             $this->authenticateRequestAs($request, $user);
+            $this->linkSiteUserInCentralAuth($token, $user);
             \Log::info('CentralAuthTokenMiddleware: User authenticated for request');
         } catch (\Exception $e) {
             \Log::error('CentralAuthTokenMiddleware: Exception during validation: ' . $e->getMessage());
@@ -129,6 +132,82 @@ class CentralAuthTokenMiddleware
         }
 
         return $accessToken->tokenable;
+    }
+
+    private function syncLocalUserProfile(User $user, array $centralUser): void
+    {
+        $payload = [];
+
+        foreach (['name', 'phone'] as $field) {
+            if (Schema::hasColumn($user->getTable(), $field) && array_key_exists($field, $centralUser)) {
+                $payload[$field] = $centralUser[$field];
+            }
+        }
+
+        if (! empty($centralUser['username'])
+            && Schema::hasColumn($user->getTable(), 'username')
+            && $centralUser['username'] !== $user->username
+            && ! User::where('username', $centralUser['username'])->whereKeyNot($user->id)->exists()
+        ) {
+            $payload['username'] = $centralUser['username'];
+        }
+
+        if ($payload) {
+            $user->update($payload);
+        }
+    }
+
+    private function availableUsername(string $username): string
+    {
+        $base = Str::slug($username, '_') ?: 'user';
+        $candidate = $base;
+        $suffix = 1;
+
+        while (User::where('username', $candidate)->exists()) {
+            $suffix++;
+            $candidate = $base . '_' . $suffix;
+        }
+
+        return $candidate;
+    }
+
+    private function localRole(?string $centralRole): string
+    {
+        return in_array($centralRole, ['super_admin', 'admin', 'editor', 'customer', 'seller'], true)
+            ? $centralRole
+            : 'customer';
+    }
+
+    private function linkSiteUserInCentralAuth(string $token, User $user): void
+    {
+        $siteSlug = trim((string) config('services.mccarvy_site.slug', ''));
+        if ($siteSlug === '') {
+            return;
+        }
+
+        foreach ($this->centralAuthBaseUrls() as $centralAuthUrl) {
+            try {
+                $response = Http::withHeaders([
+                    'Authorization' => 'Bearer ' . $token,
+                    'X-Central-Auth-Token' => $token,
+                    'Accept' => 'application/json',
+                ])->timeout(5)->post($centralAuthUrl . '/user/link-site', [
+                    'site_slug' => $siteSlug,
+                    'site_user_id' => $user->id,
+                ]);
+
+                if ($response->successful()) {
+                    return;
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('CentralAuthTokenMiddleware: Failed linking site user', [
+                    'site_slug' => $siteSlug,
+                    'user_id' => $user->id,
+                    'url' => $centralAuthUrl,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
     }
 
     private function parseBearerValue(?string $headerValue): ?string
