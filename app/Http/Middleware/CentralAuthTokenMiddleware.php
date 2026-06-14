@@ -21,11 +21,16 @@ class CentralAuthTokenMiddleware
      * @param  \Closure  $next
      * @return mixed
      */
-    public function handle(Request $request, Closure $next)
+    public function handle(Request $request, Closure $next, string $mode = 'required')
     {
         $token = $this->extractBearerToken($request);
+        $isOptional = strtolower($mode) === 'optional';
 
         if (! $token) {
+            if ($isOptional) {
+                return $next($request);
+            }
+
             \Log::info('CentralAuthTokenMiddleware: No token found in request', [
                 'authorization_header_present' => $request->headers->has('Authorization'),
                 'x_central_auth_token_present' => $request->headers->has('X-Central-Auth-Token'),
@@ -73,6 +78,8 @@ class CentralAuthTokenMiddleware
             } else {
                 $this->syncLocalUserProfile($user, $centralUser);
             }
+
+            $this->linkGuestDataForUser($user);
 
             $this->authenticateRequestAs($request, $user);
             $this->linkSiteUserInCentralAuth($token, $user);
@@ -313,5 +320,45 @@ class CentralAuthTokenMiddleware
         }
 
         return $payload;
+    }
+
+    private function linkGuestDataForUser(User $user): void
+    {
+        try {
+            $email = strtolower(trim((string) $user->email));
+            if ($email === '') {
+                return;
+            }
+
+            // Link guest orders
+            if (class_exists(\App\Models\EcommerceOrder::class)) {
+                \App\Models\EcommerceOrder::whereNull('user_id')
+                    ->whereRaw('LOWER(customer_email) = ?', [$email])
+                    ->update(['user_id' => $user->id]);
+            }
+
+            // Link guest quotations
+            if (class_exists(\App\Models\EcommerceQuotation::class)) {
+                \App\Models\EcommerceQuotation::whereNull('user_id')
+                    ->whereRaw('LOWER(customer_email) = ?', [$email])
+                    ->update(['user_id' => $user->id]);
+            }
+
+            // Link guest tickets
+            if (class_exists(\App\Models\EcommerceTicket::class)) {
+                \App\Models\EcommerceTicket::whereNull('user_id')
+                    ->whereRaw('LOWER(contact_email) = ?', [$email])
+                    ->update(['user_id' => $user->id]);
+            }
+
+            // Link guest disputes
+            if (class_exists(\App\Models\EcommerceDispute::class)) {
+                \App\Models\EcommerceDispute::whereNull('user_id')
+                    ->whereRaw('LOWER(email) = ?', [$email])
+                    ->update(['user_id' => $user->id]);
+            }
+        } catch (\Throwable $e) {
+            \Log::error('CentralAuthTokenMiddleware: Error linking guest data: ' . $e->getMessage());
+        }
     }
 }

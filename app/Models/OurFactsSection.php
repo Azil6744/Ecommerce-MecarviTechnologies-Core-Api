@@ -21,6 +21,12 @@ class OurFactsSection extends Model
         'large_number_image',
         'background_image',
         'background_color',
+        'card_background_color',
+        'heading_main',
+        'heading_highlight',
+        'timeline_background_color',
+        'timeline_card_background_color',
+        'timeline_background_image',
     ];
 
     /**
@@ -45,6 +51,19 @@ class OurFactsSection extends Model
     {
         if ($this->large_number_image) {
             return asset('storage/' . $this->large_number_image);
+        }
+        return null;
+    }
+
+    /**
+     * Get the full URL for the timeline background image.
+     *
+     * @return string|null
+     */
+    public function getTimelineBackgroundImageUrlAttribute()
+    {
+        if ($this->timeline_background_image) {
+            return asset('storage/' . $this->timeline_background_image);
         }
         return null;
     }

@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\OurPromise;
+use App\Traits\BroadcastsContentUpdates;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 class OurPromiseController extends Controller
 {
+    use BroadcastsContentUpdates;
     /**
      * Get our promise content.
      * 
@@ -77,6 +79,10 @@ class OurPromiseController extends Controller
                 ['id' => OurPromise::first()?->id ?? 0],
                 $validated
             );
+
+            $this->broadcastContentUpdate('our-promise', 'updated', [
+                'id' => $promise->id,
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -173,6 +179,10 @@ class OurPromiseController extends Controller
                 $promise->fill($dataToUpdate);
                 $promise->save();
                 $promise->refresh();
+
+                $this->broadcastContentUpdate('our-promise', 'updated', [
+                    'id' => $promise->id,
+                ]);
             } else {
                 return response()->json([
                     'success' => false,
@@ -241,6 +251,10 @@ class OurPromiseController extends Controller
 
             // Delete the promise record
             $promise->delete();
+
+            $this->broadcastContentUpdate('our-promise', 'deleted', [
+                'id' => $id,
+            ]);
 
             return response()->json([
                 'success' => true,

@@ -18,6 +18,14 @@ class WhatWeCreateSection extends Model
         'section_title',
         'background_image',
         'section_bg_color',
+        'card_background_color',
+        'heading_title',
+        'description',
+        'button_text',
+        'button_url',
+        'grid_background_color',
+        'grid_card_background_color',
+        'grid_background_image',
     ];
 
     /**
@@ -29,6 +37,19 @@ class WhatWeCreateSection extends Model
     {
         if ($this->background_image) {
             return asset('storage/' . $this->background_image);
+        }
+        return null;
+    }
+
+    /**
+     * Get the full URL for the grid background image.
+     *
+     * @return string|null
+     */
+    public function getGridBackgroundImageUrlAttribute()
+    {
+        if ($this->grid_background_image) {
+            return asset('storage/' . $this->grid_background_image);
         }
         return null;
     }

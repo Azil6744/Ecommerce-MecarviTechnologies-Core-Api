@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\CategoryTab;
 use App\Models\WhatWeCreateTab;
+use App\Traits\BroadcastsContentUpdates;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class CategoryTabController extends Controller
 {
+    use BroadcastsContentUpdates;
     /**
      * Get all category tabs.
      * 
@@ -124,6 +126,10 @@ class CategoryTabController extends Controller
             // Create category tab
             $categoryTab = CategoryTab::create($validated);
 
+            $this->broadcastContentUpdate('category-tab', 'updated', [
+                'id' => $categoryTab->id,
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Category tab created successfully',
@@ -218,6 +224,10 @@ class CategoryTabController extends Controller
                 $categoryTab->fill($dataToUpdate);
                 $categoryTab->save();
                 $categoryTab->refresh();
+
+                $this->broadcastContentUpdate('category-tab', 'updated', [
+                    'id' => $categoryTab->id,
+                ]);
             } else {
                 return response()->json([
                     'success' => false,
@@ -298,6 +308,10 @@ class CategoryTabController extends Controller
             // Delete the category tab record
             // This will automatically delete all associated tabs due to cascade delete
             $categoryTab->delete();
+
+            $this->broadcastContentUpdate('category-tab', 'deleted', [
+                'id' => $id,
+            ]);
 
             return response()->json([
                 'success' => true,

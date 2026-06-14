@@ -18,15 +18,17 @@ class PaymentController extends Controller
             return;
         }
 
-        // Stripe initialization
-        $this->stripeGateway = Omnipay::create('Stripe');
-        $this->stripeGateway->setApiKey(config('services.stripe.secret'));
+        if (filled(config('services.stripe.secret'))) {
+            $this->stripeGateway = Omnipay::create('Stripe');
+            $this->stripeGateway->setApiKey(config('services.stripe.secret'));
+        }
 
-        // PayPal initialization
-        $this->paypalGateway = Omnipay::create('PayPal_Rest');
-        $this->paypalGateway->setClientId(config('services.paypal.client_id'));
-        $this->paypalGateway->setSecret(config('services.paypal.secret'));
-        $this->paypalGateway->setTestMode(config('services.paypal.mode') === 'sandbox');
+        if (filled(config('services.paypal.client_id')) && filled(config('services.paypal.secret'))) {
+            $this->paypalGateway = Omnipay::create('PayPal_Rest');
+            $this->paypalGateway->setClientId(config('services.paypal.client_id'));
+            $this->paypalGateway->setSecret(config('services.paypal.secret'));
+            $this->paypalGateway->setTestMode(config('services.paypal.mode') === 'sandbox');
+        }
     }
 
     public function showOrder($order)
@@ -79,6 +81,10 @@ class PaymentController extends Controller
         }
 
         if ($request->payment_method === 'stripe') {
+            if ($this->shouldUseStripeTestMode()) {
+                return $this->processStripeTestPayment($order, $request->payment_token);
+            }
+
             if (! $this->stripeGateway) {
                 return response()->json([
                     'success' => false,
@@ -104,10 +110,6 @@ class PaymentController extends Controller
      */
     private function processStripe(EcommerceOrder $order, $token)
     {
-        if ($this->shouldUseStripeTestMode()) {
-            return $this->processStripeTestPayment($order, $token);
-        }
-
         try {
             $response = $this->stripeGateway->purchase([
                 'amount' => $order->total_amount,

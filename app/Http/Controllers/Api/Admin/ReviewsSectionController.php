@@ -50,6 +50,8 @@ class ReviewsSectionController extends Controller
                     'avatar_2' => $section->avatar_2_url,
                     'avatar_3' => $section->avatar_3_url,
                     'avatar_4' => $section->avatar_4_url,
+                    'background_color' => $section->background_color,
+                    'card_background_color' => $section->card_background_color,
                     'created_at' => $section->created_at,
                     'updated_at' => $section->updated_at,
                 ],
@@ -88,6 +90,8 @@ class ReviewsSectionController extends Controller
                 'review_count' => ['nullable', 'string', 'max:255'],
                 'button_text' => ['nullable', 'string', 'max:255'],
                 'button_url' => ['nullable', 'string', 'max:500'],
+                'background_color' => ['nullable', 'string', 'max:255'],
+                'card_background_color' => ['nullable', 'string', 'max:255'],
                 'avatar_1' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
                 'avatar_2' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
                 'avatar_3' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
@@ -142,6 +146,8 @@ class ReviewsSectionController extends Controller
                         'avatar_2' => $section->avatar_2_url,
                         'avatar_3' => $section->avatar_3_url,
                         'avatar_4' => $section->avatar_4_url,
+                        'background_color' => $section->background_color,
+                        'card_background_color' => $section->card_background_color,
                         'updated_at' => $section->updated_at,
                     ],
                 ],
@@ -207,7 +213,7 @@ class ReviewsSectionController extends Controller
             }
 
             // Handle text fields
-            $textFields = ['main_heading', 'average_rating', 'call_to_action_text', 'client_label', 'review_count', 'button_text', 'button_url'];
+            $textFields = ['main_heading', 'average_rating', 'call_to_action_text', 'client_label', 'review_count', 'button_text', 'button_url', 'background_color', 'card_background_color'];
             foreach ($textFields as $field) {
                 if ($request->filled($field)) {
                     $dataToUpdate[$field] = $request->input($field);
@@ -320,6 +326,8 @@ class ReviewsSectionController extends Controller
                         'avatar_2' => $section->avatar_2_url,
                         'avatar_3' => $section->avatar_3_url,
                         'avatar_4' => $section->avatar_4_url,
+                        'background_color' => $section->background_color,
+                        'card_background_color' => $section->card_background_color,
                         'updated_at' => $section->updated_at,
                     ],
                 ],
@@ -483,6 +491,8 @@ class ReviewsSectionController extends Controller
                         'avatar_2' => $section->avatar_2_url,
                         'avatar_3' => $section->avatar_3_url,
                         'avatar_4' => $section->avatar_4_url,
+                        'background_color' => $section->background_color,
+                        'card_background_color' => $section->card_background_color,
                         'updated_at' => $section->updated_at,
                     ],
                 ],

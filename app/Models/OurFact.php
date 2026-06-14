@@ -18,5 +18,7 @@ class OurFact extends Model
         'percentage',
         'label',
         'order',
+        'signature',
+        'sublabel',
     ];
 }

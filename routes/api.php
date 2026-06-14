@@ -689,7 +689,7 @@ Route::prefix('v1')->group(function () {
     |
     */
 
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware('central.auth')->group(function () {
 
         // Get Authenticated User
         // GET /api/v1/user
@@ -2569,7 +2569,7 @@ Route::prefix('v1')->group(function () {
     | frontend can safely wire against them.
     |
     */
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware('central.auth')->group(function () {
 
         // Page SEO Settings (Admin Only)
         Route::post('/page-seo-settings/{pageSlug}', [PageSeoSettingController::class, 'upsert'])

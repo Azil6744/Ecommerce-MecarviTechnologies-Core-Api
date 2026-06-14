@@ -43,6 +43,15 @@ class CheckoutController extends Controller
                 ->where('status', 'active')
                 ->first();
 
+            // If user_id is null (auth not resolved by middleware), attempt to find user by email
+            // This handles cases where the Central Auth server is slow or unreachable
+            if (! $user) {
+                $emailFromRequest = strtolower(trim((string) ($request->input('customer_email') ?? '')));
+                if ($emailFromRequest !== '') {
+                    $user = \App\Models\User::whereRaw('LOWER(email) = ?', [$emailFromRequest])->first();
+                }
+            }
+
             $cartItems = $cart?->items ?? collect();
             $requestItems = collect($validated['items'] ?? []);
 
@@ -127,6 +136,16 @@ class CheckoutController extends Controller
             }
 
             DB::commit();
+
+            // Opportunistically link any other guest orders for this email to this user
+            if ($order->user_id && $order->customer_email) {
+                $customerEmail = strtolower(trim((string) $order->customer_email));
+                if ($customerEmail !== '') {
+                    EcommerceOrder::whereNull('user_id')
+                        ->whereRaw('LOWER(customer_email) = ?', [$customerEmail])
+                        ->update(['user_id' => $order->user_id]);
+                }
+            }
 
             return response()->json([
                 'success' => true,

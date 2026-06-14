@@ -30,6 +30,7 @@ class DatabaseSeeder extends Seeder
         // Seed demo storefront products, categories, gallery images, and reviews
         $this->call([
             DemoProductSeeder::class,
+            TestUserMockDataSeeder::class,
         ]);
 
         // Uncomment to create additional test users

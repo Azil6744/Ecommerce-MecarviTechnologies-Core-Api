@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\HomePage;
+use App\Traits\BroadcastsContentUpdates;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class HomePageController extends Controller
 {
+    use BroadcastsContentUpdates;
     /**
      * Get home page content.
      * 
@@ -37,11 +39,19 @@ class HomePageController extends Controller
                 'home_page' => [
                     'id' => $homePage->id,
                     'title' => $homePage->title,
+                    'top_label' => $homePage->top_label,
                     'button_text' => $homePage->button_text,
                     'button_url' => $homePage->button_url,
+                    'secondary_button_text' => $homePage->secondary_button_text,
+                    'secondary_button_url' => $homePage->secondary_button_url,
                     'description' => $homePage->description,
+                    'trust_badge_1' => $homePage->trust_badge_1,
+                    'trust_badge_2' => $homePage->trust_badge_2,
+                    'trust_badge_3' => $homePage->trust_badge_3,
                     'background_image' => $homePage->background_image_url,
                     'secondary_image' => $homePage->secondary_image_url,
+                    'background_color' => $homePage->background_color,
+                    'accent_color' => $homePage->accent_color,
                     'created_at' => $homePage->created_at,
                     'updated_at' => $homePage->updated_at,
                 ],
@@ -74,11 +84,19 @@ class HomePageController extends Controller
             // Validate the incoming request data
             $validated = $request->validate([
                 'title' => ['required', 'string', 'max:255'],
+                'top_label' => ['nullable', 'string', 'max:255'],
                 'button_text' => ['required', 'string', 'max:255'],
-                'button_url' => ['required', 'url', 'max:255'],
+                'button_url' => ['required', 'string', 'max:255'],
+                'secondary_button_text' => ['nullable', 'string', 'max:255'],
+                'secondary_button_url' => ['nullable', 'string', 'max:255'],
                 'description' => ['nullable', 'string'],
+                'trust_badge_1' => ['nullable', 'string', 'max:255'],
+                'trust_badge_2' => ['nullable', 'string', 'max:255'],
+                'trust_badge_3' => ['nullable', 'string', 'max:255'],
                 'background_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
                 'secondary_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
+                'background_color' => ['nullable', 'string', 'max:50'],
+                'accent_color' => ['nullable', 'string', 'max:50'],
             ]);
 
             $existingHomePage = HomePage::first();
@@ -118,13 +136,25 @@ class HomePageController extends Controller
                 ['id' => HomePage::first()?->id ?? 0],
                 [
                     'title' => $validated['title'],
+                    'top_label' => $validated['top_label'] ?? null,
                     'button_text' => $validated['button_text'],
                     'button_url' => $validated['button_url'],
+                    'secondary_button_text' => $validated['secondary_button_text'] ?? null,
+                    'secondary_button_url' => $validated['secondary_button_url'] ?? null,
                     'description' => $validated['description'] ?? null,
+                    'trust_badge_1' => $validated['trust_badge_1'] ?? null,
+                    'trust_badge_2' => $validated['trust_badge_2'] ?? null,
+                    'trust_badge_3' => $validated['trust_badge_3'] ?? null,
                     'background_image' => $validated['background_image'] ?? null,
                     'secondary_image' => $validated['secondary_image'] ?? null,
+                    'background_color' => $validated['background_color'] ?? null,
+                    'accent_color' => $validated['accent_color'] ?? null,
                 ]
             );
+
+            $this->broadcastContentUpdate('home-page', 'updated', [
+                'id' => $homePage->id,
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -133,11 +163,18 @@ class HomePageController extends Controller
                     'home_page' => [
                         'id' => $homePage->id,
                         'title' => $homePage->title,
+                        'top_label' => $homePage->top_label,
                         'button_text' => $homePage->button_text,
                         'button_url' => $homePage->button_url,
+                        'secondary_button_text' => $homePage->secondary_button_text,
+                        'secondary_button_url' => $homePage->secondary_button_url,
                         'description' => $homePage->description,
+                        'trust_badge_1' => $homePage->trust_badge_1,
+                        'trust_badge_2' => $homePage->trust_badge_2,
+                        'trust_badge_3' => $homePage->trust_badge_3,
                         'background_image' => $homePage->background_image_url,
                         'secondary_image' => $homePage->secondary_image_url,
+                        'background_color' => $homePage->background_color,
                         'updated_at' => $homePage->updated_at,
                     ],
                 ],
@@ -226,6 +263,23 @@ class HomePageController extends Controller
                 $dataToUpdate['button_url'] = trim($buttonUrl);
             }
 
+            // Optional strings
+            $optionalStrings = [
+                'top_label', 'secondary_button_text', 'trust_badge_1', 'trust_badge_2', 'trust_badge_3', 'background_color', 'accent_color'
+            ];
+            foreach ($optionalStrings as $field) {
+                if ($request->has($field)) {
+                    $val = $request->input($field);
+                    $dataToUpdate[$field] = $val !== null ? trim($val) : null;
+                }
+            }
+
+            // Optional URLs
+            if ($request->has('secondary_button_url')) {
+                $val = $request->input('secondary_button_url');
+                $dataToUpdate['secondary_button_url'] = $val !== null ? trim($val) : null;
+            }
+
             // Check and update description (can be empty/null)
             if ($request->has('description')) {
                 $dataToUpdate['description'] = $request->input('description');
@@ -278,7 +332,7 @@ class HomePageController extends Controller
                     $rules['button_text'] = ['required', 'string', 'max:255'];
                 }
                 if (isset($dataToUpdate['button_url'])) {
-                    $rules['button_url'] = ['required', 'url', 'max:255'];
+                    $rules['button_url'] = ['required', 'string', 'max:255'];
                 }
                 if (isset($dataToUpdate['description'])) {
                     $rules['description'] = ['nullable', 'string'];
@@ -294,6 +348,10 @@ class HomePageController extends Controller
                 $homePage->fill($dataToUpdate);
                 $homePage->save();
                 $homePage->refresh();
+
+                $this->broadcastContentUpdate('home-page', 'updated', [
+                    'id' => $homePage->id,
+                ]);
             } else {
                 // Debug: Return what we received if no data to update
                 return response()->json([
@@ -315,11 +373,19 @@ class HomePageController extends Controller
                     'home_page' => [
                         'id' => $homePage->id,
                         'title' => $homePage->title,
+                        'top_label' => $homePage->top_label,
                         'button_text' => $homePage->button_text,
                         'button_url' => $homePage->button_url,
+                        'secondary_button_text' => $homePage->secondary_button_text,
+                        'secondary_button_url' => $homePage->secondary_button_url,
                         'description' => $homePage->description,
+                        'trust_badge_1' => $homePage->trust_badge_1,
+                        'trust_badge_2' => $homePage->trust_badge_2,
+                        'trust_badge_3' => $homePage->trust_badge_3,
                         'background_image' => $homePage->background_image_url,
                         'secondary_image' => $homePage->secondary_image_url,
+                        'background_color' => $homePage->background_color,
+                        'accent_color' => $homePage->accent_color,
                         'updated_at' => $homePage->updated_at,
                     ],
                 ],
@@ -366,9 +432,15 @@ class HomePageController extends Controller
                 'home_page' => [
                     'id' => $homePage->id,
                     'title' => $homePage->title,
+                    'top_label' => $homePage->top_label,
                     'button_text' => $homePage->button_text,
                     'button_url' => $homePage->button_url,
+                    'secondary_button_text' => $homePage->secondary_button_text,
+                    'secondary_button_url' => $homePage->secondary_button_url,
                     'description' => $homePage->description,
+                    'trust_badge_1' => $homePage->trust_badge_1,
+                    'trust_badge_2' => $homePage->trust_badge_2,
+                    'trust_badge_3' => $homePage->trust_badge_3,
                     'background_image' => $homePage->background_image_url,
                     'secondary_image' => $homePage->secondary_image_url,
                     'created_at' => $homePage->created_at,
@@ -422,6 +494,10 @@ class HomePageController extends Controller
             // Delete the home page record
             $homePage->delete();
 
+            $this->broadcastContentUpdate('home-page', 'deleted', [
+                'id' => $id,
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Home page deleted successfully',
@@ -472,9 +548,15 @@ class HomePageController extends Controller
             // Validate field name
             $allowedFields = [
                 'title',
+                'top_label',
                 'button_text',
                 'button_url',
+                'secondary_button_text',
+                'secondary_button_url',
                 'description',
+                'trust_badge_1',
+                'trust_badge_2',
+                'trust_badge_3',
                 'background_image',
                 'secondary_image'
             ];
@@ -500,6 +582,11 @@ class HomePageController extends Controller
             $homePage->$field = null;
             $homePage->save();
 
+            $this->broadcastContentUpdate('home-page', 'updated', [
+                'id' => $homePage->id,
+                'field' => $field,
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => "Field '{$field}' deleted successfully from home page.",
@@ -507,9 +594,15 @@ class HomePageController extends Controller
                     'home_page' => [
                         'id' => $homePage->id,
                         'title' => $homePage->title,
+                        'top_label' => $homePage->top_label,
                         'button_text' => $homePage->button_text,
                         'button_url' => $homePage->button_url,
+                        'secondary_button_text' => $homePage->secondary_button_text,
+                        'secondary_button_url' => $homePage->secondary_button_url,
                         'description' => $homePage->description,
+                        'trust_badge_1' => $homePage->trust_badge_1,
+                        'trust_badge_2' => $homePage->trust_badge_2,
+                        'trust_badge_3' => $homePage->trust_badge_3,
                         'background_image' => $homePage->background_image_url,
                         'secondary_image' => $homePage->secondary_image_url,
                         'updated_at' => $homePage->updated_at,

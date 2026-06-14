@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\WhatWeCreateTab;
 use App\Models\CategoryTab;
+use App\Traits\BroadcastsContentUpdates;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class WhatWeCreateTabController extends Controller
 {
+    use BroadcastsContentUpdates;
     /**
      * Get all what we create tabs.
      * 
@@ -200,6 +202,10 @@ class WhatWeCreateTabController extends Controller
             $tab = WhatWeCreateTab::with('categoryTab')->create($validated);
             $tab->refresh();
             $tab->load('categoryTab');
+
+            $this->broadcastContentUpdate('what-we-create-tab', 'updated', [
+                'id' => $tab->id,
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -409,6 +415,10 @@ class WhatWeCreateTabController extends Controller
                 $tab->save();
                 $tab->refresh();
                 $tab->load('categoryTab');
+
+                $this->broadcastContentUpdate('what-we-create-tab', 'updated', [
+                    'id' => $tab->id,
+                ]);
             } else {
                 return response()->json([
                     'success' => false,
@@ -495,6 +505,10 @@ class WhatWeCreateTabController extends Controller
             // Delete the tab record
             $tab->delete();
 
+            $this->broadcastContentUpdate('what-we-create-tab', 'deleted', [
+                'id' => $id,
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => 'What we create tab deleted successfully',
@@ -574,6 +588,10 @@ class WhatWeCreateTabController extends Controller
             $tab->save();
             $tab->refresh();
             $tab->load('categoryTab');
+
+            $this->broadcastContentUpdate('what-we-create-tab', 'updated', [
+                'id' => $tab->id,
+            ]);
 
             return response()->json([
                 'success' => true,

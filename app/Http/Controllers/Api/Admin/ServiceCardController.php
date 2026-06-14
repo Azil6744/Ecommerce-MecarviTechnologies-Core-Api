@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\ServiceCard;
+use App\Traits\BroadcastsContentUpdates;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class ServiceCardController extends Controller
 {
+    use BroadcastsContentUpdates;
     /**
      * Get all service cards.
      * 
@@ -121,6 +123,10 @@ class ServiceCardController extends Controller
 
             // Create service card
             $serviceCard = ServiceCard::create($validated);
+
+            $this->broadcastContentUpdate('service-card', 'updated', [
+                'id' => $serviceCard->id,
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -262,6 +268,10 @@ class ServiceCardController extends Controller
                 $serviceCard->fill($dataToUpdate);
                 $serviceCard->save();
                 $serviceCard->refresh();
+
+                $this->broadcastContentUpdate('service-card', 'updated', [
+                    'id' => $serviceCard->id,
+                ]);
             } else {
                 return response()->json([
                     'success' => false,
@@ -337,6 +347,10 @@ class ServiceCardController extends Controller
 
             // Delete the service card record
             $serviceCard->delete();
+
+            $this->broadcastContentUpdate('service-card', 'deleted', [
+                'id' => $id,
+            ]);
 
             return response()->json([
                 'success' => true,

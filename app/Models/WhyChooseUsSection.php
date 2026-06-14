@@ -18,8 +18,20 @@ class WhyChooseUsSection extends Model
         'section_title',
         'background_image',
         'background_color',
+        'card_background_color',
         'image_1',
         'image_2',
+        'bad_points',
+        'bottom_text',
+    ];
+
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array
+     */
+    protected $casts = [
+        'bad_points' => 'array',
     ];
 
     /**

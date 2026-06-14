@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\ProcessStep;
+use App\Traits\BroadcastsContentUpdates;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 class ProcessStepController extends Controller
 {
+    use BroadcastsContentUpdates;
     /**
      * Get all process steps.
      * 
@@ -111,6 +113,10 @@ class ProcessStepController extends Controller
 
             // Create step
             $step = ProcessStep::create($validated);
+
+            $this->broadcastContentUpdate('process-step', 'updated', [
+                'id' => $step->id,
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -226,6 +232,10 @@ class ProcessStepController extends Controller
                 $step->fill($dataToUpdate);
                 $step->save();
                 $step->refresh();
+
+                $this->broadcastContentUpdate('process-step', 'updated', [
+                    'id' => $step->id,
+                ]);
             } else {
                 return response()->json([
                     'success' => false,
@@ -296,6 +306,10 @@ class ProcessStepController extends Controller
 
             // Delete the step record
             $step->delete();
+
+            $this->broadcastContentUpdate('process-step', 'deleted', [
+                'id' => $id,
+            ]);
 
             return response()->json([
                 'success' => true,

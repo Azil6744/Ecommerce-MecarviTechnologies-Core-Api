@@ -26,6 +26,8 @@ class ReviewsSection extends Model
         'avatar_2',
         'avatar_3',
         'avatar_4',
+        'background_color',
+        'card_background_color',
     ];
 
     /**

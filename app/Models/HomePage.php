@@ -21,6 +21,14 @@ class HomePage extends Model
         'description',
         'background_image',
         'secondary_image',
+        'top_label',
+        'secondary_button_text',
+        'secondary_button_url',
+        'trust_badge_1',
+        'trust_badge_2',
+        'trust_badge_3',
+        'background_color',
+        'accent_color',
     ];
 
     /**

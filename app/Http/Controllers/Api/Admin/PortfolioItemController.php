@@ -107,7 +107,7 @@ class PortfolioItemController extends Controller
 
             // Validate link if provided (allow empty string or valid URL)
             if ($request->has('link') && $request->input('link') !== null && $request->input('link') !== '') {
-                $rules['link'] = ['string', 'max:500', 'url'];
+                $rules['link'] = ['string', 'max:500'];
             } else {
                 $rules['link'] = ['nullable', 'string', 'max:500'];
             }
@@ -275,7 +275,7 @@ class PortfolioItemController extends Controller
                     $rules['title'] = ['nullable', 'string', 'max:255'];
                 }
                 if (isset($dataToUpdate['link'])) {
-                    $rules['link'] = ['nullable', 'string', 'max:500', 'url'];
+                    $rules['link'] = ['nullable', 'string', 'max:500'];
                 }
                 if (isset($dataToUpdate['order'])) {
                     $rules['order'] = ['nullable', 'integer', 'min:0'];

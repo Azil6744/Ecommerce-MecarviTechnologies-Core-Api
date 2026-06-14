@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\ServiceSection;
+use App\Traits\BroadcastsContentUpdates;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class ServiceSectionController extends Controller
 {
+    use BroadcastsContentUpdates;
     /**
      * Get service section content.
      * 
@@ -39,8 +41,17 @@ class ServiceSectionController extends Controller
                     'subtitle' => $serviceSection->subtitle,
                     'main_title' => $serviceSection->main_title,
                     'button_text' => $serviceSection->button_text,
+                    'process_subtitle' => $serviceSection->process_subtitle,
+                    'process_title_1' => $serviceSection->process_title_1,
+                    'process_title_2' => $serviceSection->process_title_2,
+                    'process_description' => $serviceSection->process_description,
+                    'process_checklist' => $serviceSection->process_checklist,
                     'background_image' => $serviceSection->background_image_url,
                     'background_color' => $serviceSection->background_color,
+                    'card_background_color' => $serviceSection->card_background_color,
+                    'process_background_color' => $serviceSection->process_background_color,
+                    'process_card_background_color' => $serviceSection->process_card_background_color,
+                    'process_background_image' => $serviceSection->process_background_image_url,
                     'created_at' => $serviceSection->created_at,
                     'updated_at' => $serviceSection->updated_at,
                 ],
@@ -75,8 +86,17 @@ class ServiceSectionController extends Controller
                 'subtitle' => ['nullable', 'string', 'max:255'],
                 'main_title' => ['nullable', 'string', 'max:255'],
                 'button_text' => ['nullable', 'string', 'max:255'],
+                'process_subtitle' => ['nullable', 'string', 'max:255'],
+                'process_title_1' => ['nullable', 'string', 'max:255'],
+                'process_title_2' => ['nullable', 'string', 'max:255'],
+                'process_description' => ['nullable', 'string'],
+                'process_checklist' => ['nullable', 'array'],
                 'background_color' => ['nullable', 'string', 'max:32'],
+                'card_background_color' => ['nullable', 'string', 'max:50'],
                 'background_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
+                'process_background_color' => ['nullable', 'string', 'max:50'],
+                'process_card_background_color' => ['nullable', 'string', 'max:50'],
+                'process_background_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
             ]);
 
             $existingServiceSection = ServiceSection::first();
@@ -86,6 +106,27 @@ class ServiceSectionController extends Controller
                 $validated['background_color'] = $request->input('background_color') ?: null;
             } else {
                 $validated['background_color'] = $existingServiceSection->background_color ?? null;
+            }
+
+            // Handle card background color (optional)
+            if ($request->has('card_background_color')) {
+                $validated['card_background_color'] = $request->input('card_background_color') ?: null;
+            } else {
+                $validated['card_background_color'] = $existingServiceSection->card_background_color ?? null;
+            }
+
+            // Handle process background color (optional)
+            if ($request->has('process_background_color')) {
+                $validated['process_background_color'] = $request->input('process_background_color') ?: null;
+            } else {
+                $validated['process_background_color'] = $existingServiceSection->process_background_color ?? null;
+            }
+
+            // Handle process card background color (optional)
+            if ($request->has('process_card_background_color')) {
+                $validated['process_card_background_color'] = $request->input('process_card_background_color') ?: null;
+            } else {
+                $validated['process_card_background_color'] = $existingServiceSection->process_card_background_color ?? null;
             }
 
             // Handle background image upload (only if provided)
@@ -103,11 +144,30 @@ class ServiceSectionController extends Controller
                 $validated['background_image'] = $existingServiceSection->background_image ?? null;
             }
 
+            // Handle process background image upload (only if provided)
+            if ($request->hasFile('process_background_image')) {
+                // Delete old image if exists
+                if ($existingServiceSection && $existingServiceSection->process_background_image) {
+                    Storage::disk('public')->delete($existingServiceSection->process_background_image);
+                }
+
+                // Store new image
+                $imagePath = $request->file('process_background_image')->store('service-section', 'public');
+                $validated['process_background_image'] = $imagePath;
+            } else {
+                // Keep existing image if not updating
+                $validated['process_background_image'] = $existingServiceSection->process_background_image ?? null;
+            }
+
             // Update or create service section
             $serviceSection = ServiceSection::updateOrCreate(
                 ['id' => ServiceSection::first()?->id ?? 0],
                 $validated
             );
+
+            $this->broadcastContentUpdate('service-section', 'updated', [
+                'id' => $serviceSection->id,
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -118,8 +178,17 @@ class ServiceSectionController extends Controller
                         'subtitle' => $serviceSection->subtitle,
                         'main_title' => $serviceSection->main_title,
                         'button_text' => $serviceSection->button_text,
+                        'process_subtitle' => $serviceSection->process_subtitle,
+                        'process_title_1' => $serviceSection->process_title_1,
+                        'process_title_2' => $serviceSection->process_title_2,
+                        'process_description' => $serviceSection->process_description,
+                        'process_checklist' => $serviceSection->process_checklist,
                         'background_image' => $serviceSection->background_image_url,
                         'background_color' => $serviceSection->background_color,
+                        'card_background_color' => $serviceSection->card_background_color,
+                        'process_background_color' => $serviceSection->process_background_color,
+                        'process_card_background_color' => $serviceSection->process_card_background_color,
+                        'process_background_image' => $serviceSection->process_background_image_url,
                         'updated_at' => $serviceSection->updated_at,
                     ],
                 ],
@@ -187,7 +256,11 @@ class ServiceSectionController extends Controller
             }
 
             // Text fields that can be updated
-            $textFields = ['subtitle', 'main_title', 'button_text', 'background_color'];
+            $textFields = [
+                'subtitle', 'main_title', 'button_text', 'background_color', 'card_background_color',
+                'process_subtitle', 'process_title_1', 'process_title_2', 'process_description',
+                'process_background_color', 'process_card_background_color'
+            ];
             
             foreach ($textFields as $field) {
                 if ($request->filled($field)) {
@@ -196,6 +269,10 @@ class ServiceSectionController extends Controller
                     // Allow null to delete field (check both has() and all() for form-data compatibility)
                     $dataToUpdate[$field] = $request->input($field);
                 }
+            }
+
+            if ($request->has('process_checklist')) {
+                $dataToUpdate['process_checklist'] = $request->input('process_checklist');
             }
 
             // Handle background image upload (only if provided) and deletion
@@ -218,7 +295,23 @@ class ServiceSectionController extends Controller
                 }
                 $dataToUpdate['background_image'] = null;
             }
-            // Note: If background_image is not provided, existing image is preserved
+
+            // Handle process background image upload (only if provided) and deletion
+            $processFieldValue = $request->input('process_background_image');
+            $processFieldExists = $request->has('process_background_image') || array_key_exists('process_background_image', $request->all());
+            
+            if ($request->hasFile('process_background_image')) {
+                if ($serviceSection->process_background_image) {
+                    Storage::disk('public')->delete($serviceSection->process_background_image);
+                }
+                $imagePath = $request->file('process_background_image')->store('service-section', 'public');
+                $dataToUpdate['process_background_image'] = $imagePath;
+            } elseif ($processFieldExists && ($processFieldValue === null || $processFieldValue === 'delete' || $processFieldValue === '')) {
+                if ($serviceSection->process_background_image) {
+                    Storage::disk('public')->delete($serviceSection->process_background_image);
+                }
+                $dataToUpdate['process_background_image'] = null;
+            }
 
             // Validate data before updating
             if (!empty($dataToUpdate)) {
@@ -233,11 +326,38 @@ class ServiceSectionController extends Controller
                 if (isset($dataToUpdate['button_text'])) {
                     $rules['button_text'] = ['nullable', 'string', 'max:255'];
                 }
+                if (isset($dataToUpdate['process_subtitle'])) {
+                    $rules['process_subtitle'] = ['nullable', 'string', 'max:255'];
+                }
+                if (isset($dataToUpdate['process_title_1'])) {
+                    $rules['process_title_1'] = ['nullable', 'string', 'max:255'];
+                }
+                if (isset($dataToUpdate['process_title_2'])) {
+                    $rules['process_title_2'] = ['nullable', 'string', 'max:255'];
+                }
+                if (isset($dataToUpdate['process_description'])) {
+                    $rules['process_description'] = ['nullable', 'string'];
+                }
+                if (isset($dataToUpdate['process_checklist'])) {
+                    $rules['process_checklist'] = ['nullable', 'array'];
+                }
                 if (isset($dataToUpdate['background_color'])) {
                     $rules['background_color'] = ['nullable', 'string', 'max:32'];
                 }
+                if (isset($dataToUpdate['card_background_color'])) {
+                    $rules['card_background_color'] = ['nullable', 'string', 'max:50'];
+                }
                 if (isset($dataToUpdate['background_image']) && $request->hasFile('background_image')) {
                     $rules['background_image'] = ['required', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'];
+                }
+                if (isset($dataToUpdate['process_background_color'])) {
+                    $rules['process_background_color'] = ['nullable', 'string', 'max:50'];
+                }
+                if (isset($dataToUpdate['process_card_background_color'])) {
+                    $rules['process_card_background_color'] = ['nullable', 'string', 'max:50'];
+                }
+                if (isset($dataToUpdate['process_background_image']) && $request->hasFile('process_background_image')) {
+                    $rules['process_background_image'] = ['required', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'];
                 }
 
                 // Validate
@@ -249,6 +369,10 @@ class ServiceSectionController extends Controller
                 $serviceSection->fill($dataToUpdate);
                 $serviceSection->save();
                 $serviceSection->refresh();
+
+                $this->broadcastContentUpdate('service-section', 'updated', [
+                    'id' => $serviceSection->id,
+                ]);
             } else {
                 return response()->json([
                     'success' => false,
@@ -265,8 +389,17 @@ class ServiceSectionController extends Controller
                         'subtitle' => $serviceSection->subtitle,
                         'main_title' => $serviceSection->main_title,
                         'button_text' => $serviceSection->button_text,
+                        'process_subtitle' => $serviceSection->process_subtitle,
+                        'process_title_1' => $serviceSection->process_title_1,
+                        'process_title_2' => $serviceSection->process_title_2,
+                        'process_description' => $serviceSection->process_description,
+                        'process_checklist' => $serviceSection->process_checklist,
                         'background_image' => $serviceSection->background_image_url,
                         'background_color' => $serviceSection->background_color,
+                        'card_background_color' => $serviceSection->card_background_color,
+                        'process_background_color' => $serviceSection->process_background_color,
+                        'process_card_background_color' => $serviceSection->process_card_background_color,
+                        'process_background_image' => $serviceSection->process_background_image_url,
                         'updated_at' => $serviceSection->updated_at,
                     ],
                 ],
@@ -322,9 +455,16 @@ class ServiceSectionController extends Controller
             if ($serviceSection->background_image) {
                 Storage::disk('public')->delete($serviceSection->background_image);
             }
+            if ($serviceSection->process_background_image) {
+                Storage::disk('public')->delete($serviceSection->process_background_image);
+            }
 
             // Delete the service section record
             $serviceSection->delete();
+
+            $this->broadcastContentUpdate('service-section', 'deleted', [
+                'id' => $id,
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -377,8 +517,17 @@ class ServiceSectionController extends Controller
                 'subtitle',
                 'main_title',
                 'button_text',
+                'process_subtitle',
+                'process_title_1',
+                'process_title_2',
+                'process_description',
+                'process_checklist',
                 'background_image',
                 'background_color',
+                'card_background_color',
+                'process_background_color',
+                'process_card_background_color',
+                'process_background_image',
             ];
 
             // Validate field name
@@ -393,11 +542,18 @@ class ServiceSectionController extends Controller
             if ($field === 'background_image' && $serviceSection->background_image) {
                 Storage::disk('public')->delete($serviceSection->background_image);
             }
+            if ($field === 'process_background_image' && $serviceSection->process_background_image) {
+                Storage::disk('public')->delete($serviceSection->process_background_image);
+            }
 
             // Set field to null in database
             $serviceSection->$field = null;
             $serviceSection->save();
             $serviceSection->refresh();
+
+            $this->broadcastContentUpdate('service-section', 'updated', [
+                'id' => $serviceSection->id,
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -408,8 +564,17 @@ class ServiceSectionController extends Controller
                         'subtitle' => $serviceSection->subtitle,
                         'main_title' => $serviceSection->main_title,
                         'button_text' => $serviceSection->button_text,
+                        'process_subtitle' => $serviceSection->process_subtitle,
+                        'process_title_1' => $serviceSection->process_title_1,
+                        'process_title_2' => $serviceSection->process_title_2,
+                        'process_description' => $serviceSection->process_description,
+                        'process_checklist' => $serviceSection->process_checklist,
                         'background_image' => $serviceSection->background_image_url,
                         'background_color' => $serviceSection->background_color,
+                        'card_background_color' => $serviceSection->card_background_color,
+                        'process_background_color' => $serviceSection->process_background_color,
+                        'process_card_background_color' => $serviceSection->process_card_background_color,
+                        'process_background_image' => $serviceSection->process_background_image_url,
                         'updated_at' => $serviceSection->updated_at,
                     ],
                 ],

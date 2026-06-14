@@ -84,7 +84,7 @@ class ProductPageSlideController extends Controller
                 'description' => ['nullable', 'string'],
                 'background_text' => ['nullable', 'string', 'max:255'],
                 'button_text' => ['nullable', 'string', 'max:255'],
-                'button_url' => ['nullable', 'url', 'max:255'],
+                'button_url' => ['nullable', 'string', 'max:255'],
             ]);
 
             if ($request->hasFile('bg_image')) {
@@ -171,7 +171,7 @@ class ProductPageSlideController extends Controller
                 'description' => 'string',
                 'background_text' => 'string|max:255',
                 'button_text' => 'string|max:255',
-                'button_url' => 'url|max:255',
+                'button_url' => 'string|max:255',
             ];
 
             foreach ($fields as $field => $rules) {

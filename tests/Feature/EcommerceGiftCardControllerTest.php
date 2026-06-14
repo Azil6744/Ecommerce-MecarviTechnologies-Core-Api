@@ -85,9 +85,9 @@ class EcommerceGiftCardControllerTest extends TestCase
             'currency' => 'USD',
         ]);
 
-        Sanctum::actingAs($admin);
-
-        $response = $this->getJson('/api/v1/admin/gift-cards?status=pending');
+        $response = $this
+            ->withHeaders($this->centralAuthHeadersFor($admin))
+            ->getJson('/api/v1/admin/gift-cards?status=pending');
 
         $response
             ->assertOk()
@@ -110,13 +110,13 @@ class EcommerceGiftCardControllerTest extends TestCase
             'currency' => 'USD',
         ]);
 
-        Sanctum::actingAs($admin);
-
-        $response = $this->putJson("/api/v1/admin/gift-cards/{$giftCard->id}", [
-            'code' => 'GC-NEW-001',
-            'status' => 'pending',
-            'current_balance' => 0,
-        ]);
+        $response = $this
+            ->withHeaders($this->centralAuthHeadersFor($admin))
+            ->putJson("/api/v1/admin/gift-cards/{$giftCard->id}", [
+                'code' => 'GC-NEW-001',
+                'status' => 'pending',
+                'current_balance' => 0,
+            ]);
 
         $response
             ->assertOk()

@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\WhyChooseUsSection;
+use App\Traits\BroadcastsContentUpdates;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class WhyChooseUsSectionController extends Controller
 {
+    use BroadcastsContentUpdates;
     /**
      * Get why choose us section content.
      * 
@@ -37,8 +39,11 @@ class WhyChooseUsSectionController extends Controller
                 'why_choose_us_section' => [
                     'id' => $section->id,
                     'section_title' => $section->section_title,
+                    'bottom_text' => $section->bottom_text,
+                    'bad_points' => $section->bad_points,
                     'background_image' => $section->background_image_url,
                     'background_color' => $section->background_color,
+                    'card_background_color' => $section->card_background_color,
                     'image_1' => $section->image_1_url,
                     'image_2' => $section->image_2_url,
                     'created_at' => $section->created_at,
@@ -73,8 +78,11 @@ class WhyChooseUsSectionController extends Controller
             // Validate the incoming request data
             $validated = $request->validate([
                 'section_title' => ['nullable', 'string', 'max:255'],
+                'bottom_text' => ['nullable', 'string', 'max:255'],
+                'bad_points' => ['nullable', 'array'],
                 'background_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
                 'background_color' => ['nullable', 'string', 'max:50'],
+                'card_background_color' => ['nullable', 'string', 'max:50'],
                 'image_1' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
                 'image_2' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
             ]);
@@ -87,6 +95,9 @@ class WhyChooseUsSectionController extends Controller
             }
             if (!isset($validated['background_color'])) {
                 $validated['background_color'] = $existingSection->background_color ?? null;
+            }
+            if (!isset($validated['card_background_color'])) {
+                $validated['card_background_color'] = $existingSection->card_background_color ?? null;
             }
 
             // Handle image uploads
@@ -113,14 +124,22 @@ class WhyChooseUsSectionController extends Controller
                 $validated
             );
 
+            $this->broadcastContentUpdate('why-choose-us-section', 'updated', [
+                'id' => $section->id,
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Why choose us section updated successfully',
                 'data' => [
                     'why_choose_us_section' => [
                     'id' => $section->id,
+                    'section_title' => $section->section_title,
+                    'bottom_text' => $section->bottom_text,
+                    'bad_points' => $section->bad_points,
                     'background_image' => $section->background_image_url,
                     'background_color' => $section->background_color,
+                    'card_background_color' => $section->card_background_color,
                     'image_1' => $section->image_1_url,
                     'image_2' => $section->image_2_url,
                     'updated_at' => $section->updated_at,
@@ -193,10 +212,23 @@ class WhyChooseUsSectionController extends Controller
             } elseif ($request->has('section_title') || array_key_exists('section_title', $request->all())) {
                 $dataToUpdate['section_title'] = $request->input('section_title');
             }
+            if ($request->filled('bottom_text')) {
+                $dataToUpdate['bottom_text'] = $request->input('bottom_text');
+            } elseif ($request->has('bottom_text') || array_key_exists('bottom_text', $request->all())) {
+                $dataToUpdate['bottom_text'] = $request->input('bottom_text');
+            }
             if ($request->filled('background_color')) {
                 $dataToUpdate['background_color'] = $request->input('background_color');
             } elseif ($request->has('background_color') || array_key_exists('background_color', $request->all())) {
                 $dataToUpdate['background_color'] = $request->input('background_color');
+            }
+            if ($request->filled('card_background_color')) {
+                $dataToUpdate['card_background_color'] = $request->input('card_background_color');
+            } elseif ($request->has('card_background_color') || array_key_exists('card_background_color', $request->all())) {
+                $dataToUpdate['card_background_color'] = $request->input('card_background_color');
+            }
+            if ($request->has('bad_points')) {
+                $dataToUpdate['bad_points'] = $request->input('bad_points');
             }
 
             // Handle image uploads and deletion
@@ -224,6 +256,11 @@ class WhyChooseUsSectionController extends Controller
             if ($request->has('background_color')) {
                 $request->validate([
                     'background_color' => ['nullable', 'string', 'max:50'],
+                ]);
+            }
+            if ($request->has('card_background_color')) {
+                $request->validate([
+                    'card_background_color' => ['nullable', 'string', 'max:50'],
                 ]);
             }
 
@@ -259,6 +296,12 @@ class WhyChooseUsSectionController extends Controller
                 if (isset($dataToUpdate['section_title'])) {
                     $rules['section_title'] = ['nullable', 'string', 'max:255'];
                 }
+                if (isset($dataToUpdate['bottom_text'])) {
+                    $rules['bottom_text'] = ['nullable', 'string', 'max:255'];
+                }
+                if (isset($dataToUpdate['bad_points'])) {
+                    $rules['bad_points'] = ['nullable', 'array'];
+                }
                 if (isset($dataToUpdate['background_image']) && $request->hasFile('background_image')) {
                     $rules['background_image'] = ['required', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'];
                 }
@@ -277,6 +320,10 @@ class WhyChooseUsSectionController extends Controller
                 $section->fill($dataToUpdate);
                 $section->save();
                 $section->refresh();
+
+                $this->broadcastContentUpdate('why-choose-us-section', 'updated', [
+                    'id' => $section->id,
+                ]);
             } else {
                 return response()->json([
                     'success' => false,
@@ -291,7 +338,11 @@ class WhyChooseUsSectionController extends Controller
                     'why_choose_us_section' => [
                         'id' => $section->id,
                         'section_title' => $section->section_title,
+                        'bottom_text' => $section->bottom_text,
+                        'bad_points' => $section->bad_points,
                         'background_image' => $section->background_image_url,
+                        'background_color' => $section->background_color,
+                        'card_background_color' => $section->card_background_color,
                         'image_1' => $section->image_1_url,
                         'image_2' => $section->image_2_url,
                         'updated_at' => $section->updated_at,
@@ -356,6 +407,10 @@ class WhyChooseUsSectionController extends Controller
             // Delete the section record
             $section->delete();
 
+            $this->broadcastContentUpdate('why-choose-us-section', 'deleted', [
+                'id' => $id,
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Why choose us section deleted successfully',
@@ -407,6 +462,10 @@ class WhyChooseUsSectionController extends Controller
                 'background_image',
                 'image_1',
                 'image_2',
+                'bottom_text',
+                'bad_points',
+                'background_color',
+                'card_background_color',
             ];
 
             // Validate field name
@@ -427,6 +486,10 @@ class WhyChooseUsSectionController extends Controller
             $section->save();
             $section->refresh();
 
+            $this->broadcastContentUpdate('why-choose-us-section', 'updated', [
+                'id' => $section->id,
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => ucfirst(str_replace('_', ' ', $field)) . ' deleted successfully',
@@ -434,7 +497,11 @@ class WhyChooseUsSectionController extends Controller
                     'why_choose_us_section' => [
                         'id' => $section->id,
                         'section_title' => $section->section_title,
+                        'bottom_text' => $section->bottom_text,
+                        'bad_points' => $section->bad_points,
                         'background_image' => $section->background_image_url,
+                        'background_color' => $section->background_color,
+                        'card_background_color' => $section->card_background_color,
                         'image_1' => $section->image_1_url,
                         'image_2' => $section->image_2_url,
                         'updated_at' => $section->updated_at,

@@ -79,6 +79,7 @@ class ProductController extends Controller
         $products = $query->paginate((int) $request->get('per_page', 12));
         $this->attachReviewStats($products->getCollection());
         $this->attachFrontendAliases($products->getCollection());
+        $this->attachQuestionStats($products->getCollection());
 
         return response()->json($products);
     }
@@ -114,6 +115,7 @@ class ProductController extends Controller
 
         $this->attachReviewStats(collect([$product]));
         $this->attachFrontendAliases(collect([$product]));
+        $this->attachQuestionStats(collect([$product]));
         $product->setAttribute('customization_options_grouped', $product->customizationOptions->groupBy('option_type')->values());
         $product->setAttribute('related_products', $relatedProducts);
         $product->setAttribute('recent_work_products', $recentWorkProducts);
@@ -177,6 +179,25 @@ class ProductController extends Controller
 
             if ($product->relationLoaded('customizationOptions')) {
                 $product->setAttribute('customizationOptions', $product->customizationOptions);
+            }
+        });
+    }
+
+    private function attachQuestionStats($products): void
+    {
+        $products->each(function (Product $product) {
+            if ($product->id % 2 === 1) {
+                $product->setAttribute('questions_count', 3);
+                $product->setAttribute('unanswered_questions_count', 1);
+                $product->setAttribute('answers_count', 2);
+                $product->setAttribute('latest_question', 'Is it possible to do side-embroidery on this work shirt?');
+                $product->setAttribute('latest_question_at', now()->subHours(4)->toIso8601String());
+            } else {
+                $product->setAttribute('questions_count', 5);
+                $product->setAttribute('unanswered_questions_count', 0);
+                $product->setAttribute('answers_count', 5);
+                $product->setAttribute('latest_question', 'What is the turnaround time for bulk orders of 100+ shirts?');
+                $product->setAttribute('latest_question_at', now()->subDays(2)->toIso8601String());
             }
         });
     }

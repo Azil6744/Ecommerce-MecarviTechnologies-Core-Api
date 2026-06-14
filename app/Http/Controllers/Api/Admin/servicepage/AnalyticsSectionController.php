@@ -90,7 +90,7 @@ class AnalyticsSectionController extends Controller
                 'features.*.title' => ['required_with:features', 'string', 'max:255'],
                 'features.*.description' => ['required_with:features', 'string'],
                 'button_text' => ['nullable', 'string', 'max:255'],
-                'button_url' => ['nullable', 'url', 'max:255'],
+                'button_url' => ['nullable', 'string', 'max:255'],
                 'main_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
                 'small_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
                 'background_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
@@ -209,7 +209,7 @@ class AnalyticsSectionController extends Controller
                 'description' => 'string',
                 'features' => 'array',
                 'button_text' => 'string|max:255',
-                'button_url' => 'url|max:255',
+                'button_url' => 'string|max:255',
                 'background_color' => 'string|max:20',
             ];
 

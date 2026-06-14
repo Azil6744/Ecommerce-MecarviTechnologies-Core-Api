@@ -21,7 +21,26 @@ class EcommerceOrderController extends Controller
         $query = EcommerceOrder::with('items.product');
 
         if (! ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && Schema::hasColumn((new EcommerceOrder)->getTable(), 'user_id')) {
-            $query->where('user_id', $user->id);
+            $userEmail = strtolower(trim((string) ($user->email ?? '')));
+            $userId = $user?->id;
+
+            // Include orders linked by user_id OR guest orders placed with the same email
+            $query->where(function ($q) use ($userId, $userEmail) {
+                $q->where('user_id', $userId);
+                if ($userEmail !== '') {
+                    $q->orWhere(function ($sub) use ($userEmail) {
+                        $sub->whereNull('user_id')
+                            ->whereRaw('LOWER(customer_email) = ?', [$userEmail]);
+                    });
+                }
+            });
+
+            // Also opportunistically link any found guest orders to this user now
+            if ($userId && $userEmail !== '') {
+                EcommerceOrder::whereNull('user_id')
+                    ->whereRaw('LOWER(customer_email) = ?', [$userEmail])
+                    ->update(['user_id' => $userId]);
+            }
         }
 
         if ($request->filled('status')) {
@@ -59,7 +78,18 @@ class EcommerceOrderController extends Controller
         $query = EcommerceOrder::query();
 
         if (! ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && Schema::hasColumn((new EcommerceOrder)->getTable(), 'user_id')) {
-            $query->where('user_id', $user->id);
+            $userEmail = strtolower(trim((string) ($user->email ?? '')));
+            $userId = $user?->id;
+
+            $query->where(function ($q) use ($userId, $userEmail) {
+                $q->where('user_id', $userId);
+                if ($userEmail !== '') {
+                    $q->orWhere(function ($sub) use ($userEmail) {
+                        $sub->whereNull('user_id')
+                            ->whereRaw('LOWER(customer_email) = ?', [$userEmail]);
+                    });
+                }
+            });
         }
 
         $statusCounts = (clone $query)

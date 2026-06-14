@@ -19,15 +19,21 @@ Route::prefix('ecommerce')->group(function () {
     Route::get('/shipping-methods', [\App\Http\Controllers\Api\Ecommerce\ShippingMethodController::class, 'index']);
     Route::get('/products', [\App\Http\Controllers\Api\Ecommerce\ProductController::class, 'index']);
     Route::post('/products/{product}/price-preview', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'pricePreview']);
-    Route::post('/products/{product}/customization-drafts', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'storeDraft']);
+    Route::post('/products/{product}/customization-drafts', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'storeDraft'])
+        ->middleware('central.auth:optional');
     Route::get('/products/{product}/coupons', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'coupons']);
     Route::get('/products/{product}/related', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'related']);
     Route::get('/products/{product}', [\App\Http\Controllers\Api\Ecommerce\ProductController::class, 'show']);
-    Route::put('/customization-drafts/{draft}', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'updateDraft']);
-    Route::post('/customization-drafts/{draft}/files', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'uploadFile']);
-    Route::post('/customization-drafts/{draft}/submit-order', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'submitOrder']);
-    Route::post('/customization-drafts/{draft}/submit-quote', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'submitQuote']);
-    Route::post('/order-submissions', [\App\Http\Controllers\Api\Ecommerce\PublicOrderSubmissionController::class, 'store']);
+    Route::put('/customization-drafts/{draft}', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'updateDraft'])
+        ->middleware('central.auth:optional');
+    Route::post('/customization-drafts/{draft}/files', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'uploadFile'])
+        ->middleware('central.auth:optional');
+    Route::post('/customization-drafts/{draft}/submit-order', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'submitOrder'])
+        ->middleware('central.auth:optional');
+    Route::post('/customization-drafts/{draft}/submit-quote', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'submitQuote'])
+        ->middleware('central.auth:optional');
+    Route::post('/order-submissions', [\App\Http\Controllers\Api\Ecommerce\PublicOrderSubmissionController::class, 'store'])
+        ->middleware('central.auth:optional');
     Route::post('/support-tickets', [\App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class, 'publicStore']);
     Route::post('/product-reviews', [\App\Http\Controllers\Api\Ecommerce\EcommerceReviewController::class, 'publicStore']);
     Route::get('/wishlist/shared/{token}', [\App\Http\Controllers\Api\Ecommerce\WishlistController::class, 'shared']);

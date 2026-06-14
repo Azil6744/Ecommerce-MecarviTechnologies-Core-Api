@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\WhyChooseUsTab;
+use App\Traits\BroadcastsContentUpdates;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 class WhyChooseUsTabController extends Controller
 {
+    use BroadcastsContentUpdates;
     /**
      * Get all why choose us tabs.
      * 
@@ -108,6 +110,10 @@ class WhyChooseUsTabController extends Controller
 
             // Create tab
             $tab = WhyChooseUsTab::create($validated);
+
+            $this->broadcastContentUpdate('why-choose-us-tab', 'updated', [
+                'id' => $tab->id,
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -214,6 +220,10 @@ class WhyChooseUsTabController extends Controller
                 $tab->fill($dataToUpdate);
                 $tab->save();
                 $tab->refresh();
+
+                $this->broadcastContentUpdate('why-choose-us-tab', 'updated', [
+                    'id' => $tab->id,
+                ]);
             } else {
                 return response()->json([
                     'success' => false,
@@ -283,6 +293,10 @@ class WhyChooseUsTabController extends Controller
 
             // Delete the tab record
             $tab->delete();
+
+            $this->broadcastContentUpdate('why-choose-us-tab', 'deleted', [
+                'id' => $id,
+            ]);
 
             return response()->json([
                 'success' => true,

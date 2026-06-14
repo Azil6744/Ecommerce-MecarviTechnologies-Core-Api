@@ -44,6 +44,12 @@ class OurFactsSectionController extends Controller
                     'large_number_image' => $section->large_number_image_url,
                     'background_image' => $section->background_image_url,
                     'background_color' => $section->background_color,
+                    'card_background_color' => $section->card_background_color,
+                    'heading_main' => $section->heading_main,
+                    'heading_highlight' => $section->heading_highlight,
+                    'timeline_background_color' => $section->timeline_background_color,
+                    'timeline_card_background_color' => $section->timeline_card_background_color,
+                    'timeline_background_image' => $section->timeline_background_image_url,
                     'created_at' => $section->created_at,
                     'updated_at' => $section->updated_at,
                 ],
@@ -81,6 +87,12 @@ class OurFactsSectionController extends Controller
                 'large_number_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
                 'background_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
                 'background_color' => ['nullable', 'string', 'max:50'],
+                'card_background_color' => ['nullable', 'string', 'max:50'],
+                'heading_main' => ['nullable', 'string', 'max:255'],
+                'heading_highlight' => ['nullable', 'string', 'max:255'],
+                'timeline_background_color' => ['nullable', 'string', 'max:50'],
+                'timeline_card_background_color' => ['nullable', 'string', 'max:50'],
+                'timeline_background_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
             ]);
 
             $existingSection = OurFactsSection::first();
@@ -100,6 +112,29 @@ class OurFactsSectionController extends Controller
             }
             if (!isset($validated['background_color'])) {
                 $validated['background_color'] = $existingSection->background_color ?? null;
+            }
+            if (!isset($validated['card_background_color'])) {
+                $validated['card_background_color'] = $existingSection->card_background_color ?? null;
+            }
+            if (!isset($validated['timeline_background_color'])) {
+                $validated['timeline_background_color'] = $existingSection->timeline_background_color ?? null;
+            }
+            if (!isset($validated['timeline_card_background_color'])) {
+                $validated['timeline_card_background_color'] = $existingSection->timeline_card_background_color ?? null;
+            }
+
+            // Handle timeline background image upload (only if provided)
+            if ($request->hasFile('timeline_background_image')) {
+                // Delete old image if exists
+                if ($existingSection && $existingSection->timeline_background_image) {
+                    Storage::disk('public')->delete($existingSection->timeline_background_image);
+                }
+
+                // Store new image
+                $imagePath = $request->file('timeline_background_image')->store('our-facts-section', 'public');
+                $validated['timeline_background_image'] = $imagePath;
+            } else {
+                $validated['timeline_background_image'] = $existingSection->timeline_background_image ?? null;
             }
 
             // Handle large number image upload (only if provided)
@@ -140,6 +175,12 @@ class OurFactsSectionController extends Controller
                         'large_number_image' => $section->large_number_image_url,
                         'background_image' => $section->background_image_url,
                         'background_color' => $section->background_color,
+                        'card_background_color' => $section->card_background_color,
+                        'heading_main' => $section->heading_main,
+                        'heading_highlight' => $section->heading_highlight,
+                        'timeline_background_color' => $section->timeline_background_color,
+                        'timeline_card_background_color' => $section->timeline_card_background_color,
+                        'timeline_background_image' => $section->timeline_background_image_url,
                         'updated_at' => $section->updated_at,
                     ],
                 ],
@@ -222,6 +263,18 @@ class OurFactsSectionController extends Controller
             } elseif ($request->has('small_description') || array_key_exists('small_description', $request->all())) {
                 $dataToUpdate['small_description'] = $request->input('small_description');
             }
+
+            if ($request->filled('heading_main')) {
+                $dataToUpdate['heading_main'] = $request->input('heading_main');
+            } elseif ($request->has('heading_main') || array_key_exists('heading_main', $request->all())) {
+                $dataToUpdate['heading_main'] = $request->input('heading_main');
+            }
+
+            if ($request->filled('heading_highlight')) {
+                $dataToUpdate['heading_highlight'] = $request->input('heading_highlight');
+            } elseif ($request->has('heading_highlight') || array_key_exists('heading_highlight', $request->all())) {
+                $dataToUpdate['heading_highlight'] = $request->input('heading_highlight');
+            }
             if ($request->has('background_color')) {
                 $request->validate([
                     'background_color' => ['nullable', 'string', 'max:50'],
@@ -231,6 +284,39 @@ class OurFactsSectionController extends Controller
                 $dataToUpdate['background_color'] = $request->input('background_color');
             } elseif ($request->has('background_color') || array_key_exists('background_color', $request->all())) {
                 $dataToUpdate['background_color'] = $request->input('background_color');
+            }
+
+            if ($request->has('card_background_color')) {
+                $request->validate([
+                    'card_background_color' => ['nullable', 'string', 'max:50'],
+                ]);
+            }
+            if ($request->filled('card_background_color')) {
+                $dataToUpdate['card_background_color'] = $request->input('card_background_color');
+            } elseif ($request->has('card_background_color') || array_key_exists('card_background_color', $request->all())) {
+                $dataToUpdate['card_background_color'] = $request->input('card_background_color');
+            }
+
+            if ($request->has('timeline_background_color')) {
+                $request->validate([
+                    'timeline_background_color' => ['nullable', 'string', 'max:50'],
+                ]);
+            }
+            if ($request->filled('timeline_background_color')) {
+                $dataToUpdate['timeline_background_color'] = $request->input('timeline_background_color');
+            } elseif ($request->has('timeline_background_color') || array_key_exists('timeline_background_color', $request->all())) {
+                $dataToUpdate['timeline_background_color'] = $request->input('timeline_background_color');
+            }
+
+            if ($request->has('timeline_card_background_color')) {
+                $request->validate([
+                    'timeline_card_background_color' => ['nullable', 'string', 'max:50'],
+                ]);
+            }
+            if ($request->filled('timeline_card_background_color')) {
+                $dataToUpdate['timeline_card_background_color'] = $request->input('timeline_card_background_color');
+            } elseif ($request->has('timeline_card_background_color') || array_key_exists('timeline_card_background_color', $request->all())) {
+                $dataToUpdate['timeline_card_background_color'] = $request->input('timeline_card_background_color');
             }
 
             // Handle background image upload and deletion
@@ -254,6 +340,30 @@ class OurFactsSectionController extends Controller
                         Storage::disk('public')->delete($section->background_image);
                     }
                     $dataToUpdate['background_image'] = null;
+                }
+            }
+
+            // Handle timeline background image upload and deletion
+            if ($request->hasFile('timeline_background_image')) {
+                // Delete old image if exists
+                if ($section->timeline_background_image) {
+                    Storage::disk('public')->delete($section->timeline_background_image);
+                }
+
+                // Store new image
+                $imagePath = $request->file('timeline_background_image')->store('our-facts-section', 'public');
+                $dataToUpdate['timeline_background_image'] = $imagePath;
+            } else {
+                // Check if field should be deleted
+                $fieldValue = $request->input('timeline_background_image');
+                $fieldExists = $request->has('timeline_background_image') || array_key_exists('timeline_background_image', $request->all());
+                
+                if ($fieldExists && ($fieldValue === null || $fieldValue === 'delete' || $fieldValue === '')) {
+                    // Delete old image if exists
+                    if ($section->timeline_background_image) {
+                        Storage::disk('public')->delete($section->timeline_background_image);
+                    }
+                    $dataToUpdate['timeline_background_image'] = null;
                 }
             }
 
@@ -294,8 +404,17 @@ class OurFactsSectionController extends Controller
                 if (isset($dataToUpdate['small_description'])) {
                     $rules['small_description'] = ['nullable', 'string'];
                 }
+                if (isset($dataToUpdate['heading_main'])) {
+                    $rules['heading_main'] = ['nullable', 'string', 'max:255'];
+                }
+                if (isset($dataToUpdate['heading_highlight'])) {
+                    $rules['heading_highlight'] = ['nullable', 'string', 'max:255'];
+                }
                 if (isset($dataToUpdate['background_image']) && $request->hasFile('background_image')) {
                     $rules['background_image'] = ['required', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'];
+                }
+                if (isset($dataToUpdate['timeline_background_image']) && $request->hasFile('timeline_background_image')) {
+                    $rules['timeline_background_image'] = ['required', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'];
                 }
                 if (isset($dataToUpdate['large_number_image']) && $request->hasFile('large_number_image')) {
                     $rules['large_number_image'] = ['required', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'];
@@ -332,6 +451,13 @@ class OurFactsSectionController extends Controller
                         'large_number' => $section->large_number,
                         'large_number_image' => $section->large_number_image_url,
                         'background_image' => $section->background_image_url,
+                        'background_color' => $section->background_color,
+                        'card_background_color' => $section->card_background_color,
+                        'heading_main' => $section->heading_main,
+                        'heading_highlight' => $section->heading_highlight,
+                        'timeline_background_color' => $section->timeline_background_color,
+                        'timeline_card_background_color' => $section->timeline_card_background_color,
+                        'timeline_background_image' => $section->timeline_background_image_url,
                         'updated_at' => $section->updated_at,
                     ],
                 ],
@@ -389,6 +515,9 @@ class OurFactsSectionController extends Controller
             }
             if ($section->large_number_image) {
                 Storage::disk('public')->delete($section->large_number_image);
+            }
+            if ($section->timeline_background_image) {
+                Storage::disk('public')->delete($section->timeline_background_image);
             }
 
             // Delete the section record
@@ -453,6 +582,11 @@ class OurFactsSectionController extends Controller
                 'large_number',
                 'large_number_image',
                 'background_image',
+                'background_color',
+                'card_background_color',
+                'timeline_background_color',
+                'timeline_card_background_color',
+                'timeline_background_image',
             ];
 
             // Validate field name
@@ -469,6 +603,9 @@ class OurFactsSectionController extends Controller
             }
             if ($field === 'large_number_image' && $section->large_number_image) {
                 Storage::disk('public')->delete($section->large_number_image);
+            }
+            if ($field === 'timeline_background_image' && $section->timeline_background_image) {
+                Storage::disk('public')->delete($section->timeline_background_image);
             }
 
             // Set field to null in database
@@ -493,6 +630,11 @@ class OurFactsSectionController extends Controller
                         'large_number' => $section->large_number,
                         'large_number_image' => $section->large_number_image_url,
                         'background_image' => $section->background_image_url,
+                        'background_color' => $section->background_color,
+                        'card_background_color' => $section->card_background_color,
+                        'timeline_background_color' => $section->timeline_background_color,
+                        'timeline_card_background_color' => $section->timeline_card_background_color,
+                        'timeline_background_image' => $section->timeline_background_image_url,
                         'updated_at' => $section->updated_at,
                     ],
                 ],

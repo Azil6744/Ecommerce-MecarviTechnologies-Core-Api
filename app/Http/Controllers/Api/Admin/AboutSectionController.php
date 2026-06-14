@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AboutSection;
+use App\Traits\BroadcastsContentUpdates;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class AboutSectionController extends Controller
 {
+    use BroadcastsContentUpdates;
     /**
      * Get about section content.
      * 
@@ -127,6 +129,10 @@ class AboutSectionController extends Controller
                 ['id' => AboutSection::first()?->id ?? 0],
                 $validated
             );
+
+            $this->broadcastContentUpdate('about-section', 'updated', [
+                'id' => $aboutSection->id,
+            ]);
 
             return response()->json([
                 'success' => true,
@@ -331,6 +337,10 @@ class AboutSectionController extends Controller
                 $aboutSection->fill($dataToUpdate);
                 $aboutSection->save();
                 $aboutSection->refresh();
+
+                $this->broadcastContentUpdate('about-section', 'updated', [
+                    'id' => $aboutSection->id,
+                ]);
             } else {
                 return response()->json([
                     'success' => false,
@@ -426,6 +436,10 @@ class AboutSectionController extends Controller
             // Delete the about section record
             $aboutSection->delete();
 
+            $this->broadcastContentUpdate('about-section', 'deleted', [
+                'id' => $id,
+            ]);
+
             return response()->json([
                 'success' => true,
                 'message' => 'About section deleted successfully',
@@ -515,6 +529,11 @@ class AboutSectionController extends Controller
             $aboutSection->$field = null;
             $aboutSection->save();
             $aboutSection->refresh();
+
+            $this->broadcastContentUpdate('about-section', 'updated', [
+                'id' => $aboutSection->id,
+                'field' => $field,
+            ]);
 
             return response()->json([
                 'success' => true,

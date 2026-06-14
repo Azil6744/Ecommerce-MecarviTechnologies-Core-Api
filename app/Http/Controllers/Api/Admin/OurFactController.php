@@ -30,6 +30,8 @@ class OurFactController extends Controller
                         'id' => $fact->id,
                         'percentage' => $fact->percentage,
                         'label' => $fact->label,
+                        'signature' => $fact->signature,
+                        'sublabel' => $fact->sublabel,
                         'order' => $fact->order,
                         'created_at' => $fact->created_at,
                         'updated_at' => $fact->updated_at,
@@ -65,6 +67,8 @@ class OurFactController extends Controller
                     'id' => $fact->id,
                     'percentage' => $fact->percentage,
                     'label' => $fact->label,
+                    'signature' => $fact->signature,
+                    'sublabel' => $fact->sublabel,
                     'order' => $fact->order,
                     'created_at' => $fact->created_at,
                     'updated_at' => $fact->updated_at,
@@ -99,6 +103,8 @@ class OurFactController extends Controller
             $validated = $request->validate([
                 'percentage' => ['nullable', 'string', 'max:255'],
                 'label' => ['nullable', 'string', 'max:255'],
+                'signature' => ['nullable', 'string', 'max:255'],
+                'sublabel' => ['nullable', 'string'],
                 'order' => ['nullable', 'integer', 'min:0'],
             ]);
 
@@ -124,6 +130,8 @@ class OurFactController extends Controller
                         'id' => $fact->id,
                         'percentage' => $fact->percentage,
                         'label' => $fact->label,
+                        'signature' => $fact->signature,
+                        'sublabel' => $fact->sublabel,
                         'order' => $fact->order,
                         'created_at' => $fact->created_at,
                         'updated_at' => $fact->updated_at,
@@ -194,6 +202,20 @@ class OurFactController extends Controller
                 $dataToUpdate['label'] = $request->input('label');
             }
 
+            // Check and update signature
+            if ($request->filled('signature')) {
+                $dataToUpdate['signature'] = $request->input('signature');
+            } elseif ($request->has('signature') || array_key_exists('signature', $request->all())) {
+                $dataToUpdate['signature'] = $request->input('signature');
+            }
+
+            // Check and update sublabel
+            if ($request->filled('sublabel')) {
+                $dataToUpdate['sublabel'] = $request->input('sublabel');
+            } elseif ($request->has('sublabel') || array_key_exists('sublabel', $request->all())) {
+                $dataToUpdate['sublabel'] = $request->input('sublabel');
+            }
+
             // Check and update order
             if ($request->has('order')) {
                 $dataToUpdate['order'] = (int) $request->input('order');
@@ -208,6 +230,12 @@ class OurFactController extends Controller
                 }
                 if (isset($dataToUpdate['label'])) {
                     $rules['label'] = ['nullable', 'string', 'max:255'];
+                }
+                if (isset($dataToUpdate['signature'])) {
+                    $rules['signature'] = ['nullable', 'string', 'max:255'];
+                }
+                if (isset($dataToUpdate['sublabel'])) {
+                    $rules['sublabel'] = ['nullable', 'string'];
                 }
                 if (isset($dataToUpdate['order'])) {
                     $rules['order'] = ['nullable', 'integer', 'min:0'];
@@ -241,6 +269,8 @@ class OurFactController extends Controller
                         'id' => $fact->id,
                         'percentage' => $fact->percentage,
                         'label' => $fact->label,
+                        'signature' => $fact->signature,
+                        'sublabel' => $fact->sublabel,
                         'order' => $fact->order,
                         'updated_at' => $fact->updated_at,
                     ],
