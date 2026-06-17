@@ -19,6 +19,7 @@ class PortfolioItem extends Model
         'link',
         'image',
         'order',
+        'category',
     ];
 
     /**

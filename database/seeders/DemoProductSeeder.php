@@ -194,10 +194,10 @@ class DemoProductSeeder extends Seeder
 
             $png = $this->makePng($colors, $seed + $i, $i);
             if (File::put($storagePath, $png) === false) {
-                throw new RuntimeException("Unable to write demo product image at {$storagePath}. Check storage/app/public permissions.");
+                $this->command?->warn("Unable to write demo product image at {$storagePath}. Check storage/app/public permissions.");
+            } else {
+                $this->mirrorImageToPublicStorage($relativePath, $png);
             }
-
-            $this->mirrorImageToPublicStorage($relativePath, $png);
 
             $paths[] = $relativePath;
         }

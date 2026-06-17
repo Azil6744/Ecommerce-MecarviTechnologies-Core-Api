@@ -808,6 +808,12 @@ Route::prefix('v1')->group(function () {
         Route::put('/admin/order-verifications/{orderVerification}/status', [\App\Http\Controllers\Api\Admin\OrderVerificationController::class, 'updateStatus']);
         Route::delete('/admin/order-verifications/{orderVerification}', [\App\Http\Controllers\Api\Admin\OrderVerificationController::class, 'destroy']);
 
+        // Customer Verifications
+        Route::get('/admin/customer-verifications', [\App\Http\Controllers\Api\Admin\CustomerVerificationController::class, 'index']);
+        Route::get('/admin/customer-verifications/{id}', [\App\Http\Controllers\Api\Admin\CustomerVerificationController::class, 'show']);
+        Route::put('/admin/customer-verifications/{id}/approve', [\App\Http\Controllers\Api\Admin\CustomerVerificationController::class, 'approve']);
+        Route::put('/admin/customer-verifications/{id}/reject', [\App\Http\Controllers\Api\Admin\CustomerVerificationController::class, 'reject']);
+
         // Quotations
         Route::get('/admin/quotations', [AdminQuotationController::class, 'index']);
         Route::get('/admin/quotations/{quotation}', [AdminQuotationController::class, 'show']);

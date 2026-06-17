@@ -34,6 +34,7 @@ class PortfolioItemController extends Controller
                         'link' => $item->link,
                         'image' => $item->image_url,
                         'order' => $item->order,
+                        'category' => $item->category,
                         'created_at' => $item->created_at,
                         'updated_at' => $item->updated_at,
                     ];
@@ -70,6 +71,7 @@ class PortfolioItemController extends Controller
                     'link' => $item->link,
                     'image' => $item->image_url,
                     'order' => $item->order,
+                    'category' => $item->category,
                     'created_at' => $item->created_at,
                     'updated_at' => $item->updated_at,
                 ],
@@ -103,6 +105,7 @@ class PortfolioItemController extends Controller
             $rules = [
                 'title' => ['nullable', 'string', 'max:255'],
                 'order' => ['nullable', 'integer', 'min:0'],
+                'category' => ['nullable', 'string', 'max:100'],
             ];
 
             // Validate link if provided (allow empty string or valid URL)
@@ -170,6 +173,7 @@ class PortfolioItemController extends Controller
                         'link' => $item->link,
                         'image' => $item->image_url,
                         'order' => $item->order,
+                        'category' => $item->category,
                         'created_at' => $item->created_at,
                         'updated_at' => $item->updated_at,
                     ],
@@ -243,6 +247,13 @@ class PortfolioItemController extends Controller
                 $dataToUpdate['order'] = (int) $request->input('order');
             }
 
+            // Handle category
+            if ($request->filled('category')) {
+                $dataToUpdate['category'] = $request->input('category');
+            } elseif ($request->has('category') || array_key_exists('category', $request->all())) {
+                $dataToUpdate['category'] = $request->input('category');
+            }
+
             // Handle image upload and deletion
             if ($request->hasFile('image')) {
                 // Delete old image if exists
@@ -280,6 +291,9 @@ class PortfolioItemController extends Controller
                 if (isset($dataToUpdate['order'])) {
                     $rules['order'] = ['nullable', 'integer', 'min:0'];
                 }
+                if (isset($dataToUpdate['category'])) {
+                    $rules['category'] = ['nullable', 'string', 'max:100'];
+                }
                 if (isset($dataToUpdate['image']) && $request->hasFile('image')) {
                     $rules['image'] = ['required', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'];
                 }
@@ -314,6 +328,7 @@ class PortfolioItemController extends Controller
                         'link' => $item->link,
                         'image' => $item->image_url,
                         'order' => $item->order,
+                        'category' => $item->category,
                         'updated_at' => $item->updated_at,
                     ],
                 ],

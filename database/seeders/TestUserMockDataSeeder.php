@@ -364,6 +364,76 @@ class TestUserMockDataSeeder extends Seeder
             'amount' => 148.00,
         ]);
 
+        EcommerceDispute::create([
+            'dispute_number' => 'DSP-2026-000002',
+            'user_id' => $user->id,
+            'order_number' => $order2->order_number,
+            'customer_name' => $user->name,
+            'type' => 'Wrong item sent',
+            'status' => 'resolved',
+            'description' => 'Received red polo shirts instead of navy ones.',
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'amount' => 74.00,
+            'created_at' => Carbon::now()->subMonths(1),
+        ]);
+
+        EcommerceDispute::create([
+            'dispute_number' => 'DSP-2026-000003',
+            'user_id' => $user->id,
+            'order_number' => $order3->order_number,
+            'customer_name' => $user->name,
+            'type' => 'Order not received',
+            'status' => 'open',
+            'description' => 'Tracking has not updated in 7 days, package seems lost.',
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'amount' => 111.00,
+            'created_at' => Carbon::now()->subDays(2),
+        ]);
+
+        EcommerceDispute::create([
+            'dispute_number' => 'DSP-2026-000004',
+            'user_id' => $user->id,
+            'order_number' => 'ORD-2026-999999',
+            'customer_name' => $user->name,
+            'type' => 'Item damaged / defective',
+            'status' => 'awaiting_response',
+            'description' => 'The embroidery on 2 caps has loose threads and is unraveling.',
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'amount' => 37.00,
+            'created_at' => Carbon::now()->subMonths(2),
+        ]);
+
+        EcommerceDispute::create([
+            'dispute_number' => 'DSP-2026-000005',
+            'user_id' => $user->id,
+            'order_number' => 'ORD-2026-888888',
+            'customer_name' => $user->name,
+            'type' => 'Tracking issues',
+            'status' => 'closed',
+            'description' => 'Shipment was delayed by courier but eventually arrived.',
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'amount' => 45.00,
+            'created_at' => Carbon::now()->subMonths(3),
+        ]);
+
+        EcommerceDispute::create([
+            'dispute_number' => 'DSP-2026-000006',
+            'user_id' => $user->id,
+            'order_number' => 'ORD-2026-777777',
+            'customer_name' => $user->name,
+            'type' => 'Wrong item sent',
+            'status' => 'resolved',
+            'description' => 'Incorrect size delivered, resolved with customer support.',
+            'email' => $user->email,
+            'phone' => $user->phone,
+            'amount' => 95.00,
+            'created_at' => Carbon::now()->subMonths(4),
+        ]);
+
         // 7. Seed Reviews
         EcommerceReview::create([
             'product_id' => $product->id,

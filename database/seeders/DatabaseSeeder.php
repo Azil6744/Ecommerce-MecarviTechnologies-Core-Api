@@ -12,28 +12,40 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Seed roles (for documentation/reference)
+        // 1. Roles and Permissions
         $this->call([
             RoleSeeder::class,
         ]);
 
-        // Seed admin user
+        // 2. Users and Accounts
         $this->call([
             AdminUserSeeder::class,
+            AdditionalAdminSeeder::class,
+            SellerAccountSeeder::class,
+            UserAccountSeeder::class,
         ]);
 
-        // Seed initial quote form fields
+        // 3. Page Content and Custom Form Fields
         $this->call([
             QuoteFormFieldSeeder::class,
+            ContactPageHeroSectionSeeder::class,
         ]);
 
-        // Seed demo storefront products, categories, gallery images, and reviews
+        // 4. Products, Storefront, Homepage Content
         $this->call([
             DemoProductSeeder::class,
             TestUserMockDataSeeder::class,
         ]);
 
-        // Uncomment to create additional test users
-        // \App\Models\User::factory(10)->create();
+        // 5. Admin Settings, Gateways, Email Templates, Shipping, and Sample Orders
+        $this->call([
+            AdminPagesSeeder::class,
+        ]);
+
+        // 6. Orders mock data (Proofs, Verifications, Quotations)
+        $this->call([
+            OrderSectionMockDataSeeder::class,
+            OrderProofsAndVerificationsSeeder::class,
+        ]);
     }
 }
