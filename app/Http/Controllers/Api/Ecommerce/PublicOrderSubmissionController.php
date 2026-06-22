@@ -34,6 +34,8 @@ class PublicOrderSubmissionController extends Controller
             'customization.logo_url' => ['nullable', 'string', 'max:1000'],
             'customization.additional_details' => ['nullable', 'string'],
             'coupon_code' => ['nullable', 'string', 'max:100'],
+            'shipping_method' => ['nullable', 'string', 'max:255'],
+            'shipping_amount' => ['nullable', 'numeric', 'min:0'],
             'page_context' => ['nullable', 'array'],
         ]);
 
@@ -101,6 +103,8 @@ class PublicOrderSubmissionController extends Controller
             'notes' => $validated['notes'] ?? null,
             'discount_amount' => $pricing['discount_amount'],
             'subtotal' => $pricing['subtotal'] ?? $total,
+            'shipping_method' => $validated['shipping_method'] ?? null,
+            'shipping_amount' => $validated['shipping_amount'] ?? 0,
             'metadata' => [
                 'customization' => $validated['customization'] ?? [],
                 'page_context' => $validated['page_context'] ?? [],
@@ -111,7 +115,7 @@ class PublicOrderSubmissionController extends Controller
                     'attributes' => $product->attributes ?? [],
                 ],
             ],
-            'total_amount' => $total,
+            'total_amount' => $total + ($validated['shipping_amount'] ?? 0),
             'order_date' => Carbon::today(),
         ]);
         $order->statusEvents()->create([

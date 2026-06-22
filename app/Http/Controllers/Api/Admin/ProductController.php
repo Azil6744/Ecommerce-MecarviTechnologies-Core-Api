@@ -271,6 +271,11 @@ class ProductController extends Controller
             );
         }
 
+        // Clean up any old preview assets that no longer correspond to the updated list of images
+        ProductPreviewAsset::where('product_id', $product->id)
+            ->where('sort_order', '>=', count($images))
+            ->delete();
+
         $this->upsertCustomizationOption($product, 'embroidery_type', $attributes['embroidery_type'] ?? 'Embroidery', 0);
         $this->upsertCustomizationOption($product, 'placement', $attributes['placement'] ?? 'Left Chest', 0);
         $this->upsertCustomizationOption($product, 'size', $attributes['size_label'] ?? 'Standard (4" Wide)', 0);

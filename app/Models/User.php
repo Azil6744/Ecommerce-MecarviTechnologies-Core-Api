@@ -26,6 +26,7 @@ class User extends Authenticatable
         'phone',
         'pin',
         'role',
+        'wallet_balance',
         'banned_at',
         'deactivated_at',
         'last_login_at',
@@ -52,6 +53,7 @@ class User extends Authenticatable
         'banned_at' => 'datetime',
         'deactivated_at' => 'datetime',
         'last_login_at' => 'datetime',
+        'wallet_balance' => 'decimal:2',
     ];
 
     /**
@@ -101,10 +103,20 @@ class User extends Authenticatable
      */
     public static function getAvailableRoles(): array
     {
-        return ['super_admin', 'admin', 'editor', 'viewer', 'customer', 'seller'];
+        return ['super_admin', 'admin', 'editor', 'viewer', 'customer', 'seller', 'staff'];
     }
 
     // Ecommerce Relationships
+    public function affiliate()
+    {
+        return $this->hasOne(EcommerceAffiliate::class);
+    }
+
+    public function referrals()
+    {
+        return $this->hasMany(EcommerceReferral::class, 'referrer_id');
+    }
+
     public function orders()
     {
         return $this->hasMany(EcommerceOrder::class);

@@ -60,6 +60,12 @@ class Product extends Model
         return $this->hasMany(EcommerceReview::class);
     }
 
+    // Relationship with product questions
+    public function productQuestions()
+    {
+        return $this->hasMany(EcommerceProductQuestion::class);
+    }
+
     public function approvedReviews()
     {
         return $this->hasMany(EcommerceReview::class)

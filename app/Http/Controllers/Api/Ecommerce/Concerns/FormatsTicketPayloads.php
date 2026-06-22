@@ -13,6 +13,7 @@ trait FormatsTicketPayloads
     {
         return [
             'user:id,name,email',
+            'product:id,name,sku',
             'replies.user:id,name,email',
             'replies.attachments',
             'attachments.user:id,name,email',
@@ -23,7 +24,7 @@ trait FormatsTicketPayloads
 
     protected function ticketPayload(EcommerceTicket $ticket, bool $detailed = false): array
     {
-        $ticket->loadMissing('user:id,name,email');
+        $ticket->loadMissing(['user:id,name,email', 'product:id,name,sku']);
 
         $payload = [
             'id' => $ticket->id,
@@ -32,6 +33,12 @@ trait FormatsTicketPayloads
             'user' => $ticket->user ? [
                 'name' => $ticket->user->name,
                 'email' => $ticket->user->email,
+            ] : null,
+            'product_id' => $ticket->product_id,
+            'product' => $ticket->product ? [
+                'id' => $ticket->product->id,
+                'name' => $ticket->product->name,
+                'sku' => $ticket->product->sku,
             ] : null,
             'subject' => $ticket->subject,
             'title' => $ticket->subject,

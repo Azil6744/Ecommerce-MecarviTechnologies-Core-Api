@@ -12,7 +12,8 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // $schedule->command('inspire')->hourly();
+        $schedule->command('affiliate:release-commissions')->daily();
+        $schedule->command('ecommerce:check-expired-gift-cards')->daily();
     }
 
     /**

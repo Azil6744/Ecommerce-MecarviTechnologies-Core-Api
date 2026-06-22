@@ -120,6 +120,7 @@ class EcommerceTicketController extends Controller
             'subject' => ['nullable', 'string', 'max:255'],
             'message' => ['nullable', 'string'],
             'source_page' => ['nullable', 'string', 'max:255'],
+            'category' => ['nullable', 'string', 'max:255'],
             'metadata' => ['nullable', 'array'],
         ]);
 
@@ -132,6 +133,7 @@ class EcommerceTicketController extends Controller
             'subject' => $validated['subject'] ?? 'Product support request',
             'message' => $validated['message'] ?? 'Customer requested help from the product detail page.',
             'source_page' => $validated['source_page'] ?? 'product_detail',
+            'category' => $validated['category'] ?? 'product_report',
             'status' => 'open',
             'priority' => 'normal',
             'metadata' => array_merge($validated['metadata'] ?? [], [

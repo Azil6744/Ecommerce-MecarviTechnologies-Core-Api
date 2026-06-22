@@ -120,6 +120,8 @@ class ProductCustomizationController extends Controller
             'company_name' => ['nullable', 'string', 'max:255'],
             'notes' => ['nullable', 'string'],
             'payment_method' => ['nullable', 'string', 'max:255'],
+            'shipping_method' => ['nullable', 'string', 'max:255'],
+            'shipping_amount' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         return DB::transaction(function () use ($request, $draft, $validated) {
@@ -137,11 +139,13 @@ class ProductCustomizationController extends Controller
                 'payment_status' => 'unpaid',
                 'payment_method' => $validated['payment_method'] ?? null,
                 'notes' => $validated['notes'] ?? null,
+                'shipping_method' => $validated['shipping_method'] ?? null,
+                'shipping_amount' => $validated['shipping_amount'] ?? 0,
                 'metadata' => [
                     'customization' => $customization,
                     'draft_id' => $draft->id,
                 ],
-                'total_amount' => $draft->total_price,
+                'total_amount' => $draft->total_price + ($validated['shipping_amount'] ?? 0),
                 'subtotal' => $draft->total_price + $draft->discount_amount,
                 'discount_amount' => $draft->discount_amount,
                 'order_date' => Carbon::today(),
@@ -304,32 +308,67 @@ class ProductCustomizationController extends Controller
             ->get()
             ->groupBy('option_type');
 
+        // Fetch active global attributes with active values
+        $globalAttrs = \App\Models\GlobalAttribute::with(['values' => function ($q) {
+            $q->where('status', 'active');
+        }])->where('status', 'active')->get();
+
         foreach ($selectedOptions as $type => $value) {
+            if ($value === null || $value === '') {
+                continue;
+            }
             $values = is_array($value) ? $value : [$value];
+            $typeKey = $this->optionKey($type);
 
             foreach ($values as $selectedValue) {
-                $key = $this->optionKey($selectedValue);
-                $group = $options->get($type);
-                if (! $group) {
+                if ($selectedValue === null || $selectedValue === '') {
                     continue;
                 }
+                $valKey = $this->optionKey($selectedValue);
 
-                $match = $group->first(function ($option) use ($key, $selectedValue) {
-                    return $option->option_key === $key || $option->label === $selectedValue;
+                // 1. Try product-specific customization options
+                $group = $options->get($type);
+                if ($group) {
+                    $match = $group->first(function ($option) use ($valKey, $selectedValue) {
+                        return $option->option_key === $valKey || $option->label === $selectedValue;
+                    });
+
+                    if ($match) {
+                        $amount = round((float) $match->price_modifier * $quantity, 2);
+                        $total += $amount;
+                        $items[] = [
+                            'type' => $type,
+                            'key' => $match->option_key,
+                            'label' => $match->label,
+                            'amount' => $amount,
+                        ];
+                        continue;
+                    }
+                }
+
+                // 2. Try global attributes
+                $globalAttr = $globalAttrs->first(function ($attr) use ($typeKey, $type) {
+                    return $this->optionKey($attr->name) === $typeKey || strtolower($attr->name) === strtolower($type);
                 });
 
-                if (! $match) {
-                    continue;
-                }
+                if ($globalAttr) {
+                    $matchVal = $globalAttr->values->first(function ($val) use ($valKey, $selectedValue) {
+                        return $this->optionKey($val->name) === $valKey || strtolower($val->name) === strtolower($selectedValue);
+                    });
 
-                $amount = round((float) $match->price_modifier * $quantity, 2);
-                $total += $amount;
-                $items[] = [
-                    'type' => $type,
-                    'key' => $match->option_key,
-                    'label' => $match->label,
-                    'amount' => $amount,
-                ];
+                    if ($matchVal) {
+                        $pricingMode = $matchVal->pricing_mode ?? $globalAttr->pricing_mode ?? 'per_item';
+                        $isPerItem = $pricingMode === 'per_item';
+                        $amount = round((float) $matchVal->price * ($isPerItem ? $quantity : 1), 2);
+                        $total += $amount;
+                        $items[] = [
+                            'type' => $globalAttr->name,
+                            'key' => $this->optionKey($matchVal->name),
+                            'label' => $matchVal->name,
+                            'amount' => $amount,
+                        ];
+                    }
+                }
             }
         }
 

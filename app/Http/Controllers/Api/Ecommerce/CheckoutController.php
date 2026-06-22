@@ -9,6 +9,7 @@ use App\Models\EcommerceCart;
 use App\Models\EcommerceAddress;
 use App\Models\EcommerceOrder;
 use App\Models\EcommerceOrderItem;
+use App\Models\EcommerceGiftCard;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 
@@ -32,6 +33,8 @@ class CheckoutController extends Controller
             'notes' => 'nullable|string',
             'packaging_option' => 'nullable|string|max:255',
             'gift_message' => 'nullable|string',
+            'gift_card_codes' => 'nullable|array',
+            'gift_card_codes.*' => 'string',
         ]);
 
         try {
@@ -43,8 +46,6 @@ class CheckoutController extends Controller
                 ->where('status', 'active')
                 ->first();
 
-            // If user_id is null (auth not resolved by middleware), attempt to find user by email
-            // This handles cases where the Central Auth server is slow or unreachable
             if (! $user) {
                 $emailFromRequest = strtolower(trim((string) ($request->input('customer_email') ?? '')));
                 if ($emailFromRequest !== '') {
@@ -68,7 +69,67 @@ class CheckoutController extends Controller
             $itemsSubtotal = $cartItems->isNotEmpty()
                 ? (float) $cartItems->sum('total_price')
                 : (float) $requestItems->sum(fn ($item) => (float) ($item['total_price'] ?? (($item['unit_price'] ?? $item['price'] ?? 0) * ($item['quantity'] ?? 1))));
-            $totalAmount = round((float) ($validated['total_amount'] ?? ($itemsSubtotal + $shippingAmount + $taxAmount - $discountAmount)), 2);
+            
+            $originalTotalAmount = round((float) ($validated['total_amount'] ?? ($itemsSubtotal + $shippingAmount + $taxAmount - $discountAmount)), 2);
+            $totalAmount = $originalTotalAmount;
+
+            // Gift card validation
+            $giftCardCodes = $validated['gift_card_codes'] ?? [];
+            $giftCardsToRedeem = [];
+            $totalGiftCardApplied = 0.00;
+
+            if (!empty($giftCardCodes)) {
+                foreach ($giftCardCodes as $code) {
+                    $giftCard = EcommerceGiftCard::where('code', $code)->first();
+
+                    if (!$giftCard) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Invalid gift card code: {$code}"
+                        ], 400);
+                    }
+
+                    if (in_array(strtolower($giftCard->status), ['disabled', 'expired', 'fully used', 'redeemed', 'cancelled'])) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Gift card {$code} is not active."
+                        ], 400);
+                    }
+
+                    if ($giftCard->expires_at && $giftCard->expires_at->isPast()) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Gift card {$code} has expired."
+                        ], 400);
+                    }
+
+                    if ($giftCard->current_balance <= 0) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Gift card {$code} has no remaining balance."
+                        ], 400);
+                    }
+
+                    $giftCardsToRedeem[] = $giftCard;
+                }
+
+                // Calculate total gift card amount to apply
+                $tempTotal = $totalAmount;
+                foreach ($giftCardsToRedeem as $giftCard) {
+                    $cardBalance = (float) $giftCard->current_balance;
+                    $deduct = min($tempTotal, $cardBalance);
+                    $tempTotal -= $deduct;
+                    $totalGiftCardApplied += $deduct;
+
+                    if ($tempTotal <= 0) {
+                        break;
+                    }
+                }
+
+                // Deduct from total amount
+                $totalAmount = max(0.00, round($totalAmount - $totalGiftCardApplied, 2));
+            }
+
             $shippingAddress = $this->addressForUser($user?->id, $validated['shipping_address_id'] ?? null);
             $billingAddress = $this->addressForUser($user?->id, $validated['billing_address_id'] ?? $validated['shipping_address_id'] ?? null);
 
@@ -104,6 +165,61 @@ class CheckoutController extends Controller
                 'label' => 'Order placed',
             ]);
 
+            // Deduct gift card balances and create ledger transactions
+            if (!empty($giftCardsToRedeem)) {
+                $remainingToDeduct = $originalTotalAmount;
+                $actualApplied = 0.00;
+
+                foreach ($giftCardsToRedeem as $giftCard) {
+                    if ($remainingToDeduct <= 0) {
+                        break;
+                    }
+
+                    $oldBalance = (float) $giftCard->current_balance;
+                    $deducted = min($remainingToDeduct, $oldBalance);
+                    $newBalance = $oldBalance - $deducted;
+                    $remainingToDeduct -= $deducted;
+                    $actualApplied += $deducted;
+
+                    $newStatus = $newBalance <= 0 ? 'fully used' : 'partially used';
+                    $giftCard->update([
+                        'current_balance' => $newBalance,
+                        'status' => $newStatus,
+                        'last_used_at' => now(),
+                    ]);
+
+                    // Ledger transaction for Redemption
+                    $giftCard->transactions()->create([
+                        'transaction_type' => 'Redemption',
+                        'amount' => -$deducted,
+                        'order_id' => $order->id,
+                        'notes' => "Redeemed {$deducted} for order {$order->order_number}.",
+                        'created_by' => $user?->id,
+                    ]);
+
+                    // Activity log
+                    $giftCard->activityLogs()->create([
+                        'action' => 'Redeemed',
+                        'user_id' => $user?->id,
+                        'old_value' => (string) $oldBalance,
+                        'new_value' => (string) $newBalance,
+                    ]);
+                }
+
+                // If fully paid by gift cards, mark order as paid
+                if ($remainingToDeduct <= 0) {
+                    $order->update([
+                        'payment_status' => 'paid',
+                    ]);
+                }
+
+                // Store gift card info in metadata
+                $meta = $order->metadata ?? [];
+                $meta['gift_cards_applied'] = collect($giftCardsToRedeem)->map(fn($gc) => $gc->code)->toArray();
+                $meta['gift_card_deduction'] = $actualApplied;
+                $order->update(['metadata' => $meta]);
+            }
+
             if ($cartItems->isNotEmpty()) {
                 foreach ($cartItems as $cartItem) {
                     EcommerceOrderItem::create([
@@ -137,7 +253,6 @@ class CheckoutController extends Controller
 
             DB::commit();
 
-            // Opportunistically link any other guest orders for this email to this user
             if ($order->user_id && $order->customer_email) {
                 $customerEmail = strtolower(trim((string) $order->customer_email));
                 if ($customerEmail !== '') {

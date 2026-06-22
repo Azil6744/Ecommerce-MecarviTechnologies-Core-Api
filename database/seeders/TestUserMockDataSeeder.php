@@ -470,7 +470,7 @@ class TestUserMockDataSeeder extends Seeder
         EcommerceGiftCard::create([
             'user_id' => $user->id,
             'order_id' => $order2->id,
-            'code' => 'MEC-GIFT-50-OFF',
+            'code' => '500000000000050',
             'recipient_name' => $user->name,
             'recipient_email' => $user->email,
             'sender_name' => 'Mecarvi Promo',

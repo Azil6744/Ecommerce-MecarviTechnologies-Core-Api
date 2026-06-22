@@ -5,7 +5,6 @@ namespace Tests\Feature;
 use App\Models\EcommerceGiftCard;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class EcommerceGiftCardControllerTest extends TestCase
@@ -29,7 +28,7 @@ class EcommerceGiftCardControllerTest extends TestCase
 
         $ownCard = EcommerceGiftCard::create([
             'user_id' => $customer->id,
-            'code' => 'GC-OWN-001',
+            'code' => '100000000000001',
             'recipient_name' => 'Own Recipient',
             'recipient_email' => 'own@example.com',
             'initial_balance' => 100,
@@ -40,7 +39,7 @@ class EcommerceGiftCardControllerTest extends TestCase
 
         EcommerceGiftCard::create([
             'user_id' => $otherCustomer->id,
-            'code' => 'GC-OTHER-001',
+            'code' => '200000000000001',
             'recipient_name' => 'Other Recipient',
             'recipient_email' => 'other@example.com',
             'initial_balance' => 100,
@@ -57,7 +56,7 @@ class EcommerceGiftCardControllerTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.id', $ownCard->id)
-            ->assertJsonPath('data.0.code', 'GC-OWN-001')
+            ->assertJsonPath('data.0.code', '100000000000001')
             ->assertJsonMissingPath('data.1');
     }
 
@@ -66,7 +65,7 @@ class EcommerceGiftCardControllerTest extends TestCase
         $admin = User::factory()->create(['role' => 'super_admin']);
 
         EcommerceGiftCard::create([
-            'code' => 'GC-PENDING-001',
+            'code' => '300000000000001',
             'recipient_name' => 'Pending Recipient',
             'recipient_email' => 'pending@example.com',
             'initial_balance' => 100,
@@ -76,7 +75,7 @@ class EcommerceGiftCardControllerTest extends TestCase
         ]);
 
         EcommerceGiftCard::create([
-            'code' => 'GC-ACTIVE-001',
+            'code' => '400000000000001',
             'recipient_name' => 'Active Recipient',
             'recipient_email' => 'active@example.com',
             'initial_balance' => 100,
@@ -92,16 +91,16 @@ class EcommerceGiftCardControllerTest extends TestCase
         $response
             ->assertOk()
             ->assertJsonCount(1, 'data')
-            ->assertJsonPath('data.0.code', 'GC-PENDING-001')
+            ->assertJsonPath('data.0.code', '300000000000001')
             ->assertJsonPath('data.0.status', 'pending');
     }
 
-    public function test_update_allows_code_change_and_marks_redeemed_cards(): void
+    public function test_update_marks_redeemed_cards(): void
     {
         $admin = User::factory()->create(['role' => 'super_admin']);
 
         $giftCard = EcommerceGiftCard::create([
-            'code' => 'GC-OLD-001',
+            'code' => '500000000000001',
             'recipient_name' => 'Recipient',
             'recipient_email' => 'recipient@example.com',
             'initial_balance' => 100,
@@ -113,14 +112,13 @@ class EcommerceGiftCardControllerTest extends TestCase
         $response = $this
             ->withHeaders($this->centralAuthHeadersFor($admin))
             ->putJson("/api/v1/admin/gift-cards/{$giftCard->id}", [
-                'code' => 'GC-NEW-001',
                 'status' => 'pending',
                 'current_balance' => 0,
             ]);
 
         $response
             ->assertOk()
-            ->assertJsonPath('data.code', 'GC-NEW-001')
+            ->assertJsonPath('data.code', '500000000000001')
             ->assertJsonPath('data.status', 'pending')
             ->assertJsonPath('data.current_balance', 0);
 
@@ -128,7 +126,7 @@ class EcommerceGiftCardControllerTest extends TestCase
 
         $this->assertDatabaseHas('ecommerce_gift_cards', [
             'id' => $giftCard->id,
-            'code' => 'GC-NEW-001',
+            'code' => '500000000000001',
             'status' => 'pending',
             'current_balance' => '0.00',
         ]);
@@ -142,23 +140,21 @@ class EcommerceGiftCardControllerTest extends TestCase
 
         $response = $this
             ->withHeaders($this->centralAuthHeadersFor($customer))
-            ->postJson('/api/ecommerce/gift-cards', [
-                'code' => 'GC-CREATE-001',
+            ->postJson('/api/v1/admin/gift-cards', [
                 'recipient_name' => 'Created Recipient',
                 'recipient_email' => 'created@example.com',
                 'amount' => 75,
             ]);
 
-        $response
-            ->assertCreated()
-            ->assertJsonPath('data.code', 'GC-CREATE-001')
-            ->assertJsonPath('data.user_id', $customer->id)
-            ->assertJsonPath('data.currency', 'USD')
-            ->assertJsonPath('data.current_balance', 75);
+        $response->assertCreated();
+
+        $generatedCode = $response->json('data.code');
+        $this->assertMatchesRegularExpression('/^\d{15}$/', $generatedCode);
+        $this->assertSame('USD', $response->json('data.currency'));
+        $this->assertSame(75.0, (float) $response->json('data.current_balance'));
 
         $this->assertDatabaseHas('ecommerce_gift_cards', [
-            'code' => 'GC-CREATE-001',
-            'user_id' => $customer->id,
+            'code' => $generatedCode,
             'currency' => 'USD',
         ]);
     }
@@ -169,23 +165,20 @@ class EcommerceGiftCardControllerTest extends TestCase
 
         $response = $this
             ->withHeaders($this->centralAuthHeadersFor($customer))
-            ->postJson('/api/ecommerce/gift-cards', [
+            ->postJson('/api/v1/admin/gift-cards', [
                 'recipient_name' => 'Generated Code Recipient',
                 'recipient_email' => 'generated@example.com',
                 'amount' => 25,
             ]);
 
-        $response
-            ->assertCreated()
-            ->assertJsonPath('data.user_id', $customer->id);
+        $response->assertCreated();
 
         $generatedCode = $response->json('data.code');
 
         $this->assertIsString($generatedCode);
-        $this->assertStringStartsWith('GC-', $generatedCode);
+        $this->assertMatchesRegularExpression('/^\d{15}$/', $generatedCode);
         $this->assertDatabaseHas('ecommerce_gift_cards', [
             'code' => $generatedCode,
-            'user_id' => $customer->id,
         ]);
     }
 }

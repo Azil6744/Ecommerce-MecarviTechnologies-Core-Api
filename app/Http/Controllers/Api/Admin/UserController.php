@@ -283,7 +283,38 @@ class UserController extends Controller
             }
 
             $perPage = $request->get('per_page', 50);
-            $users = User::with(['roles', 'permissions'])->paginate($perPage);
+            
+            $query = User::with(['roles', 'permissions']);
+
+            if ($request->has('search') && $request->search) {
+                $s = $request->search;
+                $query->where(function ($q) use ($s) {
+                    $q->where('name', 'like', "%{$s}%")
+                      ->orWhere('email', 'like', "%{$s}%");
+                });
+            }
+
+            if ($request->has('role') && $request->role) {
+                $role = $request->role;
+                $query->where(function ($q) use ($role) {
+                    $q->where('role', $role)
+                      ->orWhereHas('roles', function ($roleQuery) use ($role) {
+                          $roleQuery->where('name', $role);
+                      });
+                });
+            }
+
+            if ($request->has('status') && $request->status) {
+                if ($request->status === 'banned') {
+                    $query->whereNotNull('banned_at');
+                } elseif ($request->status === 'deactivated') {
+                    $query->whereNotNull('deactivated_at');
+                } elseif ($request->status === 'active') {
+                    $query->whereNull('banned_at')->whereNull('deactivated_at');
+                }
+            }
+
+            $users = $query->orderBy('created_at', 'desc')->paginate($perPage);
 
             // Transform the users data
             $users->getCollection()->transform(function ($user) {
@@ -291,9 +322,13 @@ class UserController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
+                    'role' => $user->role,
                     'roles' => $user->roles->pluck('name')->toArray(),
                     'permissions' => $user->getAllPermissions()->pluck('name')->toArray(),
                     'email_verified_at' => $user->email_verified_at,
+                    'banned_at' => $user->banned_at,
+                    'deactivated_at' => $user->deactivated_at,
+                    'last_login_at' => $user->last_login_at,
                     'created_at' => $user->created_at,
                     'updated_at' => $user->updated_at,
                 ];

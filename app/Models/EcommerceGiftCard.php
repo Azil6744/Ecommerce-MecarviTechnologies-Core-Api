@@ -26,6 +26,16 @@ class EcommerceGiftCard extends Model
         'purchased_at',
         'redeemed_at',
         'currency',
+        
+        // Extended fields
+        'buyer_user_id',
+        'buyer_name',
+        'buyer_email',
+        'owner_email',
+        'issue_type',
+        'issued_by_admin_id',
+        'disabled_reason',
+        'last_used_at',
     ];
 
     protected $casts = [
@@ -35,15 +45,88 @@ class EcommerceGiftCard extends Model
         'scheduled_for' => 'datetime',
         'purchased_at' => 'datetime',
         'redeemed_at' => 'datetime',
+        'buyer_user_id' => 'integer',
+        'issued_by_admin_id' => 'integer',
+        'last_used_at' => 'datetime',
     ];
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        // Enforce 15-digit code generation validation
+        static::creating(function ($giftCard) {
+            if (empty($giftCard->code)) {
+                do {
+                    $code = '';
+                    for ($i = 0; $i < 15; $i++) {
+                        $code .= random_int(0, 9);
+                    }
+                } while (static::where('code', $code)->exists());
+                
+                $giftCard->code = $code;
+            }
+        });
+
+        static::saving(function ($giftCard) {
+            if (empty($giftCard->code)) {
+                throw new \InvalidArgumentException('Gift card code is required.');
+            }
+            if (!preg_match('/^\d{15}$/', $giftCard->code)) {
+                throw new \InvalidArgumentException('Gift card code must be exactly 15 digits.');
+            }
+        });
+
+        // Prevent editing code
+        static::updating(function ($giftCard) {
+            if ($giftCard->isDirty('code')) {
+                throw new \InvalidArgumentException('The gift card code cannot be modified.');
+            }
+        });
+
+        // Prevent deletion
+        static::deleting(function ($giftCard) {
+            throw new \Exception('Gift cards cannot be deleted.');
+        });
+    }
 
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
+    public function buyer()
+    {
+        return $this->belongsTo(User::class, 'buyer_user_id');
+    }
+
+    public function admin()
+    {
+        return $this->belongsTo(User::class, 'issued_by_admin_id');
+    }
+
     public function order()
     {
         return $this->belongsTo(EcommerceOrder::class, 'order_id');
+    }
+
+    public function giftCardOrder()
+    {
+        return $this->belongsTo(EcommerceGiftCardOrder::class, 'order_id');
+    }
+
+    public function transactions()
+    {
+        return $this->hasMany(EcommerceGiftCardTransaction::class, 'giftcard_id');
+    }
+
+    public function transfers()
+    {
+        return $this->hasMany(EcommerceGiftCardTransfer::class, 'giftcard_id');
+    }
+
+    public function activityLogs()
+    {
+        return $this->hasMany(EcommerceGiftCardActivityLog::class, 'giftcard_id');
     }
 }

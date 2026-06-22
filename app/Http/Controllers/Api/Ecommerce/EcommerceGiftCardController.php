@@ -5,8 +5,12 @@ namespace App\Http\Controllers\Api\Ecommerce;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\EcommerceGiftCard;
+use App\Models\EcommerceGiftCardTransfer;
+use App\Models\User;
+use App\Support\GiftCardMailer;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 class EcommerceGiftCardController extends Controller
 {
@@ -45,44 +49,79 @@ class EcommerceGiftCardController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'code' => 'nullable|string|unique:ecommerce_gift_cards,code',
             'recipient_name' => 'required|string',
             'recipient_email' => 'nullable|email',
             'amount' => 'required|numeric|min:0.01',
             'sender_name' => 'nullable|string',
-            'status' => 'nullable|in:active,redeemed,expired,scheduled,cancelled,pending',
             'expires_at' => 'nullable|date',
             'delivery_type' => 'nullable|string|max:50',
             'message' => 'nullable|string',
             'scheduled_for' => 'nullable|date',
-            'order_id' => 'nullable|integer',
             'currency' => 'nullable|string|max:10',
         ]);
 
-        $payload = [
-            'code' => $request->filled('code') ? $request->code : $this->generateUniqueGiftCardCode(),
-            'recipient_name' => $request->recipient_name,
-            'recipient_email' => $request->recipient_email ?? '',
-            'sender_name' => $request->sender_name ?? null,
-            'initial_balance' => $request->amount,
-            'current_balance' => $request->amount,
-            'status' => $this->normalizeStatus($request->input('status', 'active')),
-            'expires_at' => $request->expires_at ?? null,
-            'delivery_type' => $request->input('delivery_type'),
-            'message' => $request->input('message'),
-            'scheduled_for' => $request->input('scheduled_for'),
-            'order_id' => $request->input('order_id'),
-            'currency' => $request->input('currency', 'USD'),
-            'purchased_at' => Carbon::now(),
-        ];
-
-        if (Schema::hasColumn((new EcommerceGiftCard)->getTable(), 'user_id') && $request->user()) {
-            $payload['user_id'] = $request->user()->id;
+        $code = $this->generateUniqueGiftCardCode();
+        $recipientUser = null;
+        if ($request->filled('recipient_email')) {
+            $recipientUser = User::where('email', $request->recipient_email)->first();
         }
 
-        $item = EcommerceGiftCard::create($payload);
+        return DB::transaction(function () use ($request, $code, $recipientUser) {
+            $giftCard = EcommerceGiftCard::create([
+                'code' => $code,
+                'recipient_name' => $request->recipient_name,
+                'recipient_email' => $request->recipient_email ?? '',
+                'sender_name' => $request->sender_name ?? 'Admin',
+                'initial_balance' => $request->amount,
+                'current_balance' => $request->amount,
+                'status' => 'active',
+                'expires_at' => $request->expires_at ?? null,
+                'delivery_type' => $request->delivery_type ?? 'Manual',
+                'message' => $request->message,
+                'scheduled_for' => $request->scheduled_for,
+                'currency' => $request->currency ?? 'USD',
+                'purchased_at' => Carbon::now(),
+                'user_id' => $recipientUser?->id,
+                'owner_email' => $request->recipient_email ?? null,
+                'issue_type' => 'Manual',
+                'issued_by_admin_id' => $request->user()?->id,
+            ]);
 
-        return response()->json(['success' => true, 'data' => $this->giftCardPayload($item->fresh(['order', 'user']))], 201);
+            // Create ledger entry
+            $giftCard->transactions()->create([
+                'transaction_type' => 'Issue',
+                'amount' => $request->amount,
+                'notes' => 'Manual gift card issued by admin.',
+                'created_by' => $request->user()?->id,
+            ]);
+
+            // Create activity log
+            $giftCard->activityLogs()->create([
+                'action' => 'Manual Gift Card Issued',
+                'admin_id' => $request->user()?->id,
+                'old_value' => null,
+                'new_value' => json_encode($giftCard->only(['id', 'code', 'initial_balance', 'recipient_email'])),
+                'ip_address' => $request->ip(),
+            ]);
+
+            // Try sending email if recipient email is present
+            if ($request->filled('recipient_email')) {
+                $emailSent = GiftCardMailer::sendIssued($request->recipient_email, [
+                    'code' => $code,
+                    'balance' => $request->amount,
+                    'message' => $request->message,
+                    'recipient_name' => $request->recipient_name,
+                    'sender_name' => $request->sender_name ?? 'Admin',
+                    'expires_at' => $giftCard->expires_at ? $giftCard->expires_at->toDateString() : '',
+                ]);
+
+                if ($emailSent) {
+                    $giftCard->update(['status' => 'delivered']);
+                }
+            }
+
+            return response()->json(['success' => true, 'data' => $this->giftCardPayload($giftCard->fresh(['order', 'user']))], 201);
+        });
     }
 
     public function show(Request $request, $id)
@@ -96,13 +135,12 @@ class EcommerceGiftCardController extends Controller
         $item = $this->resolveGiftCard($request, $id);
 
         $data = $request->validate([
-            'code' => 'sometimes|string|unique:ecommerce_gift_cards,code,' . $id,
             'recipient_name' => 'sometimes|string',
             'recipient_email' => 'sometimes|nullable|email',
             'sender_name' => 'sometimes|nullable|string',
             'initial_balance' => 'sometimes|numeric|min:0',
             'current_balance' => 'sometimes|numeric|min:0',
-            'status' => 'sometimes|in:active,redeemed,expired,scheduled,cancelled,pending',
+            'status' => 'sometimes|in:active,delivered,redeemed,expired,scheduled,cancelled,pending,disabled',
             'expires_at' => 'sometimes|nullable|date',
             'delivery_type' => 'sometimes|nullable|string|max:50',
             'message' => 'sometimes|nullable|string',
@@ -135,6 +173,278 @@ class EcommerceGiftCardController extends Controller
         return response()->json(['success' => true, 'message' => 'Deleted successfully']);
     }
 
+    /**
+     * Adjust balance of a gift card (Admin).
+     */
+    public function adjustBalance(Request $request, $id)
+    {
+        $request->validate([
+            'amount' => 'required|numeric',
+            'notes' => 'required|string|max:255',
+        ]);
+
+        $giftCard = EcommerceGiftCard::findOrFail($id);
+        $oldBalance = $giftCard->current_balance;
+        $newBalance = $oldBalance + $request->amount;
+
+        if ($newBalance < 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Adjusted balance cannot be negative.'
+            ], 400);
+        }
+
+        return DB::transaction(function () use ($giftCard, $request, $oldBalance, $newBalance) {
+            $giftCard->update([
+                'current_balance' => $newBalance,
+            ]);
+
+            $giftCard->transactions()->create([
+                'transaction_type' => 'Manual Adjustment',
+                'amount' => $request->amount,
+                'notes' => $request->notes,
+                'created_by' => $request->user()?->id,
+            ]);
+
+            $giftCard->activityLogs()->create([
+                'action' => 'Balance Adjusted',
+                'admin_id' => $request->user()?->id,
+                'old_value' => (string) $oldBalance,
+                'new_value' => (string) $newBalance,
+                'ip_address' => $request->ip(),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Balance adjusted successfully.',
+                'data' => $this->giftCardPayload($giftCard->fresh())
+            ]);
+        });
+    }
+
+    /**
+     * Disable a gift card (Admin).
+     */
+    public function disable(Request $request, $id)
+    {
+        $request->validate([
+            'disabled_reason' => 'required|string|max:255',
+        ]);
+
+        $giftCard = EcommerceGiftCard::findOrFail($id);
+        $oldStatus = $giftCard->status;
+
+        $giftCard->update([
+            'status' => 'disabled',
+            'disabled_reason' => $request->disabled_reason,
+        ]);
+
+        $giftCard->activityLogs()->create([
+            'action' => 'Disabled',
+            'admin_id' => $request->user()?->id,
+            'old_value' => $oldStatus,
+            'new_value' => 'disabled',
+            'ip_address' => $request->ip(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Gift card disabled successfully.',
+            'data' => $this->giftCardPayload($giftCard)
+        ]);
+    }
+
+    /**
+     * Enable a gift card (Admin).
+     */
+    public function enable(Request $request, $id)
+    {
+        $giftCard = EcommerceGiftCard::findOrFail($id);
+        $oldStatus = $giftCard->status;
+
+        $giftCard->update([
+            'status' => 'active',
+            'disabled_reason' => null,
+        ]);
+
+        $giftCard->activityLogs()->create([
+            'action' => 'Enabled',
+            'admin_id' => $request->user()?->id,
+            'old_value' => $oldStatus,
+            'new_value' => 'active',
+            'ip_address' => $request->ip(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Gift card enabled successfully.',
+            'data' => $this->giftCardPayload($giftCard)
+        ]);
+    }
+
+    /**
+     * Transfer gift card ownership (Customer).
+     */
+    public function transfer(Request $request, $id)
+    {
+        $request->validate([
+            'recipient_email' => 'required|email|max:255',
+        ]);
+
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
+        }
+
+        $giftCard = EcommerceGiftCard::where('id', $id)
+            ->where('user_id', $user->id)
+            ->firstOrFail();
+
+        if (in_array(strtolower($giftCard->status), ['disabled', 'expired', 'fully used', 'redeemed'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only active gift cards can be transferred.'
+            ], 400);
+        }
+
+        if ($giftCard->expires_at && $giftCard->expires_at->isPast()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This gift card has expired.'
+            ], 400);
+        }
+
+        if ($giftCard->current_balance <= 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This gift card has no remaining balance.'
+            ], 400);
+        }
+
+        if (strtolower($request->recipient_email) === strtolower($user->email)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You cannot transfer a gift card to yourself.'
+            ], 400);
+        }
+
+        return DB::transaction(function () use ($giftCard, $request, $user) {
+            $recipientUser = User::where('email', $request->recipient_email)->first();
+            $newOwnerId = $recipientUser?->id;
+            
+            $oldOwnerId = $giftCard->user_id;
+            $oldOwnerEmail = $user->email;
+            $recipientEmail = $request->recipient_email;
+
+            // Record transfer
+            EcommerceGiftCardTransfer::create([
+                'giftcard_id' => $giftCard->id,
+                'old_owner_id' => $oldOwnerId,
+                'new_owner_id' => $newOwnerId,
+                'old_owner_email' => $oldOwnerEmail,
+                'new_owner_email' => $recipientEmail,
+                'transfer_reason' => 'Transferred by owner',
+                'transferred_at' => now(),
+            ]);
+
+            // Record transaction ledger
+            $giftCard->transactions()->create([
+                'transaction_type' => 'Transfer',
+                'amount' => $giftCard->current_balance,
+                'notes' => 'Transferred from ' . $oldOwnerEmail . ' to ' . $recipientEmail,
+                'created_by' => $user->id,
+            ]);
+
+            // Update gift card owner
+            $giftCard->update([
+                'user_id' => $newOwnerId,
+                'owner_email' => $recipientEmail,
+                'recipient_email' => $recipientEmail,
+                'recipient_name' => $recipientUser?->name ?: $recipientEmail,
+            ]);
+
+            // Activity Log
+            $giftCard->activityLogs()->create([
+                'action' => 'Transferred',
+                'user_id' => $user->id,
+                'old_value' => $oldOwnerEmail,
+                'new_value' => $recipientEmail,
+                'ip_address' => $request->ip(),
+            ]);
+
+            // Send notification emails
+            GiftCardMailer::sendTransferredToOldOwner($oldOwnerEmail, [
+                'code' => $giftCard->code,
+                'balance' => $giftCard->current_balance,
+                'new_owner_email' => $recipientEmail,
+            ]);
+
+            GiftCardMailer::sendTransferredToNewOwner($recipientEmail, [
+                'code' => $giftCard->code,
+                'balance' => $giftCard->current_balance,
+                'old_owner_email' => $oldOwnerEmail,
+                'expires_at' => $giftCard->expires_at ? $giftCard->expires_at->toDateString() : '',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Gift card transferred successfully.',
+                'data' => $this->giftCardPayload($giftCard->fresh())
+            ]);
+        });
+    }
+
+    /**
+     * Validate a gift card code.
+     */
+    public function validateCode(Request $request)
+    {
+        $request->validate([
+            'code' => 'required|string',
+        ]);
+
+        $giftCard = EcommerceGiftCard::where('code', $request->code)->first();
+
+        if (!$giftCard) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid gift card code.'
+            ], 404);
+        }
+
+        if (in_array(strtolower($giftCard->status), ['disabled', 'expired', 'fully used', 'redeemed', 'cancelled'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This gift card is not active.'
+            ], 400);
+        }
+
+        if ($giftCard->expires_at && $giftCard->expires_at->isPast()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This gift card has expired.'
+            ], 400);
+        }
+
+        if ($giftCard->current_balance <= 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This gift card has no remaining balance.'
+            ], 400);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Gift card code is valid.',
+            'data' => [
+                'code' => $giftCard->code,
+                'current_balance' => (float)$giftCard->current_balance,
+                'expires_at' => $giftCard->expires_at ? $giftCard->expires_at->toDateString() : null,
+                'recipient_name' => $giftCard->recipient_name,
+            ]
+        ]);
+    }
+
     private function resolveGiftCard(Request $request, int|string $id): EcommerceGiftCard
     {
         $query = EcommerceGiftCard::query();
@@ -150,7 +460,7 @@ class EcommerceGiftCardController extends Controller
     private function normalizeStatus(?string $status): string
     {
         $normalized = strtolower(trim((string) $status));
-        return in_array($normalized, ['active', 'redeemed', 'expired', 'scheduled', 'cancelled', 'pending'], true)
+        return in_array($normalized, ['active', 'delivered', 'redeemed', 'expired', 'scheduled', 'cancelled', 'pending', 'disabled', 'partially used', 'fully used'], true)
             ? $normalized
             : 'active';
     }
@@ -191,7 +501,10 @@ class EcommerceGiftCardController extends Controller
     private function generateUniqueGiftCardCode(): string
     {
         do {
-            $code = 'GC-' . strtoupper(substr(bin2hex(random_bytes(6)), 0, 10));
+            $code = '';
+            for ($i = 0; $i < 15; $i++) {
+                $code .= random_int(0, 9);
+            }
         } while (EcommerceGiftCard::where('code', $code)->exists());
 
         return $code;

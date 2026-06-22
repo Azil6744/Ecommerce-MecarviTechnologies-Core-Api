@@ -75,8 +75,27 @@ class CentralAuthTokenMiddleware
                     'password' => bcrypt(Str::random(16)),
                     'role' => $this->localRole($centralUser['role'] ?? null),
                 ]);
+
+                // Assign Spatie Role for newly created user
+                $roleName = $user->role;
+                if ($roleName && in_array($roleName, ['super_admin', 'admin', 'editor', 'customer', 'seller'], true)) {
+                    \Spatie\Permission\Models\Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
+                    $user->assignRole($roleName);
+                }
             } else {
                 $this->syncLocalUserProfile($user, $centralUser);
+
+                // Sync role if it changed or if Spatie role is missing
+                $centralRoleName = $this->localRole($centralUser['role'] ?? null);
+                if ($user->role !== $centralRoleName) {
+                    $user->role = $centralRoleName;
+                    $user->save();
+                }
+
+                if ($centralRoleName && !$user->hasRole($centralRoleName)) {
+                    \Spatie\Permission\Models\Role::firstOrCreate(['name' => $centralRoleName, 'guard_name' => 'web']);
+                    $user->assignRole($centralRoleName);
+                }
             }
 
             $this->linkGuestDataForUser($user);

@@ -60,19 +60,39 @@ class EcommerceConversationController extends Controller
         ]);
 
         $now = Carbon::now();
-        $conversation = EcommerceConversation::create([
-            'user_id' => $request->user()->id,
-            'subject' => $validated['subject'] ?? 'New conversation',
-            'status' => 'open',
-            'linked_type' => $validated['linked_type'] ?? null,
-            'linked_id' => $validated['linked_id'] ?? null,
-            'linked_label' => $validated['linked_label'] ?? null,
-            'last_customer_message_at' => $now,
-            'last_message_at' => $now,
-        ]);
+        $userId = $request->user()->id;
+
+        // Check if user already has an existing conversation
+        $conversation = EcommerceConversation::where('user_id', $userId)->first();
+
+        if ($conversation) {
+            // Update existing conversation
+            $conversation->update([
+                'status' => 'open',
+                'subject' => $validated['subject'] ?? $conversation->subject ?? 'General Support',
+                'linked_type' => $validated['linked_type'] ?? $conversation->linked_type,
+                'linked_id' => $validated['linked_id'] ?? $conversation->linked_id,
+                'linked_label' => $validated['linked_label'] ?? $conversation->linked_label,
+                'last_customer_message_at' => $now,
+                'last_message_at' => $now,
+                'closed_at' => null,
+            ]);
+        } else {
+            // Create a new one
+            $conversation = EcommerceConversation::create([
+                'user_id' => $userId,
+                'subject' => $validated['subject'] ?? 'General Support',
+                'status' => 'open',
+                'linked_type' => $validated['linked_type'] ?? null,
+                'linked_id' => $validated['linked_id'] ?? null,
+                'linked_label' => $validated['linked_label'] ?? null,
+                'last_customer_message_at' => $now,
+                'last_message_at' => $now,
+            ]);
+        }
 
         $conversation->messages()->create([
-            'sender_id' => $request->user()->id,
+            'sender_id' => $userId,
             'sender_type' => 'customer',
             'message' => $validated['message'],
         ]);

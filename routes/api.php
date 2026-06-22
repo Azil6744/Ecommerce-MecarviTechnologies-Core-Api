@@ -8,6 +8,10 @@ use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\Admin\RolePermissionController;
 use App\Http\Controllers\Api\Admin\CategoryController;
 use App\Http\Controllers\Api\Admin\ProductController;
+use App\Http\Controllers\Api\Admin\ProductColorController;
+use App\Http\Controllers\Api\Admin\ProductLabelController;
+use App\Http\Controllers\Api\Admin\ProductBrandController;
+use App\Http\Controllers\Api\Admin\ProductReportController;
 use App\Http\Controllers\Api\Admin\ProductDetailDataController;
 use App\Http\Controllers\Api\Admin\HomePageController;
 use App\Http\Controllers\Api\Admin\MembershipPageController;
@@ -836,6 +840,13 @@ Route::prefix('v1')->group(function () {
         Route::get('/admin/gift-cards/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'show']);
         Route::put('/admin/gift-cards/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'update']);
         Route::delete('/admin/gift-cards/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'destroy']);
+        Route::post('/admin/gift-cards/{id}/adjust-balance', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'adjustBalance']);
+        Route::post('/admin/gift-cards/{id}/disable', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'disable']);
+        Route::post('/admin/gift-cards/{id}/enable', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'enable']);
+
+        // Gift Card Orders
+        Route::get('/admin/gift-card-orders', [\App\Http\Controllers\Api\Ecommerce\GiftCardOrderController::class, 'index']);
+        Route::post('/admin/gift-card-orders/{id}/issue', [\App\Http\Controllers\Api\Ecommerce\GiftCardOrderController::class, 'issue']);
 
         // Payment Gateways
         Route::get('/admin/payment-gateways', [\App\Http\Controllers\Api\Admin\PaymentGatewayController::class, 'index']);
@@ -2622,6 +2633,10 @@ Route::prefix('v1')->group(function () {
 
         // Products Management (Admin Only)
         Route::apiResource('products', ProductController::class);
+        Route::apiResource('product-colors', ProductColorController::class);
+        Route::apiResource('product-labels', ProductLabelController::class);
+        Route::apiResource('brands', ProductBrandController::class);
+        Route::apiResource('product-reports', ProductReportController::class)->except(['store']);
         Route::get('/products/{product}/detail-data', [ProductDetailDataController::class, 'show'])
             ->name('api.v1.products.detail-data.show');
         Route::put('/products/{product}/detail-data', [ProductDetailDataController::class, 'update'])

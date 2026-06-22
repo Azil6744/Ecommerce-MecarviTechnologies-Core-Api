@@ -9,6 +9,72 @@ use Illuminate\Support\Facades\Schema;
 
 class EcommerceAffiliateController extends Controller
 {
+    public function getSettings(Request $request)
+    {
+        $settings = \App\Models\SiteSetting::first();
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'referral_reward_referrer' => $settings ? (float)$settings->referral_reward_referrer : 0.00,
+                'referral_reward_referee' => $settings ? (float)$settings->referral_reward_referee : 0.00,
+                'referral_commission_percentage' => $settings ? (float)$settings->referral_commission_percentage : 0.00,
+            ]
+        ]);
+    }
+
+    public function updateSettings(Request $request)
+    {
+        $validated = $request->validate([
+            'referral_reward_referrer' => 'required|numeric|min:0',
+            'referral_reward_referee' => 'required|numeric|min:0',
+            'referral_commission_percentage' => 'required|numeric|between:0,100',
+        ]);
+
+        $settings = \App\Models\SiteSetting::first();
+        if (!$settings) {
+            $settings = new \App\Models\SiteSetting();
+        }
+
+        $settings->referral_reward_referrer = $validated['referral_reward_referrer'];
+        $settings->referral_reward_referee = $validated['referral_reward_referee'];
+        $settings->referral_commission_percentage = $validated['referral_commission_percentage'];
+        $settings->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Affiliate settings updated successfully.',
+            'data' => [
+                'referral_reward_referrer' => (float)$settings->referral_reward_referrer,
+                'referral_reward_referee' => (float)$settings->referral_reward_referee,
+                'referral_commission_percentage' => (float)$settings->referral_commission_percentage,
+            ]
+        ]);
+    }
+
+    public function referralsList(Request $request)
+    {
+        $referrals = \App\Models\EcommerceReferral::with(['referrer', 'referred'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($request->get('per_page', 15));
+
+        return response()->json([
+            'success' => true,
+            'data' => $referrals
+        ]);
+    }
+
+    public function referralCommissionsList(Request $request)
+    {
+        $commissions = \App\Models\EcommerceReferralCommission::with(['referrer', 'referred', 'order'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($request->get('per_page', 15));
+
+        return response()->json([
+            'success' => true,
+            'data' => $commissions
+        ]);
+    }
+
     public function index(Request $request)
     {
         $user = $request->user();

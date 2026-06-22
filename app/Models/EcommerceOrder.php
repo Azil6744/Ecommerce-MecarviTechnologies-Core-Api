@@ -56,4 +56,45 @@ class EcommerceOrder extends Model
     {
         return $this->hasMany(EcommerceOrderStatusEvent::class, 'order_id')->latest();
     }
+
+    protected static function booted()
+    {
+        static::updated(function ($order) {
+            // Trigger referral commission logic when payment_status becomes 'paid'
+            if ($order->wasChanged('payment_status') && $order->payment_status === 'paid') {
+                try {
+                    // Check if referred user exists in referrals table
+                    $referral = \App\Models\EcommerceReferral::where('referred_id', $order->user_id)->first();
+                    if ($referral && $referral->referrer_id) {
+                        // Check if a commission has already been calculated for this order to prevent duplication
+                        $exists = \App\Models\EcommerceReferralCommission::where('order_id', $order->id)->exists();
+                        if (!$exists) {
+                            $settings = \App\Models\SiteSetting::first();
+                            $commissionPercentage = $settings ? (float)$settings->referral_commission_percentage : 0.00;
+
+                            if ($commissionPercentage > 0) {
+                                $orderAmount = (float)($order->subtotal ?: $order->total_amount);
+                                $commissionAmount = round($orderAmount * ($commissionPercentage / 100), 2);
+
+                                if ($commissionAmount > 0) {
+                                    \App\Models\EcommerceReferralCommission::create([
+                                        'referrer_id' => $referral->referrer_id,
+                                        'referred_id' => $order->user_id,
+                                        'order_id' => $order->id,
+                                        'order_amount' => $orderAmount,
+                                        'commission_percentage' => $commissionPercentage,
+                                        'commission_amount' => $commissionAmount,
+                                        'status' => 'pending',
+                                        'payout_at' => now()->addDays(10),
+                                    ]);
+                                }
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    \Log::error('Referral commission failed: ' . $e->getMessage());
+                }
+            }
+        });
+    }
 }

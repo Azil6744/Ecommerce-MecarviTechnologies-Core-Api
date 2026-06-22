@@ -105,6 +105,14 @@ class RoleSeeder extends Seeder
             'edit orders',
         ]);
 
+        $staffRole = Role::firstOrCreate(['name' => 'staff']);
+        $staffRole->syncPermissions([
+            'view products',
+            'view orders',
+            'edit orders',
+            'view content',
+        ]);
+
         $this->command->info('Roles and permissions seeded successfully!');
     }
 }

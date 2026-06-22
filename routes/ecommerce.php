@@ -17,6 +17,7 @@ Route::prefix('ecommerce')->group(function () {
     // Public E-Commerce Routes (No Auth Required)
     Route::get('/categories', [\App\Http\Controllers\Api\Ecommerce\CategoryController::class, 'index']);
     Route::get('/shipping-methods', [\App\Http\Controllers\Api\Ecommerce\ShippingMethodController::class, 'index']);
+    Route::get('/delivery-times', [\App\Http\Controllers\Api\Ecommerce\DeliveryTimeController::class, 'index']);
     Route::get('/products', [\App\Http\Controllers\Api\Ecommerce\ProductController::class, 'index']);
     Route::post('/products/{product}/price-preview', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'pricePreview']);
     Route::post('/products/{product}/customization-drafts', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'storeDraft'])
@@ -43,6 +44,15 @@ Route::prefix('ecommerce')->group(function () {
     Route::match(['get', 'post'], '/payment/paypal/cancel', [\App\Http\Controllers\Api\Ecommerce\PaymentController::class, 'paypalCancel']);
     Route::get('/disputes', [\App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class, 'index']);
     Route::post('/disputes', [\App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class, 'store']);
+    Route::get('/attributes', [\App\Http\Controllers\Api\Ecommerce\PublicAttributeController::class, 'index']);
+
+    // Gift Cards & Orders (Public / Optional Auth)
+    Route::post('/gift-card-orders', [\App\Http\Controllers\Api\Ecommerce\GiftCardOrderController::class, 'store'])
+        ->middleware('central.auth:optional');
+    Route::post('/payment/gift-card-order', [\App\Http\Controllers\Api\Ecommerce\GiftCardOrderController::class, 'pay'])
+        ->middleware('central.auth:optional');
+    Route::post('/gift-cards/validate', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'validateCode'])
+        ->middleware('central.auth:optional');
     
     // Guest Cart (Session/Cookie based cart could be handled here if needed, 
     // but usually we force auth for b2b or manage via local storage on frontend)
@@ -119,9 +129,12 @@ Route::prefix('ecommerce')->group(function () {
         Route::post('conversations/{conversation}/close', [\App\Http\Controllers\Api\Ecommerce\EcommerceConversationController::class, 'close']);
         Route::get('returns/stats', [\App\Http\Controllers\Api\Ecommerce\EcommerceReturnController::class, 'stats']);
         Route::apiResource('returns', \App\Http\Controllers\Api\Ecommerce\EcommerceReturnController::class);
+        Route::post('/gift-cards/{id}/transfer', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'transfer']);
         Route::apiResource('gift-cards', \App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class);
         Route::apiResource('reviews', \App\Http\Controllers\Api\Ecommerce\EcommerceReviewController::class);
         Route::apiResource('affiliates', \App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class);
+        Route::apiResource('product-questions', \App\Http\Controllers\Api\Ecommerce\EcommerceProductQuestionController::class);
+        Route::post('product-questions/{question}/replies', [\App\Http\Controllers\Api\Ecommerce\EcommerceProductQuestionController::class, 'addReply']);
 
         // Order Proofs
         Route::get('/proofs', [\App\Http\Controllers\Api\Ecommerce\OrderProofController::class, 'index']);
@@ -154,6 +167,7 @@ Route::prefix('ecommerce')->group(function () {
     Route::middleware(['central.auth', 'admin.only'])->group(function () {
         // Orders Management
         Route::get('/admin/orders', [\App\Http\Controllers\Api\Admin\AdminOrderController::class, 'index']);
+        Route::get('/admin/orders/stats', [\App\Http\Controllers\Api\Admin\AdminOrderController::class, 'stats']);
         Route::get('/admin/orders/{order}', [\App\Http\Controllers\Api\Admin\AdminOrderController::class, 'show']);
         Route::put('/admin/orders/{order}/status', [\App\Http\Controllers\Api\Admin\AdminOrderController::class, 'updateStatus']);
         Route::delete('/admin/orders/{order}', [\App\Http\Controllers\Api\Admin\AdminOrderController::class, 'destroy']);
@@ -163,6 +177,11 @@ Route::prefix('ecommerce')->group(function () {
         Route::get('/admin/reviews/{review}', [\App\Http\Controllers\Api\Admin\AdminReviewController::class, 'show']);
         Route::put('/admin/reviews/{review}', [\App\Http\Controllers\Api\Admin\AdminReviewController::class, 'approve']);
         Route::delete('/admin/reviews/{review}', [\App\Http\Controllers\Api\Admin\AdminReviewController::class, 'destroy']);
+
+        // Product Questions Management (Admin)
+        Route::get('/admin/product-questions', [\App\Http\Controllers\Api\Ecommerce\EcommerceProductQuestionController::class, 'index']);
+        Route::post('/admin/product-questions/{question}/replies', [\App\Http\Controllers\Api\Ecommerce\EcommerceProductQuestionController::class, 'addReply']);
+        Route::delete('/admin/product-questions/{question}', [\App\Http\Controllers\Api\Ecommerce\EcommerceProductQuestionController::class, 'destroy']);
 
         // Returns Management
         Route::get('/admin/returns', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'index']);
@@ -196,6 +215,12 @@ Route::prefix('ecommerce')->group(function () {
         Route::post('/admin/wallet/{user}/credit', [\App\Http\Controllers\Api\Admin\AdminWalletController::class, 'creditWallet']);
         Route::post('/admin/wallet/{user}/debit', [\App\Http\Controllers\Api\Admin\AdminWalletController::class, 'debitWallet']);
 
+        // Global Attributes Management
+        Route::post('admin/attributes/upload-image', [\App\Http\Controllers\Api\Admin\AdminAttributeController::class, 'uploadImage']);
+        Route::apiResource('admin/attributes', \App\Http\Controllers\Api\Admin\AdminAttributeController::class);
+        Route::apiResource('admin/delivery-times', \App\Http\Controllers\Api\Admin\DeliveryTimeController::class);
+        Route::post('admin/delivery-times/reorder', [\App\Http\Controllers\Api\Admin\DeliveryTimeController::class, 'reorder']);
+
         // Disputes Management
         Route::get('/admin/disputes', [\App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class, 'index']);
         Route::get('/admin/disputes/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class, 'show']);
@@ -210,6 +235,10 @@ Route::prefix('ecommerce')->group(function () {
 
         // Affiliates Management
         Route::get('/admin/affiliates', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'index']);
+        Route::get('/admin/affiliate-settings', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'getSettings']);
+        Route::post('/admin/affiliate-settings', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'updateSettings']);
+        Route::get('/admin/referrals', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'referralsList']);
+        Route::get('/admin/referral-commissions', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'referralCommissionsList']);
         Route::get('/admin/affiliates/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'show']);
         Route::put('/admin/affiliates/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'update']);
         Route::delete('/admin/affiliates/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'destroy']);
