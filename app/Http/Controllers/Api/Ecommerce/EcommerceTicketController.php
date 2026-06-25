@@ -163,13 +163,14 @@ class EcommerceTicketController extends Controller
         $validated = $request->validate([
             'status' => ['sometimes', 'string'],
             'priority' => ['sometimes', 'string'],
+            'assigned_to' => ['sometimes', 'nullable', 'string'],
         ]);
 
         $updates = [];
 
         if (array_key_exists('status', $validated)) {
             $status = $this->normalizeStatus($validated['status']);
-            abort_if(! in_array($status, ['closed', 'resolved'], true), 422, 'Customers can only close or resolve tickets.');
+            abort_if(! $status, 422, 'Invalid status.');
             $updates['status'] = $status;
             $updates['closed_at'] = in_array($status, ['closed', 'resolved'], true) ? now() : null;
         }
@@ -178,6 +179,12 @@ class EcommerceTicketController extends Controller
             $priority = $this->normalizePriority($validated['priority']);
             abort_if(! $priority, 422, 'Invalid priority.');
             $updates['priority'] = $priority;
+        }
+
+        if (array_key_exists('assigned_to', $validated)) {
+            $metadata = $ticket->metadata ?: [];
+            $metadata['assigned_to'] = $validated['assigned_to'];
+            $updates['metadata'] = $metadata;
         }
 
         if ($updates) {
@@ -256,7 +263,7 @@ class EcommerceTicketController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $ticket->notes()->with('user:id,name,email')->where('visibility', 'public')->latest()->get()
+            'data' => $ticket->notes()->with('user:id,name,email')->latest()->get()
                 ->map(fn (EcommerceTicketNote $note) => $this->notePayload($note)),
         ]);
     }

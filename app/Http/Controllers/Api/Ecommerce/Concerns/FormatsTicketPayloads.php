@@ -47,6 +47,7 @@ trait FormatsTicketPayloads
             'priority' => str((string) ($ticket->priority ?: 'normal'))->replace('_', ' ')->title()->toString(),
             'status' => str((string) ($ticket->status ?: 'open'))->replace('_', ' ')->title()->toString(),
             'status_key' => strtolower(str_replace([' ', '-'], '_', (string) ($ticket->status ?: 'open'))),
+            'assigned_to' => $ticket->metadata['assigned_to'] ?? null,
             'is_urgent' => (bool) $ticket->is_urgent,
             'contact_email' => $ticket->contact_email,
             'contact_phone' => $ticket->contact_phone,
@@ -82,9 +83,7 @@ trait FormatsTicketPayloads
                     'email' => $activity->user->email,
                 ] : null,
             ])->values();
-            $notes = $this->includeInternalTicketNotes()
-                ? $ticket->notes
-                : $ticket->notes->where('visibility', 'public');
+            $notes = $ticket->notes;
 
             $payload['notes'] = $notes
                 ->sortByDesc('created_at')

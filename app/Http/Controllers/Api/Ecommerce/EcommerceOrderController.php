@@ -250,10 +250,17 @@ class EcommerceOrderController extends Controller
                 }
 
                 $options = $orderItem->product_options ?? [];
+                $normalizedOptions = is_array($options) ? $options : [];
+                ksort($normalizedOptions);
+
                 $cartItem = $cart->items()
                     ->where('product_id', $orderItem->product_id)
-                    ->where('options', json_encode($options))
-                    ->first();
+                    ->get()
+                    ->first(function ($item) use ($normalizedOptions) {
+                        $itemOptions = is_array($item->options) ? $item->options : [];
+                        ksort($itemOptions);
+                        return $itemOptions === $normalizedOptions;
+                    });
 
                 if ($cartItem) {
                     $quantity = (int) $cartItem->quantity + (int) $orderItem->quantity;

@@ -261,11 +261,17 @@ class WishlistController extends Controller
             $quantity = max(1, (int) $item->quantity);
             $unitPrice = (float) ($product->sale_price ?? $product->price ?? $item->saved_price ?? 0);
             $options = $item->options ?? [];
+            $normalizedOptions = is_array($options) ? $options : [];
+            ksort($normalizedOptions);
 
             $cartItem = $cart->items()
                 ->where('product_id', $product->id)
-                ->where('options', json_encode($options))
-                ->first();
+                ->get()
+                ->first(function ($item) use ($normalizedOptions) {
+                    $itemOptions = is_array($item->options) ? $item->options : [];
+                    ksort($itemOptions);
+                    return $itemOptions === $normalizedOptions;
+                });
 
             if ($cartItem) {
                 $nextQuantity = $cartItem->quantity + $quantity;

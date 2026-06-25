@@ -57,10 +57,17 @@ class CartController extends Controller
 
         $cart = $this->activeCartFor($request);
 
+        $normalizedOptions = is_array($options) ? $options : [];
+        ksort($normalizedOptions);
+
         $cartItem = $cart->items()
             ->where('product_id', $product->id)
-            ->where('options', json_encode($options))
-            ->first();
+            ->get()
+            ->first(function ($item) use ($normalizedOptions) {
+                $itemOptions = is_array($item->options) ? $item->options : [];
+                ksort($itemOptions);
+                return $itemOptions === $normalizedOptions;
+            });
 
         if ($cartItem) {
             $nextQuantity = $cartItem->quantity + $quantity;
