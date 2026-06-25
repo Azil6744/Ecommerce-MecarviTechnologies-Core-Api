@@ -80,16 +80,16 @@ class EcommerceAffiliateController extends Controller
         $user = $request->user();
         // Check if admin to return all, or just user
         if ($user && $user->isSuperAdmin()) {
-            return response()->json(['success' => true, 'data' => EcommerceAffiliate::all()]);
+            return response()->json(['success' => true, 'data' => EcommerceAffiliate::with('user')->get()]);
         }
         
         // Get by user_id if column exists, otherwise all
         if(Schema::hasColumn((new EcommerceAffiliate)->getTable(), 'user_id')) {
-            $query = EcommerceAffiliate::where('user_id', $user->id);
+            $query = EcommerceAffiliate::where('user_id', $user->id)->with('user');
             return response()->json(['success' => true, 'data' => $query->get()]);
         }
 
-        return response()->json(['success' => true, 'data' => EcommerceAffiliate::all()]);
+        return response()->json(['success' => true, 'data' => EcommerceAffiliate::with('user')->get()]);
     }
 
     public function store(Request $request)
@@ -120,5 +120,44 @@ class EcommerceAffiliateController extends Controller
         $item = EcommerceAffiliate::findOrFail($id);
         $item->delete();
         return response()->json(['success' => true, 'message' => 'Deleted successfully']);
+    }
+
+    public function payout(Request $request, $id)
+    {
+        $commission = \App\Models\EcommerceReferralCommission::findOrFail($id);
+        
+        if ($commission->status === 'completed') {
+            return response()->json([
+                'success' => false,
+                'message' => 'This commission payout has already been processed.'
+            ], 400);
+        }
+
+        $commission->update([
+            'status' => 'completed',
+            'payout_at' => now(),
+        ]);
+
+        // Add to referrer's wallet
+        $referrer = $commission->referrer;
+        if ($referrer) {
+            $newBalance = round((float)($referrer->wallet_balance ?? 0) + (float)$commission->commission_amount, 2);
+            $referrer->update(['wallet_balance' => $newBalance]);
+
+            \App\Models\EcommerceWalletTransaction::create([
+                'user_id' => $referrer->id,
+                'type' => 'Affiliate Credit',
+                'amount' => $commission->commission_amount,
+                'balance_after' => $newBalance,
+                'description' => 'Referral commission payout for order #' . ($commission->order ? $commission->order->order_number : 'N/A'),
+                'status' => 'Completed',
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Payout processed successfully.',
+            'data' => $commission->load(['referrer', 'referred', 'order'])
+        ]);
     }
 }

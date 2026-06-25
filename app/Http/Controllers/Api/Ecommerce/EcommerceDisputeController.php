@@ -17,7 +17,7 @@ class EcommerceDisputeController extends Controller
     {
         $user = $request->user();
 
-        $query = EcommerceDispute::query()->latest();
+        $query = EcommerceDispute::query()->with(['order.items'])->latest();
 
         if ($request->filled('status')) {
             $query->where('status', $request->string('status'));
@@ -165,6 +165,8 @@ class EcommerceDisputeController extends Controller
             'phone' => ['sometimes', 'nullable', 'string', 'max:40'],
             'amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'status' => ['sometimes', Rule::in(self::ALLOWED_STATUSES)],
+            'evidence' => ['nullable', 'array', 'max:10'],
+            'evidence.*' => ['file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'],
         ];
         $validated = $request->validate($rules);
 
@@ -177,8 +179,16 @@ class EcommerceDisputeController extends Controller
             unset($validated['issue_type']);
         }
 
+        if (Schema::hasColumn((new EcommerceDispute)->getTable(), 'evidence') && $request->hasFile('evidence')) {
+            $files = is_array($item->evidence) ? $item->evidence : [];
+            foreach ($request->file('evidence') as $file) {
+                $files[] = $file->store('disputes/evidence', 'public');
+            }
+            $validated['evidence'] = $files;
+        }
+
         $item->update($validated);
-        return response()->json(['success' => true, 'data' => $item]);
+        return response()->json(['success' => true, 'data' => $item->fresh(['order.items'])]);
     }
 
     public function destroy(Request $request, $id)
@@ -209,9 +219,12 @@ class EcommerceDisputeController extends Controller
     private function resolveDispute(string $id): ?EcommerceDispute
     {
         return EcommerceDispute::query()
-            ->where('id', $id)
-            ->orWhere('dispute_number', $id)
-            ->orWhere('order_number', $id)
+            ->with(['order.items'])
+            ->where(function ($query) use ($id) {
+                $query->where('id', $id)
+                    ->orWhere('dispute_number', $id)
+                    ->orWhere('order_number', $id);
+            })
             ->first();
     }
 

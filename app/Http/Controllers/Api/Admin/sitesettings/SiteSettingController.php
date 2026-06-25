@@ -49,6 +49,13 @@ class SiteSettingController extends Controller
                 ],
                 'theme_primary_color' => $settings->theme_primary_color ?? '#ff6c00',
                 'theme_secondary_color' => $settings->theme_secondary_color ?? '#ff00a7',
+                'tax_rate' => (float)($settings->tax_rate ?? 10.00),
+                'tax_enabled' => (bool)$settings->tax_enabled,
+                'loyalty_points_earned_per_unit_price' => (float)($settings->loyalty_points_earned_per_unit_price ?? 50.00),
+                'loyalty_points_earned_points' => (int)($settings->loyalty_points_earned_points ?? 2),
+                'charity_name' => $settings->charity_name ?? 'Red Cross',
+                'charity_donation_enabled' => (bool)$settings->charity_donation_enabled,
+                'charity_default_amount' => (float)($settings->charity_default_amount ?? 1.00),
                 'header_links' => $headerLinks->map(fn ($link) => [
                     'id' => $link->id,
                     'label' => $link->label,
@@ -113,6 +120,13 @@ class SiteSettingController extends Controller
                 'header_links.*.url' => ['required_with:header_links', 'string', 'max:500'],
                 'header_links.*.show_in_header' => ['sometimes', 'boolean'],
                 'header_links.*.sort_order' => ['sometimes', 'integer', 'min:0'],
+                'tax_rate' => ['nullable', 'numeric', 'min:0'],
+                'tax_enabled' => ['sometimes', 'boolean'],
+                'loyalty_points_earned_per_unit_price' => ['nullable', 'numeric', 'min:0'],
+                'loyalty_points_earned_points' => ['nullable', 'integer', 'min:0'],
+                'charity_name' => ['nullable', 'string', 'max:255'],
+                'charity_donation_enabled' => ['sometimes', 'boolean'],
+                'charity_default_amount' => ['nullable', 'numeric', 'min:0'],
             ];
             if ($request->hasFile('logo')) {
                 $rules['logo'] = ['nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp,svg,ico,bmp,tiff,tif', 'max:51200'];
@@ -163,7 +177,9 @@ class SiteSettingController extends Controller
             
             $generalFields = [
                 'confirmation_message', 'default_message', 'loader_type', 'loader_color',
-                'maintenance_message', 'contact_us_email', 'contact_us_phone', 'contact_us_address'
+                'maintenance_message', 'contact_us_email', 'contact_us_phone', 'contact_us_address',
+                'tax_rate', 'loyalty_points_earned_per_unit_price', 'loyalty_points_earned_points',
+                'charity_name', 'charity_default_amount'
             ];
             foreach ($generalFields as $field) {
                 if ($request->has($field)) {
@@ -172,6 +188,12 @@ class SiteSettingController extends Controller
             }
             if ($request->has('maintenance_mode')) {
                 $settings->maintenance_mode = filter_var($request->input('maintenance_mode'), FILTER_VALIDATE_BOOLEAN);
+            }
+            if ($request->has('tax_enabled')) {
+                $settings->tax_enabled = filter_var($request->input('tax_enabled'), FILTER_VALIDATE_BOOLEAN);
+            }
+            if ($request->has('charity_donation_enabled')) {
+                $settings->charity_donation_enabled = filter_var($request->input('charity_donation_enabled'), FILTER_VALIDATE_BOOLEAN);
             }
             if ($request->has('logo') && ! $request->hasFile('logo') && is_string($request->input('logo'))) {
                 $settings->logo = $request->input('logo') ?: null;
@@ -272,6 +294,13 @@ class SiteSettingController extends Controller
                 'header_links.*.url' => ['required_with:header_links', 'string', 'max:500'],
                 'header_links.*.show_in_header' => ['sometimes', 'boolean'],
                 'header_links.*.sort_order' => ['sometimes', 'integer', 'min:0'],
+                'tax_rate' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+                'tax_enabled' => ['sometimes', 'boolean'],
+                'loyalty_points_earned_per_unit_price' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+                'loyalty_points_earned_points' => ['sometimes', 'nullable', 'integer', 'min:0'],
+                'charity_name' => ['sometimes', 'nullable', 'string', 'max:255'],
+                'charity_donation_enabled' => ['sometimes', 'boolean'],
+                'charity_default_amount' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             ];
             if ($request->hasFile('logo')) {
                 $rules['logo'] = ['sometimes', 'nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp,svg,ico,bmp,tiff,tif', 'max:51200'];
@@ -317,7 +346,9 @@ class SiteSettingController extends Controller
             
             $generalFields = [
                 'confirmation_message', 'default_message', 'loader_type', 'loader_color',
-                'maintenance_message', 'contact_us_email', 'contact_us_phone', 'contact_us_address'
+                'maintenance_message', 'contact_us_email', 'contact_us_phone', 'contact_us_address',
+                'tax_rate', 'loyalty_points_earned_per_unit_price', 'loyalty_points_earned_points',
+                'charity_name', 'charity_default_amount'
             ];
             foreach ($generalFields as $field) {
                 if ($request->has($field)) {
@@ -326,6 +357,12 @@ class SiteSettingController extends Controller
             }
             if ($request->has('maintenance_mode')) {
                 $settings->maintenance_mode = filter_var($request->input('maintenance_mode'), FILTER_VALIDATE_BOOLEAN);
+            }
+            if ($request->has('tax_enabled')) {
+                $settings->tax_enabled = filter_var($request->input('tax_enabled'), FILTER_VALIDATE_BOOLEAN);
+            }
+            if ($request->has('charity_donation_enabled')) {
+                $settings->charity_donation_enabled = filter_var($request->input('charity_donation_enabled'), FILTER_VALIDATE_BOOLEAN);
             }
             if ($request->has('logo') && ! $request->hasFile('logo') && is_string($request->input('logo'))) {
                 $settings->logo = $request->input('logo') ?: null;
@@ -757,6 +794,13 @@ class SiteSettingController extends Controller
             'contact_us_email' => $settings->contact_us_email,
             'contact_us_phone' => $settings->contact_us_phone,
             'contact_us_address' => $settings->contact_us_address,
+            'tax_rate' => (float)($settings->tax_rate ?? 10.00),
+            'tax_enabled' => (bool)$settings->tax_enabled,
+            'loyalty_points_earned_per_unit_price' => (float)($settings->loyalty_points_earned_per_unit_price ?? 50.00),
+            'loyalty_points_earned_points' => (int)($settings->loyalty_points_earned_points ?? 2),
+            'charity_name' => $settings->charity_name ?? 'Red Cross',
+            'charity_donation_enabled' => (bool)$settings->charity_donation_enabled,
+            'charity_default_amount' => (float)($settings->charity_default_amount ?? 1.00),
             'header_links' => $headerLinks->map(fn ($link) => [
                 'id' => $link->id,
                 'label' => $link->label,

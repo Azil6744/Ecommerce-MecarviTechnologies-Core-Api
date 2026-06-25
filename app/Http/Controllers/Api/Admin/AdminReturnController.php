@@ -76,7 +76,23 @@ class AdminReturnController extends Controller
             'approved_at' => now(),
         ]);
 
-        // TODO: Process refund to user wallet
+        // Process refund to user wallet
+        if ($return->user_id) {
+            $user = $return->user;
+            if ($user && $return->refund_amount > 0) {
+                $newBalance = round((float)($user->wallet_balance ?? 0) + (float)$return->refund_amount, 2);
+                $user->update(['wallet_balance' => $newBalance]);
+
+                \App\Models\EcommerceWalletTransaction::create([
+                    'user_id' => $user->id,
+                    'type' => 'Refund credit',
+                    'amount' => $return->refund_amount,
+                    'balance_after' => $newBalance,
+                    'description' => 'Refund for returned order #' . $return->order_number,
+                    'status' => 'Completed',
+                ]);
+            }
+        }
 
         return response()->json($return);
     }

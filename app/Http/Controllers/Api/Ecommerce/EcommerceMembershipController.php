@@ -14,16 +14,16 @@ class EcommerceMembershipController extends Controller
         $user = $request->user();
         // Check if admin to return all, or just user
         if ($user && $user->isSuperAdmin()) {
-            return response()->json(['success' => true, 'data' => EcommerceMembership::all()]);
+            return response()->json(['success' => true, 'data' => EcommerceMembership::with('user')->get()]);
         }
         
         // Get by user_id if column exists, otherwise all
         if(Schema::hasColumn((new EcommerceMembership)->getTable(), 'user_id')) {
-            $query = EcommerceMembership::where('user_id', $user->id);
+            $query = EcommerceMembership::where('user_id', $user->id)->with('user');
             return response()->json(['success' => true, 'data' => $query->get()]);
         }
 
-        return response()->json(['success' => true, 'data' => EcommerceMembership::all()]);
+        return response()->json(['success' => true, 'data' => EcommerceMembership::with('user')->get()]);
     }
 
     public function store(Request $request)

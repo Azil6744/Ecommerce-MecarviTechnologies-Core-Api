@@ -27,6 +27,7 @@ class User extends Authenticatable
         'pin',
         'role',
         'wallet_balance',
+        'loyalty_points',
         'banned_at',
         'deactivated_at',
         'last_login_at',
@@ -54,6 +55,7 @@ class User extends Authenticatable
         'deactivated_at' => 'datetime',
         'last_login_at' => 'datetime',
         'wallet_balance' => 'decimal:2',
+        'loyalty_points' => 'integer',
     ];
 
     /**

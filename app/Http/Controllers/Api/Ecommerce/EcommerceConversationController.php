@@ -20,6 +20,14 @@ class EcommerceConversationController extends Controller
             ->with(['user:id,name,email', 'latestMessage.sender:id,name,email'])
             ->withCount('messages');
 
+        if ($request->filled('linked_type')) {
+            $query->where('linked_type', $request->string('linked_type'));
+        }
+
+        if ($request->filled('linked_id')) {
+            $query->where('linked_id', $request->integer('linked_id'));
+        }
+
         if ($request->filled('status')) {
             $query->where('status', $request->string('status')->lower());
         }
@@ -62,8 +70,15 @@ class EcommerceConversationController extends Controller
         $now = Carbon::now();
         $userId = $request->user()->id;
 
-        // Check if user already has an existing conversation
-        $conversation = EcommerceConversation::where('user_id', $userId)->first();
+        // Check if user already has an existing conversation for this entity/link
+        $convoQuery = EcommerceConversation::where('user_id', $userId);
+        if (isset($validated['linked_type']) && isset($validated['linked_id'])) {
+            $convoQuery->where('linked_type', $validated['linked_type'])
+                       ->where('linked_id', $validated['linked_id']);
+        } else {
+            $convoQuery->whereNull('linked_type');
+        }
+        $conversation = $convoQuery->first();
 
         if ($conversation) {
             // Update existing conversation

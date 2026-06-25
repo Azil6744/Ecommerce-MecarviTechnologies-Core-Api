@@ -15,6 +15,7 @@ class Product extends Model
         'description',
         'short_description',
         'price',
+        'loyalty_points_price',
         'sale_price',
         'cost_price',
         'category_id',
@@ -36,6 +37,7 @@ class Product extends Model
 
     protected $casts = [
         'price' => 'decimal:2',
+        'loyalty_points_price' => 'integer',
         'sale_price' => 'decimal:2',
         'cost_price' => 'decimal:2',
         'weight' => 'decimal:2',

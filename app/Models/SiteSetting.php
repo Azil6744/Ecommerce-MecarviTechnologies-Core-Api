@@ -23,6 +23,22 @@ class SiteSetting extends Model
         'button_url',
         'theme_primary_color',
         'theme_secondary_color',
+        'tax_rate',
+        'tax_enabled',
+        'loyalty_points_earned_per_unit_price',
+        'loyalty_points_earned_points',
+        'charity_name',
+        'charity_donation_enabled',
+        'charity_default_amount',
+    ];
+
+    protected $casts = [
+        'tax_rate' => 'decimal:2',
+        'tax_enabled' => 'boolean',
+        'loyalty_points_earned_per_unit_price' => 'decimal:2',
+        'loyalty_points_earned_points' => 'integer',
+        'charity_donation_enabled' => 'boolean',
+        'charity_default_amount' => 'decimal:2',
     ];
 
     /**

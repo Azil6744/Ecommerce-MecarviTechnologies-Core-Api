@@ -15,7 +15,7 @@ trait FormatsTicketPayloads
             'user:id,name,email',
             'product:id,name,sku',
             'replies.user:id,name,email',
-            'replies.attachments',
+            'replies.replyAttachments',
             'attachments.user:id,name,email',
             'activities.user:id,name,email',
             'notes.user:id,name,email',
@@ -68,7 +68,7 @@ trait FormatsTicketPayloads
                     'name' => $reply->user->name,
                     'email' => $reply->user->email,
                 ] : null,
-                'attachments' => $reply->attachments->map(fn ($attachment) => $this->attachmentPayload($attachment)),
+                'attachments' => $reply->replyAttachments->map(fn ($attachment) => $this->attachmentPayload($attachment)),
             ])->values();
             $payload['attachments'] = $ticket->attachments->map(fn ($attachment) => $this->attachmentPayload($attachment))->values();
             $payload['activities'] = $ticket->activities->sortByDesc('created_at')->map(fn ($activity) => [

@@ -29,12 +29,16 @@ class CheckoutController extends Controller
             'shipping_amount' => 'nullable|numeric|min:0',
             'discount_amount' => 'nullable|numeric|min:0',
             'tax_amount' => 'nullable|numeric|min:0',
+            'tip_amount' => 'nullable|numeric|min:0',
+            'donation_amount' => 'nullable|numeric|min:0',
             'total_amount' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string',
             'packaging_option' => 'nullable|string|max:255',
             'gift_message' => 'nullable|string',
             'gift_card_codes' => 'nullable|array',
             'gift_card_codes.*' => 'string',
+            'pay_with_points_item_ids' => 'nullable|array',
+            'pay_with_points_item_ids.*' => 'integer',
         ]);
 
         try {
@@ -63,15 +67,72 @@ class CheckoutController extends Controller
                 ], 422);
             }
 
+            // 1. Process Loyalty Points redemption if selected
+            $pointsRedeemed = 0;
+            if ($user && !empty($validated['pay_with_points_item_ids'])) {
+                $pointsItemIds = $validated['pay_with_points_item_ids'];
+                $pointsProducts = \App\Models\Product::whereIn('id', $pointsItemIds)->get()->keyBy('id');
+
+                if ($cartItems->isNotEmpty()) {
+                    foreach ($cartItems as $cartItem) {
+                        if (in_array($cartItem->product_id, $pointsItemIds)) {
+                            $prod = $pointsProducts->get($cartItem->product_id);
+                            if ($prod && $prod->loyalty_points_price) {
+                                $pointsRedeemed += $prod->loyalty_points_price * $cartItem->quantity;
+                                $cartItem->total_price = 0.00;
+                                $cartItem->unit_price = 0.00;
+                            }
+                        }
+                    }
+                } else {
+                    $updatedRequestItems = [];
+                    foreach ($requestItems as $item) {
+                        $productId = $item['product_id'] ?? null;
+                        if ($productId && in_array($productId, $pointsItemIds)) {
+                            $prod = $pointsProducts->get($productId);
+                            if ($prod && $prod->loyalty_points_price) {
+                                $qty = (int)($item['quantity'] ?? 1);
+                                $pointsRedeemed += $prod->loyalty_points_price * $qty;
+                                $item['total_price'] = 0.00;
+                                $item['unit_price'] = 0.00;
+                                $item['price'] = 0.00;
+                            }
+                        }
+                        $updatedRequestItems[] = $item;
+                    }
+                    $requestItems = collect($updatedRequestItems);
+                }
+
+                if ($pointsRedeemed > 0) {
+                    if ($user->loyalty_points < $pointsRedeemed) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Insufficient loyalty points. You need {$pointsRedeemed} points but only have {$user->loyalty_points}."
+                        ], 400);
+                    }
+                    $user->loyalty_points -= $pointsRedeemed;
+                    $user->save();
+                }
+            }
+
             $shippingAmount = round((float) ($validated['shipping_amount'] ?? 0), 2);
             $discountAmount = round((float) ($validated['discount_amount'] ?? 0), 2);
-            $taxAmount = round((float) ($validated['tax_amount'] ?? 0), 2);
+
             $itemsSubtotal = $cartItems->isNotEmpty()
                 ? (float) $cartItems->sum('total_price')
                 : (float) $requestItems->sum(fn ($item) => (float) ($item['total_price'] ?? (($item['unit_price'] ?? $item['price'] ?? 0) * ($item['quantity'] ?? 1))));
-            
-            $originalTotalAmount = round((float) ($validated['total_amount'] ?? ($itemsSubtotal + $shippingAmount + $taxAmount - $discountAmount)), 2);
-            $totalAmount = $originalTotalAmount;
+
+            // 2. Fetch active settings for Taxes, Loyalty Point Earn, and Charity
+            $settings = \App\Models\SiteSetting::first();
+            $taxRate = $settings && $settings->tax_enabled ? (float)$settings->tax_rate : 0.00;
+            $taxAmount = $settings && $settings->tax_enabled ? round($itemsSubtotal * ($taxRate / 100), 2) : round((float) ($validated['tax_amount'] ?? 0), 2);
+
+            $tipAmount = round((float) ($validated['tip_amount'] ?? 0), 2);
+            $donationAmount = round((float) ($validated['donation_amount'] ?? 0), 2);
+
+            // Subtotal + shipping + tax + tip + donation - discount
+            $originalTotalAmount = round((float) ($itemsSubtotal + $shippingAmount + $taxAmount + $tipAmount + $donationAmount - $discountAmount), 2);
+            $totalAmount = max(0.00, $originalTotalAmount);
 
             // Gift card validation
             $giftCardCodes = $validated['gift_card_codes'] ?? [];
@@ -133,6 +194,19 @@ class CheckoutController extends Controller
             $shippingAddress = $this->addressForUser($user?->id, $validated['shipping_address_id'] ?? null);
             $billingAddress = $this->addressForUser($user?->id, $validated['billing_address_id'] ?? $validated['shipping_address_id'] ?? null);
 
+            // 3. Award Loyalty Points on order paid amount
+            $pointsEarned = 0;
+            if ($user && $totalAmount > 0) {
+                $earnPerUnitPrice = $settings && $settings->loyalty_points_earned_per_unit_price > 0 ? (float)$settings->loyalty_points_earned_per_unit_price : 50.00;
+                $earnPoints = $settings ? (int)$settings->loyalty_points_earned_points : 2;
+                $pointsEarned = (int)(floor($totalAmount / $earnPerUnitPrice) * $earnPoints);
+                
+                if ($pointsEarned > 0) {
+                    $user->loyalty_points += $pointsEarned;
+                    $user->save();
+                }
+            }
+
             $orderData = [
                 'user_id' => $user?->id,
                 'customer_name' => $user?->name ?? 'Guest Customer',
@@ -144,6 +218,10 @@ class CheckoutController extends Controller
                 'shipping_amount' => $shippingAmount,
                 'discount_amount' => $discountAmount,
                 'tax_amount' => $taxAmount,
+                'tip_amount' => $tipAmount,
+                'donation_amount' => $donationAmount,
+                'loyalty_points_earned' => $pointsEarned,
+                'loyalty_points_redeemed' => $pointsRedeemed,
                 'shipping_address' => EcommerceOrderController::formatAddress($shippingAddress),
                 'billing_address' => EcommerceOrderController::formatAddress($billingAddress),
                 'payment_method' => $validated['payment_method'],

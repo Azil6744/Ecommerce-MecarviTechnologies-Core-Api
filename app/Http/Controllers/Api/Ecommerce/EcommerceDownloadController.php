@@ -322,6 +322,25 @@ class EcommerceDownloadController extends Controller
     {
         $resolved = $this->resolveSource($payload);
         $size = $resolved['size'] ?? null;
+        
+        $thumbnail = $payload['thumbnail'] ?? null;
+        if (! $thumbnail && $resolved) {
+            $ext = strtolower($resolved['extension'] ?? '');
+            if (in_array($ext, ['png', 'jpg', 'jpeg', 'webp', 'gif'], true)) {
+                if ($resolved['type'] === 'storage') {
+                    $thumbnail = Storage::disk($resolved['disk'])->url($resolved['path']);
+                } elseif ($resolved['type'] === 'remote') {
+                    $thumbnail = $resolved['url'];
+                }
+            } elseif ($ext === 'pdf') {
+                $title = strtolower($payload['title'] ?? '');
+                if (str_contains($title, 'digitized') || str_contains($title, 'design') || str_contains($title, 'stitch')) {
+                    $thumbnail = url('/mock-assets/digitization_mockup.png');
+                } else {
+                    $thumbnail = url('/mock-assets/apparel_mockup.png');
+                }
+            }
+        }
 
         return array_merge($payload, [
             'size_bytes' => $size,
@@ -329,7 +348,7 @@ class EcommerceDownloadController extends Controller
             'date' => $payload['created_at'] ? optional(\Carbon\Carbon::parse($payload['created_at']))->format('M j, Y') : now()->format('M j, Y'),
             'download_url' => $this->downloadUrl($payload['id']),
             'preview_url' => $this->previewUrl($payload['id']),
-            'thumbnail_url' => $payload['thumbnail'] ?? null,
+            'thumbnail_url' => $thumbnail,
             'order_label' => 'Order #' . ($payload['order_number'] ?? ''),
         ]);
     }

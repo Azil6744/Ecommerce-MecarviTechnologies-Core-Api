@@ -239,9 +239,28 @@ Route::prefix('ecommerce')->group(function () {
         Route::post('/admin/affiliate-settings', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'updateSettings']);
         Route::get('/admin/referrals', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'referralsList']);
         Route::get('/admin/referral-commissions', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'referralCommissionsList']);
+        Route::post('/admin/referral-commissions/{id}/payout', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'payout']);
         Route::get('/admin/affiliates/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'show']);
         Route::put('/admin/affiliates/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'update']);
         Route::delete('/admin/affiliates/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'destroy']);
+
+        // Tax Rates Configuration
+        Route::get('/admin/tax-rates', [\App\Http\Controllers\Api\Admin\TaxRateController::class, 'index']);
+        Route::post('/admin/tax-rates', [\App\Http\Controllers\Api\Admin\TaxRateController::class, 'store']);
+        Route::put('/admin/tax-rates/{id}', [\App\Http\Controllers\Api\Admin\TaxRateController::class, 'update']);
+        Route::delete('/admin/tax-rates/{id}', [\App\Http\Controllers\Api\Admin\TaxRateController::class, 'destroy']);
+
+        // Loyalty Points Settings
+        Route::get('/admin/loyalty-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getLoyalty']);
+        Route::post('/admin/loyalty-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'saveLoyalty']);
+
+        // Charity / Donation Settings
+        Route::get('/admin/charity-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getCharity']);
+        Route::post('/admin/charity-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'saveCharity']);
+
+        // Tips Settings
+        Route::get('/admin/tips-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getTips']);
+        Route::post('/admin/tips-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'saveTips']);
     });
 
 });
