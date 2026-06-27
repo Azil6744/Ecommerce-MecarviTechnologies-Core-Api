@@ -33,7 +33,7 @@ class PaymentController extends Controller
 
     public function showOrder($order)
     {
-        $query = EcommerceOrder::query();
+        $query = EcommerceOrder::with(['items.product']);
 
         if (is_numeric($order)) {
             $query->where(function ($q) use ($order) {
@@ -44,6 +44,7 @@ class PaymentController extends Controller
         }
 
         $item = $query->firstOrFail();
+        $subtotal = (float) ($item->subtotal ?: $item->items->sum('total_price'));
 
         return response()->json([
             'success' => true,
@@ -55,7 +56,17 @@ class PaymentController extends Controller
                 'payment_method' => $item->payment_method,
                 'currency' => $item->currency ?? 'USD',
                 'total_amount' => (float) $item->total_amount,
+                'subtotal' => round($subtotal, 2),
+                'shipping_amount' => (float) ($item->shipping_amount ?? 0),
+                'discount_amount' => (float) ($item->discount_amount ?? 0),
+                'tax_amount' => (float) ($item->tax_amount ?? 0),
+                'shipping_address' => $item->shipping_address,
+                'billing_address' => $item->billing_address,
+                'shipping_method' => $item->shipping_method,
+                'loyalty_points_earned' => (int) ($item->loyalty_points_earned ?? 0),
+                'estimated_delivery_at' => optional($item->estimated_delivery_at)->toIso8601String(),
                 'created_at' => optional($item->created_at)->toIso8601String(),
+                'items' => $item->items,
             ],
         ]);
     }

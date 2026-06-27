@@ -123,6 +123,76 @@ class AdminOrderController extends Controller
             }
 
             $order->update($payload);
+
+            // Handle Loyalty Points transitions based on status changes
+            if ($order->user_id) {
+                if (in_array($request->status, ['delivered', 'completed'], true)) {
+                    // Update pending loyalty points earned on this order to available
+                    $pendingTxn = \App\Models\EcommerceLoyaltyTransaction::where('order_id', $order->id)
+                        ->where('transaction_type', 'earned')
+                        ->where('status', 'pending')
+                        ->first();
+                    if ($pendingTxn) {
+                        $pendingTxn->update(['status' => 'available']);
+                        $user = \App\Models\User::find($order->user_id);
+                        if ($user) {
+                            $user->loyalty_points = max(0, $user->loyalty_points + $pendingTxn->points);
+                            $user->save();
+                        }
+                    }
+                } elseif (in_array($request->status, ['cancelled'], true)) {
+                    // Reverse earned points
+                    $earnedTxns = \App\Models\EcommerceLoyaltyTransaction::where('order_id', $order->id)
+                        ->where('transaction_type', 'earned')
+                        ->whereIn('status', ['pending', 'available'])
+                        ->get();
+                    foreach ($earnedTxns as $t) {
+                        if ($t->status === 'available') {
+                            $user = \App\Models\User::find($order->user_id);
+                            if ($user) {
+                                $user->loyalty_points = max(0, $user->loyalty_points - $t->points);
+                                $user->save();
+                            }
+                            // Create a reversal entry
+                            \App\Models\EcommerceLoyaltyTransaction::create([
+                                'user_id' => $order->user_id,
+                                'order_id' => $order->id,
+                                'transaction_type' => 'reversed',
+                                'points' => -$t->points,
+                                'dollar_value' => $t->dollar_value,
+                                'status' => 'reversed',
+                                'reason' => "Reversed points due to order cancellation.",
+                            ]);
+                        }
+                        $t->update(['status' => 'reversed']);
+                    }
+
+                    // Return points redeemed back to customer
+                    $redeemedTxns = \App\Models\EcommerceLoyaltyTransaction::where('order_id', $order->id)
+                        ->where('transaction_type', 'redeemed')
+                        ->where('status', 'redeemed')
+                        ->get();
+                    foreach ($redeemedTxns as $t) {
+                        $user = \App\Models\User::find($order->user_id);
+                        if ($user) {
+                            $user->loyalty_points = max(0, $user->loyalty_points + abs($t->points));
+                            $user->save();
+                        }
+                        // Create a return manual adjustment
+                        \App\Models\EcommerceLoyaltyTransaction::create([
+                            'user_id' => $order->user_id,
+                            'order_id' => $order->id,
+                            'transaction_type' => 'manual_added',
+                            'points' => abs($t->points),
+                            'dollar_value' => $t->dollar_value,
+                            'status' => 'available',
+                            'reason' => "Returned redeemed points due to order cancellation.",
+                        ]);
+                        $t->update(['status' => 'reversed']);
+                    }
+                }
+            }
+
             $order->statusEvents()->create([
                 'user_id' => optional($request->user())->id,
                 'status' => $request->status,

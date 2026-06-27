@@ -295,6 +295,33 @@ class EcommerceOrderController extends Controller
         ]);
     }
 
+    public function tip(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'tip_amount' => ['required', 'numeric', 'min:0.5'],
+        ]);
+
+        $order = $this->resolveOrderForUser($request, $id);
+        if (! in_array(strtolower($order->status), ['completed', 'delivered'], true)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tips can only be added after the order is completed.',
+            ], 422);
+        }
+
+        $tipAmount = round((float) $validated['tip_amount'], 2);
+        $order->forceFill([
+            'tip_amount' => round(((float) ($order->tip_amount ?? 0)) + $tipAmount, 2),
+            'total_amount' => round(((float) $order->total_amount) + $tipAmount, 2),
+        ])->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Tip added successfully.',
+            'data' => $this->orderPayload($order->fresh(['items.product', 'proofs', 'verifications', 'statusEvents'])),
+        ]);
+    }
+
     private function resolveOrderForUser(Request $request, $id): EcommerceOrder
     {
         $query = EcommerceOrder::with(['items.product', 'proofs', 'verifications', 'statusEvents']);
@@ -337,6 +364,8 @@ class EcommerceOrderController extends Controller
             'shipping_amount' => (float) ($order->shipping_amount ?? 0),
             'discount_amount' => (float) ($order->discount_amount ?? 0),
             'tax_amount' => (float) ($order->tax_amount ?? 0),
+            'tip_amount' => (float) ($order->tip_amount ?? 0),
+            'donation_amount' => (float) ($order->donation_amount ?? 0),
             'total_amount' => (float) $order->total_amount,
             'shipping_address' => $order->shipping_address,
             'billing_address' => $order->billing_address,

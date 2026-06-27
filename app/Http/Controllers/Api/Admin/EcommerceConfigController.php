@@ -56,7 +56,33 @@ class EcommerceConfigController extends Controller
                 'points_to_dollar_ratio' => 'required|string',
                 'minimum_redeem_points' => 'required|string',
                 'max_redeem_percent' => 'required|string',
-                'expiry_days' => 'required|string'
+                'expiry_days' => 'required|string',
+                // New optional configurations
+                'program_name' => 'nullable|string',
+                'program_description' => 'nullable|string',
+                'calculation_method' => 'nullable|string',
+                'eligible_items' => 'nullable|array',
+                'excluded_categories' => 'nullable|array',
+                'signup_bonus' => 'nullable|string',
+                'first_order_bonus' => 'nullable|string',
+                'review_bonus' => 'nullable|string',
+                'referral_bonus' => 'nullable|string',
+                'birthday_bonus' => 'nullable|string',
+                'membership_bonus' => 'nullable|string',
+                'min_order_amount' => 'nullable|string',
+                'allow_partial_redemption' => 'nullable|boolean',
+                'allow_with_coupons' => 'nullable|boolean',
+                'allow_with_gift_cards' => 'nullable|boolean',
+                'enable_expiration' => 'nullable|boolean',
+                'expiration_method' => 'nullable|string',
+                'expiration_reminder_days' => 'nullable|string',
+                'availability_rule' => 'nullable|string',
+                'remove_on_cancelled' => 'nullable|boolean',
+                'reverse_on_refunded' => 'nullable|boolean',
+                'auto_recalculate_partial' => 'nullable|boolean',
+                'max_earn_per_month' => 'nullable|string',
+                'max_redeem_per_month' => 'nullable|string',
+                'fraud_protection' => 'nullable|boolean',
             ]);
 
             // Sync legacy columns in site_settings for checkout code compatibility
@@ -75,6 +101,92 @@ class EcommerceConfigController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to save loyalty config',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Perform manual customer points adjustment.
+     */
+    public function adjustPoints(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'user_id' => 'required|integer|exists:users,id',
+                'points' => 'required|integer',
+                'transaction_type' => 'required|string|in:manual_added,manual_removed,reversed,expired,bonus',
+                'reason' => 'required|string|max:1000'
+            ]);
+
+            $user = \App\Models\User::findOrFail($validated['user_id']);
+            $points = (int)$validated['points'];
+            
+            // Adjust balance
+            if ($validated['transaction_type'] === 'manual_removed') {
+                $user->loyalty_points = max(0, $user->loyalty_points - abs($points));
+            } else {
+                $user->loyalty_points = max(0, $user->loyalty_points + $points);
+            }
+            $user->save();
+
+            // Create Transaction audit log
+            $ratio = 0.01;
+            $settings = SiteSetting::first();
+            if ($settings && $settings->loyalty_settings) {
+                $loyalty = json_decode($settings->loyalty_settings, true);
+                $ratio = (float)($loyalty['points_to_dollar_ratio'] ?? 0.01);
+            }
+
+            $transaction = \App\Models\EcommerceLoyaltyTransaction::create([
+                'user_id' => $user->id,
+                'transaction_type' => $validated['transaction_type'],
+                'points' => $validated['transaction_type'] === 'manual_removed' ? -abs($points) : $points,
+                'dollar_value' => abs($points) * $ratio,
+                'status' => 'available',
+                'reason' => $validated['reason'],
+                'admin_id' => $request->user()?->id ?? 1, // Fallback to user ID 1 if not authenticated
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Customer points adjusted successfully!',
+                'data' => [
+                    'loyalty_points' => $user->loyalty_points,
+                    'transaction' => $transaction
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to adjust points',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get loyalty point transactions history.
+     */
+    public function getTransactions(Request $request)
+    {
+        try {
+            $query = \App\Models\EcommerceLoyaltyTransaction::with(['user', 'admin', 'order']);
+
+            if ($request->has('user_id')) {
+                $query->where('user_id', $request->query('user_id'));
+            }
+
+            $transactions = $query->orderBy('created_at', 'desc')->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $transactions
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch transactions list',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -212,5 +324,156 @@ class EcommerceConfigController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    public function getPackaging()
+    {
+        try {
+            $settings = SiteSetting::firstOrCreate([]);
+            $packaging = $settings->packaging_settings ? json_decode($settings->packaging_settings, true) : null;
+
+            // Handle old format or empty value
+            if (!$packaging || !isset($packaging['styles'])) {
+                $packaging = [
+                    'styles' => [
+                        [
+                            'id' => 1,
+                            'name' => 'Standard Packaging',
+                            'description' => 'Our standard secure packaging to keep your items safe.',
+                            'price' => '0.00',
+                            'includedInPrice' => true,
+                            'displayOrder' => '1',
+                            'status' => true,
+                            'isRecommended' => true,
+                        ],
+                        [
+                            'id' => 2,
+                            'name' => 'Premium Packaging',
+                            'description' => 'Premium box with tissue paper for a professional touch.',
+                            'price' => '4.99',
+                            'includedInPrice' => false,
+                            'displayOrder' => '2',
+                            'status' => true,
+                        ],
+                        [
+                            'id' => 3,
+                            'name' => 'Luxury Packaging',
+                            'description' => 'High-end gift box with ribbon for a lasting impression.',
+                            'price' => '9.99',
+                            'includedInPrice' => false,
+                            'displayOrder' => '3',
+                            'status' => true,
+                        ],
+                    ],
+                    'additional_options' => [
+                        [
+                            'id' => 1,
+                            'name' => 'Add a Thank You Card',
+                            'description' => 'Include a thank you card with your order.',
+                            'price' => '$0.99',
+                            'displayOrder' => '1',
+                            'status' => true,
+                        ],
+                        [
+                            'id' => 2,
+                            'name' => 'Extra Protection',
+                            'description' => 'Add extra bubble wrap protection.',
+                            'price' => '$1.49',
+                            'displayOrder' => '2',
+                            'status' => true,
+                        ],
+                    ],
+                ];
+            }
+
+            return response()->json(['success' => true, 'data' => $packaging]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Failed to fetch packaging config', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function savePackaging(Request $request)
+    {
+        try {
+            $settings = SiteSetting::firstOrCreate([]);
+            
+            $validated = $request->validate([
+                'styles' => 'required|array',
+                'styles.*.id' => 'required',
+                'styles.*.name' => 'required|string|max:255',
+                'styles.*.description' => 'required|string|max:500',
+                'styles.*.price' => 'required|numeric|min:0',
+                'styles.*.includedInPrice' => 'required|boolean',
+                'styles.*.displayOrder' => 'required|string|max:50',
+                'styles.*.status' => 'required|boolean',
+                'styles.*.isRecommended' => 'nullable|boolean',
+                'styles.*.image' => 'nullable|string',
+
+                'additional_options' => 'required|array',
+                'additional_options.*.id' => 'required',
+                'additional_options.*.name' => 'required|string|max:255',
+                'additional_options.*.description' => 'required|string|max:500',
+                'additional_options.*.price' => 'required|string|max:50',
+                'additional_options.*.displayOrder' => 'required|string|max:50',
+                'additional_options.*.status' => 'required|boolean',
+                'additional_options.*.image' => 'nullable|string',
+            ]);
+
+            // Save Base64 Images as files for styles
+            foreach ($validated['styles'] as $key => $style) {
+                if (isset($style['image']) && str_starts_with($style['image'], 'data:image/')) {
+                    $validated['styles'][$key]['image'] = $this->saveBase64Image($style['image'], $style['name']);
+                }
+            }
+
+            // Save Base64 Images as files for additional options
+            foreach ($validated['additional_options'] as $key => $opt) {
+                if (isset($opt['image']) && str_starts_with($opt['image'], 'data:image/')) {
+                    $validated['additional_options'][$key]['image'] = $this->saveBase64Image($opt['image'], $opt['name']);
+                }
+            }
+
+            $settings->packaging_settings = json_encode($validated);
+            $settings->save();
+
+            return response()->json(['success' => true, 'data' => $validated, 'message' => 'Packaging configuration saved successfully']);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Failed to save packaging config', 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    private function saveBase64Image($base64Data, $name)
+    {
+        if (empty($base64Data)) {
+            return '';
+        }
+
+        if (preg_match('/^data:image\/(\w+);base64,/', $base64Data, $type)) {
+            $data = substr($base64Data, strpos($base64Data, ',') + 1);
+            $type = strtolower($type[1]); // png, jpg, jpeg, gif
+
+            if (!in_array($type, ['jpg', 'jpeg', 'gif', 'png'])) {
+                return '';
+            }
+
+            $data = base64_decode($data);
+
+            if ($data === false) {
+                return '';
+            }
+
+            $fileName = uniqid() . '_' . \Illuminate\Support\Str::slug($name) . '.' . $type;
+            $dirPath = storage_path('app/public/packaging');
+
+            if (!\Illuminate\Support\Facades\File::exists($dirPath)) {
+                \Illuminate\Support\Facades\File::makeDirectory($dirPath, 0755, true);
+            }
+
+            \Illuminate\Support\Facades\File::put($dirPath . '/' . $fileName, $data);
+
+            return '/storage/packaging/' . $fileName;
+        }
+
+        return $base64Data; // Return as-is if it's already a URL/path
     }
 }

@@ -127,6 +127,14 @@ class ProductCustomizationController extends Controller
         return DB::transaction(function () use ($request, $draft, $validated) {
             $product = $draft->product;
             $customization = $this->customizationPayload($draft);
+            $shippingAmount = (float) ($validated['shipping_amount'] ?? 0);
+            $appliedCoupon = $draft->coupon_code
+                ? EcommerceCoupon::where('code', $draft->coupon_code)->first()
+                : null;
+
+            if ($appliedCoupon?->discount_type === 'free_shipping') {
+                $shippingAmount = 0;
+            }
 
             $order = EcommerceOrder::create([
                 'order_number' => EcommerceOrder::generateOrderNumber(),
@@ -140,12 +148,12 @@ class ProductCustomizationController extends Controller
                 'payment_method' => $validated['payment_method'] ?? null,
                 'notes' => $validated['notes'] ?? null,
                 'shipping_method' => $validated['shipping_method'] ?? null,
-                'shipping_amount' => $validated['shipping_amount'] ?? 0,
+                'shipping_amount' => $shippingAmount,
                 'metadata' => [
                     'customization' => $customization,
                     'draft_id' => $draft->id,
                 ],
-                'total_amount' => $draft->total_price + ($validated['shipping_amount'] ?? 0),
+                'total_amount' => $draft->total_price + $shippingAmount,
                 'subtotal' => $draft->total_price + $draft->discount_amount,
                 'discount_amount' => $draft->discount_amount,
                 'order_date' => Carbon::today(),
@@ -224,6 +232,15 @@ class ProductCustomizationController extends Controller
     {
         $coupons = EcommerceCoupon::query()
             ->where('is_active', true)
+            ->where(function ($query) {
+                $query->whereNull('starts_at')->orWhere('starts_at', '<=', now());
+            })
+            ->where(function ($query) {
+                $query->whereNull('expires_at')->orWhere('expires_at', '>=', now());
+            })
+            ->where(function ($query) {
+                $query->whereNull('usage_limit')->orWhereColumn('used_count', '<', 'usage_limit');
+            })
             ->where(function ($query) use ($product) {
                 $query->whereDoesntHave('products')
                     ->orWhereHas('products', fn ($productQuery) => $productQuery->where('products.id', $product->id));
@@ -231,7 +248,10 @@ class ProductCustomizationController extends Controller
             ->orderBy('id')
             ->get();
 
-        return response()->json(['success' => true, 'data' => $coupons]);
+        return response()->json([
+            'success' => true,
+            'data' => $coupons->map(fn (EcommerceCoupon $coupon) => $coupon->toPublicArray())->values(),
+        ]);
     }
 
     public function related(Product $product)
@@ -266,6 +286,7 @@ class ProductCustomizationController extends Controller
         $subtotal = round(max(0, $lineSubtotal + $setupFee), 2);
         $couponCode = isset($payload['coupon_code']) ? strtoupper(trim((string) $payload['coupon_code'])) : null;
         $discount = 0;
+        $appliedCoupon = null;
 
         if ($couponCode) {
             $coupon = EcommerceCoupon::where('code', $couponCode)
@@ -275,7 +296,10 @@ class ProductCustomizationController extends Controller
                 })
                 ->first();
 
-            $discount = $coupon ? $coupon->discountFor($subtotal) : 0;
+            if ($coupon && $coupon->isUsableFor($subtotal)) {
+                $discount = $coupon->discountFor($subtotal);
+                $appliedCoupon = $coupon;
+            }
         }
 
         return [
@@ -287,7 +311,8 @@ class ProductCustomizationController extends Controller
             'subtotal' => $subtotal,
             'discount_amount' => round($discount, 2),
             'total_price' => round(max(0, $subtotal - $discount), 2),
-            'coupon_code' => $discount > 0 ? $couponCode : null,
+            'coupon_code' => $appliedCoupon ? $appliedCoupon->code : null,
+            'coupon' => $appliedCoupon ? $appliedCoupon->toPublicArray() : null,
             'breakdown' => [
                 'base' => round($unitPrice * $quantity, 2),
                 'options' => $optionAdjustments['items'],

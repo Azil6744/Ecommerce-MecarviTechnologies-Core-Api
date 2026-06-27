@@ -30,6 +30,7 @@ class SiteSetting extends Model
         'charity_name',
         'charity_donation_enabled',
         'charity_default_amount',
+        'packaging_settings',
     ];
 
     protected $casts = [

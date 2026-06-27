@@ -14,6 +14,9 @@ class ProductBrand extends Model
         'priority',
         'description',
         'is_active',
+        'logo',
+        'seo_meta_title',
+        'seo_meta_description',
     ];
 
     protected $casts = [

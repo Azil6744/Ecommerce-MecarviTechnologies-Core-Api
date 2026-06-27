@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Ecommerce;
 use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\EcommerceReview;
+use App\Models\EcommerceCoupon;
 use App\Models\Product;
 use Illuminate\Http\Request;
 
@@ -96,7 +97,17 @@ class ProductController extends Controller
         $product->load([
             'category.parent',
             'previewAssets' => fn ($query) => $query->where('is_active', true),
-            'coupons' => fn ($query) => $query->where('is_active', true),
+            'coupons' => fn ($query) => $query
+                ->where('is_active', true)
+                ->where(function ($inner) {
+                    $inner->whereNull('starts_at')->orWhere('starts_at', '<=', now());
+                })
+                ->where(function ($inner) {
+                    $inner->whereNull('expires_at')->orWhere('expires_at', '>=', now());
+                })
+                ->where(function ($inner) {
+                    $inner->whereNull('usage_limit')->orWhereColumn('used_count', '<', 'usage_limit');
+                }),
             'customizationOptions' => fn ($query) => $query->where('is_active', true),
             'pricingRules' => fn ($query) => $query->where('is_active', true),
         ]);
@@ -116,6 +127,7 @@ class ProductController extends Controller
         $this->attachReviewStats(collect([$product]));
         $this->attachFrontendAliases(collect([$product]));
         $this->attachQuestionStats(collect([$product]));
+        $this->attachPublicCoupons(collect([$product]));
         $product->setAttribute('customization_options_grouped', $product->customizationOptions->groupBy('option_type')->values());
         $product->setAttribute('related_products', $relatedProducts);
         $product->setAttribute('recent_work_products', $recentWorkProducts);
@@ -179,6 +191,15 @@ class ProductController extends Controller
 
             if ($product->relationLoaded('customizationOptions')) {
                 $product->setAttribute('customizationOptions', $product->customizationOptions);
+            }
+        });
+    }
+
+    private function attachPublicCoupons($products): void
+    {
+        $products->each(function (Product $product) {
+            if ($product->relationLoaded('coupons')) {
+                $product->setRelation('coupons', $product->coupons->map(fn (EcommerceCoupon $coupon) => $coupon->toPublicArray())->values());
             }
         });
     }

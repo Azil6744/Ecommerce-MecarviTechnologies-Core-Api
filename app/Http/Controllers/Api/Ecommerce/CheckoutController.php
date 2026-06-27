@@ -39,6 +39,8 @@ class CheckoutController extends Controller
             'gift_card_codes.*' => 'string',
             'pay_with_points_item_ids' => 'nullable|array',
             'pay_with_points_item_ids.*' => 'integer',
+            'points_redeemed' => 'nullable|integer|min:0',
+            'selected_charity' => 'nullable|string|max:255',
         ]);
 
         try {
@@ -112,6 +114,23 @@ class CheckoutController extends Controller
                     }
                     $user->loyalty_points -= $pointsRedeemed;
                     $user->save();
+                }
+            }
+
+            // General checkout subtotal loyalty points discount redemption
+            $generalPointsRedeemed = 0;
+            if ($user && !empty($validated['points_redeemed'])) {
+                $generalPointsRedeemed = (int)$validated['points_redeemed'];
+                if ($generalPointsRedeemed > 0) {
+                    if ($user->loyalty_points < $generalPointsRedeemed) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => "Insufficient loyalty points. You need {$generalPointsRedeemed} points but only have {$user->loyalty_points}."
+                        ], 400);
+                    }
+                    $user->loyalty_points -= $generalPointsRedeemed;
+                    $user->save();
+                    $pointsRedeemed += $generalPointsRedeemed;
                 }
             }
 
@@ -201,10 +220,7 @@ class CheckoutController extends Controller
                 $earnPoints = $settings ? (int)$settings->loyalty_points_earned_points : 2;
                 $pointsEarned = (int)(floor($totalAmount / $earnPerUnitPrice) * $earnPoints);
                 
-                if ($pointsEarned > 0) {
-                    $user->loyalty_points += $pointsEarned;
-                    $user->save();
-                }
+                // Points start as pending, only awarded to user balance when completed/delivered.
             }
 
             $orderData = [
@@ -237,6 +253,85 @@ class CheckoutController extends Controller
             ];
 
             $order = EcommerceOrder::create($orderData);
+
+            // Log Donation transaction in the database if donation was made
+            if ($donationAmount > 0) {
+                $charityName = $validated['selected_charity'] ?? 'Feeding America';
+                $charity = \App\Models\Charity::where('name', $charityName)->first();
+                $charityCategory = $charity ? $charity->category : 'Charity';
+                $charityLogo = $charity ? $charity->logo_svg_type : 'generic_charity';
+
+                $donorName = $user ? $user->name : ($order->customer_name ?? 'Guest Customer');
+                $donorEmail = $user ? $user->email : ($order->customer_email ?? 'guest@example.com');
+
+                $pmBrand = 'Visa';
+                $pmDetails = '**** 4242';
+                $methodLower = strtolower((string)($validated['payment_method'] ?? ''));
+                if ($methodLower === 'paypal') {
+                    $pmBrand = 'PayPal';
+                    $pmDetails = 'PayPal';
+                } else if ($methodLower === 'apple_pay') {
+                    $pmBrand = 'Apple Pay';
+                    $pmDetails = 'Apple Pay';
+                } else if ($methodLower === 'google_pay') {
+                    $pmBrand = 'Google Pay';
+                    $pmDetails = 'Google Pay';
+                } else if ($methodLower === 'saved_card') {
+                    $pmBrand = 'Visa';
+                    $pmDetails = 'Saved Card';
+                }
+
+                \App\Models\Donation::create([
+                    'order_id' => $order->order_number,
+                    'txn_id' => 'TXN-' . rand(10000000, 99999999),
+                    'donor_name' => $donorName,
+                    'donor_email' => $donorEmail,
+                    'charity_name' => $charityName,
+                    'charity_category' => $charityCategory,
+                    'charity_logo_type' => $charityLogo,
+                    'amount' => $donationAmount,
+                    'payment_method_brand' => $pmBrand,
+                    'payment_method_details' => $pmDetails,
+                    'payment_method_email' => $user ? $user->email : null,
+                    'status' => 'Completed',
+                ]);
+            }
+
+            // Log Loyalty points transactions in the database
+            if ($user) {
+                $ratio = 0.01;
+                if ($settings && $settings->loyalty_settings) {
+                    $loyalty = json_decode($settings->loyalty_settings, true);
+                    $ratio = (float)($loyalty['points_to_dollar_ratio'] ?? 0.01);
+                }
+
+                // Points earned (pending status)
+                if ($pointsEarned > 0) {
+                    \App\Models\EcommerceLoyaltyTransaction::create([
+                        'user_id' => $user->id,
+                        'order_id' => $order->id,
+                        'transaction_type' => 'earned',
+                        'points' => $pointsEarned,
+                        'dollar_value' => $pointsEarned * $ratio,
+                        'status' => 'pending',
+                        'reason' => "Points pending for order {$order->order_number}",
+                    ]);
+                }
+
+                // Points redeemed (redeemed status)
+                if ($pointsRedeemed > 0) {
+                    \App\Models\EcommerceLoyaltyTransaction::create([
+                        'user_id' => $user->id,
+                        'order_id' => $order->id,
+                        'transaction_type' => 'redeemed',
+                        'points' => -$pointsRedeemed,
+                        'dollar_value' => $pointsRedeemed * $ratio,
+                        'status' => 'redeemed',
+                        'reason' => "Redeemed points on order {$order->order_number}",
+                    ]);
+                }
+            }
+
             $order->statusEvents()->create([
                 'user_id' => $user?->id,
                 'status' => 'pending',

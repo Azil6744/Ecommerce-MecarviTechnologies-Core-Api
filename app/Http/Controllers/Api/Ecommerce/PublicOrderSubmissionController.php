@@ -48,6 +48,11 @@ class PublicOrderSubmissionController extends Controller
         $unitPrice = $pricing['unit_price'];
         $quantity = $pricing['quantity'];
         $total = $pricing['total_price'];
+        $shippingAmount = (float) ($validated['shipping_amount'] ?? 0);
+
+        if (data_get($pricing, 'coupon.discount_type') === 'free_shipping') {
+            $shippingAmount = 0;
+        }
 
         if (data_get($validated, 'page_context.intent') === 'quote') {
             $quote = EcommerceQuotation::create([
@@ -104,7 +109,7 @@ class PublicOrderSubmissionController extends Controller
             'discount_amount' => $pricing['discount_amount'],
             'subtotal' => $pricing['subtotal'] ?? $total,
             'shipping_method' => $validated['shipping_method'] ?? null,
-            'shipping_amount' => $validated['shipping_amount'] ?? 0,
+            'shipping_amount' => $shippingAmount,
             'metadata' => [
                 'customization' => $validated['customization'] ?? [],
                 'page_context' => $validated['page_context'] ?? [],
@@ -115,7 +120,7 @@ class PublicOrderSubmissionController extends Controller
                     'attributes' => $product->attributes ?? [],
                 ],
             ],
-            'total_amount' => $total + ($validated['shipping_amount'] ?? 0),
+            'total_amount' => $total + $shippingAmount,
             'order_date' => Carbon::today(),
         ]);
         $order->statusEvents()->create([

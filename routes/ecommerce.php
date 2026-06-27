@@ -19,6 +19,11 @@ Route::prefix('ecommerce')->group(function () {
     Route::get('/shipping-methods', [\App\Http\Controllers\Api\Ecommerce\ShippingMethodController::class, 'index']);
     Route::get('/delivery-times', [\App\Http\Controllers\Api\Ecommerce\DeliveryTimeController::class, 'index']);
     Route::get('/products', [\App\Http\Controllers\Api\Ecommerce\ProductController::class, 'index']);
+    Route::get('/coupons/validate', [\App\Http\Controllers\Api\Admin\EcommerceCouponController::class, 'validateCoupon']);
+    Route::get('/charity-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getCharity']);
+    Route::get('/tips-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getTips']);
+    Route::get('/packaging-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getPackaging']);
+    Route::get('/loyalty-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getLoyalty']);
     Route::post('/products/{product}/price-preview', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'pricePreview']);
     Route::post('/products/{product}/customization-drafts', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'storeDraft'])
         ->middleware('central.auth:optional');
@@ -91,6 +96,7 @@ Route::prefix('ecommerce')->group(function () {
         Route::get('/orders/stats', [\App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class, 'stats']);
         Route::get('/orders/track', [\App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class, 'track']);
         Route::post('/orders/{order}/cancel', [\App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class, 'cancel']);
+        Route::post('/orders/{order}/tip', [\App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class, 'tip']);
         Route::get('/orders/{order}/invoice', [\App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class, 'invoice']);
         Route::post('/orders/{order}/reorder', [\App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class, 'reorder']);
         Route::apiResource('orders', \App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class);
@@ -250,9 +256,14 @@ Route::prefix('ecommerce')->group(function () {
         Route::put('/admin/tax-rates/{id}', [\App\Http\Controllers\Api\Admin\TaxRateController::class, 'update']);
         Route::delete('/admin/tax-rates/{id}', [\App\Http\Controllers\Api\Admin\TaxRateController::class, 'destroy']);
 
+        // Coupons Management
+        Route::apiResource('admin/coupons', \App\Http\Controllers\Api\Admin\EcommerceCouponController::class);
+
         // Loyalty Points Settings
         Route::get('/admin/loyalty-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getLoyalty']);
         Route::post('/admin/loyalty-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'saveLoyalty']);
+        Route::post('/admin/loyalty-config/adjust-points', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'adjustPoints']);
+        Route::get('/admin/loyalty-config/transactions', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getTransactions']);
 
         // Charity / Donation Settings
         Route::get('/admin/charity-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getCharity']);
@@ -261,6 +272,10 @@ Route::prefix('ecommerce')->group(function () {
         // Tips Settings
         Route::get('/admin/tips-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getTips']);
         Route::post('/admin/tips-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'saveTips']);
+
+        // Packaging Settings
+        Route::get('/admin/packaging-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getPackaging']);
+        Route::post('/admin/packaging-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'savePackaging']);
     });
 
 });

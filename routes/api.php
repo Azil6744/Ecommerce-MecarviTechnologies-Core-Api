@@ -848,6 +848,16 @@ Route::prefix('v1')->group(function () {
         Route::get('/admin/gift-card-orders', [\App\Http\Controllers\Api\Ecommerce\GiftCardOrderController::class, 'index']);
         Route::post('/admin/gift-card-orders/{id}/issue', [\App\Http\Controllers\Api\Ecommerce\GiftCardOrderController::class, 'issue']);
 
+        // Charity Management
+        Route::get('/admin/charities', [\App\Http\Controllers\Api\Admin\CharityController::class, 'index']);
+        Route::post('/admin/charities', [\App\Http\Controllers\Api\Admin\CharityController::class, 'store']);
+        Route::put('/admin/charities/{id}', [\App\Http\Controllers\Api\Admin\CharityController::class, 'update']);
+        Route::delete('/admin/charities/{id}', [\App\Http\Controllers\Api\Admin\CharityController::class, 'destroy']);
+        Route::patch('/admin/charities/{id}/status', [\App\Http\Controllers\Api\Admin\CharityController::class, 'toggleStatus']);
+
+        // Donation History
+        Route::get('/admin/donations', [\App\Http\Controllers\Api\Admin\DonationController::class, 'index']);
+
         // Payment Gateways
         Route::get('/admin/payment-gateways', [\App\Http\Controllers\Api\Admin\PaymentGatewayController::class, 'index']);
         Route::post('/admin/payment-gateways', [\App\Http\Controllers\Api\Admin\PaymentGatewayController::class, 'store']);
