@@ -10,6 +10,7 @@ use App\Models\EcommerceAddress;
 use App\Models\EcommerceOrder;
 use App\Models\EcommerceOrderItem;
 use App\Models\EcommerceGiftCard;
+use App\Models\EcommerceCoupon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 
@@ -28,6 +29,7 @@ class CheckoutController extends Controller
             'payment_method' => 'required|string|max:255',
             'shipping_amount' => 'nullable|numeric|min:0',
             'discount_amount' => 'nullable|numeric|min:0',
+            'coupon_code' => 'nullable|string|max:100',
             'tax_amount' => 'nullable|numeric|min:0',
             'tip_amount' => 'nullable|numeric|min:0',
             'donation_amount' => 'nullable|numeric|min:0',
@@ -41,6 +43,10 @@ class CheckoutController extends Controller
             'pay_with_points_item_ids.*' => 'integer',
             'points_redeemed' => 'nullable|integer|min:0',
             'selected_charity' => 'nullable|string|max:255',
+            'packaging_amount' => 'nullable|numeric|min:0',
+            'item_packaging_configs' => 'nullable|array',
+            'add_thank_you_card' => 'nullable|boolean',
+            'add_extra_protection' => 'nullable|boolean',
         ]);
 
         try {
@@ -141,6 +147,44 @@ class CheckoutController extends Controller
                 ? (float) $cartItems->sum('total_price')
                 : (float) $requestItems->sum(fn ($item) => (float) ($item['total_price'] ?? (($item['unit_price'] ?? $item['price'] ?? 0) * ($item['quantity'] ?? 1))));
 
+            $productIds = $cartItems->isNotEmpty()
+                ? $cartItems->pluck('product_id')->filter()->map(fn ($id) => (int) $id)->values()->all()
+                : $requestItems->pluck('product_id')->filter()->map(fn ($id) => (int) $id)->values()->all();
+            $couponContext = [
+                'product_ids' => $productIds,
+                'user_id' => $user?->id,
+                'customer_email' => $user?->email ?? $request->input('customer_email'),
+            ];
+
+            $appliedCoupon = null;
+            $couponCode = strtoupper(trim((string) ($validated['coupon_code'] ?? '')));
+            if ($couponCode !== '') {
+                $coupon = EcommerceCoupon::query()
+                    ->with('products:id')
+                    ->whereRaw('UPPER(code) = ?', [$couponCode])
+                    ->first();
+
+                if (! $coupon || ! $coupon->isUsableFor($itemsSubtotal, $couponContext)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Coupon is not valid for this order.',
+                    ], 422);
+                }
+
+                $appliedCoupon = $coupon;
+                $discountAmount = max($discountAmount, $coupon->discountFor($itemsSubtotal, $couponContext));
+            } else {
+                $appliedCoupon = $this->bestAutoCoupon($itemsSubtotal, $couponContext);
+                if ($appliedCoupon) {
+                    $couponCode = $appliedCoupon->code;
+                    $discountAmount = max($discountAmount, $appliedCoupon->discountFor($itemsSubtotal, $couponContext));
+                }
+            }
+
+            if ($appliedCoupon?->discount_type === 'free_shipping') {
+                $shippingAmount = max(0, round($shippingAmount - $appliedCoupon->shippingDiscountFor($shippingAmount, $itemsSubtotal, $couponContext), 2));
+            }
+
             // 2. Fetch active settings for Taxes, Loyalty Point Earn, and Charity
             $settings = \App\Models\SiteSetting::first();
             $taxRate = $settings && $settings->tax_enabled ? (float)$settings->tax_rate : 0.00;
@@ -148,9 +192,10 @@ class CheckoutController extends Controller
 
             $tipAmount = round((float) ($validated['tip_amount'] ?? 0), 2);
             $donationAmount = round((float) ($validated['donation_amount'] ?? 0), 2);
+            $packagingAmount = round((float) ($validated['packaging_amount'] ?? 0), 2);
 
-            // Subtotal + shipping + tax + tip + donation - discount
-            $originalTotalAmount = round((float) ($itemsSubtotal + $shippingAmount + $taxAmount + $tipAmount + $donationAmount - $discountAmount), 2);
+            // Subtotal + shipping + tax + tip + donation + packaging - discount
+            $originalTotalAmount = round((float) ($itemsSubtotal + $shippingAmount + $taxAmount + $tipAmount + $donationAmount + $packagingAmount - $discountAmount), 2);
             $totalAmount = max(0.00, $originalTotalAmount);
 
             // Gift card validation
@@ -245,7 +290,13 @@ class CheckoutController extends Controller
                 'notes' => $validated['notes'] ?? null,
                 'metadata' => [
                     'packaging_option' => $validated['packaging_option'] ?? null,
+                    'packaging_amount' => $packagingAmount ?? 0,
+                    'item_packaging_configs' => $validated['item_packaging_configs'] ?? null,
+                    'add_thank_you_card' => $validated['add_thank_you_card'] ?? false,
+                    'add_extra_protection' => $validated['add_extra_protection'] ?? false,
                     'gift_message' => $validated['gift_message'] ?? null,
+                    'coupon_code' => $appliedCoupon?->code,
+                    'coupon' => $appliedCoupon?->toManagementArray(),
                     'checkout_payload' => $validated,
                 ],
                 'order_number' => EcommerceOrder::generateOrderNumber(),
@@ -253,6 +304,10 @@ class CheckoutController extends Controller
             ];
 
             $order = EcommerceOrder::create($orderData);
+
+            if ($appliedCoupon) {
+                $appliedCoupon->increment('used_count');
+            }
 
             // Log Donation transaction in the database if donation was made
             if ($donationAmount > 0) {
@@ -458,5 +513,28 @@ class CheckoutController extends Controller
         }
 
         return EcommerceAddress::where('user_id', $userId)->whereKey((int) $addressId)->first();
+    }
+
+    private function bestAutoCoupon(float $itemsSubtotal, array $context): ?EcommerceCoupon
+    {
+        return EcommerceCoupon::query()
+            ->with('products:id')
+            ->where('is_active', true)
+            ->where(function ($query) {
+                $query->whereNull('starts_at')->orWhere('starts_at', '<=', now());
+            })
+            ->where(function ($query) {
+                $query->whereNull('expires_at')->orWhere('expires_at', '>=', now());
+            })
+            ->where(function ($query) {
+                $query->whereNull('usage_limit')->orWhereColumn('used_count', '<', 'usage_limit');
+            })
+            ->get()
+            ->filter(fn (EcommerceCoupon $coupon) => ($coupon->metadata['apply_method'] ?? 'code') === 'auto')
+            ->filter(fn (EcommerceCoupon $coupon) => $coupon->isUsableFor($itemsSubtotal, $context))
+            ->sortByDesc(fn (EcommerceCoupon $coupon) => $coupon->discount_type === 'free_shipping'
+                ? 0
+                : $coupon->discountFor($itemsSubtotal, $context))
+            ->first();
     }
 }

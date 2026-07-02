@@ -49,9 +49,24 @@ class PublicOrderSubmissionController extends Controller
         $quantity = $pricing['quantity'];
         $total = $pricing['total_price'];
         $shippingAmount = (float) ($validated['shipping_amount'] ?? 0);
+        $appliedCoupon = $pricing['coupon_code']
+            ? EcommerceCoupon::where('code', $pricing['coupon_code'])->first()
+            : null;
+        $couponContext = [
+            'product_ids' => [$product->id],
+            'user_id' => optional($request->user())->id,
+            'customer_email' => $validated['customer_email'],
+        ];
 
-        if (data_get($pricing, 'coupon.discount_type') === 'free_shipping') {
-            $shippingAmount = 0;
+        if ($pricing['coupon_code'] && (! $appliedCoupon || ! $appliedCoupon->isUsableFor((float) ($pricing['subtotal'] ?? $total + $pricing['discount_amount']), $couponContext))) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Coupon is not valid for this order.',
+            ], 422);
+        }
+
+        if ($appliedCoupon?->discount_type === 'free_shipping') {
+            $shippingAmount = max(0, $shippingAmount - $appliedCoupon->shippingDiscountFor($shippingAmount, (float) ($pricing['subtotal'] ?? $total + $pricing['discount_amount']), $couponContext));
         }
 
         if (data_get($validated, 'page_context.intent') === 'quote') {
@@ -140,8 +155,8 @@ class PublicOrderSubmissionController extends Controller
             'product_options' => $validated['customization'] ?? [],
         ]);
 
-        if ($pricing['coupon_code']) {
-            EcommerceCoupon::where('code', $pricing['coupon_code'])->increment('used_count');
+        if ($appliedCoupon) {
+            $appliedCoupon->increment('used_count');
         }
 
         return response()->json([

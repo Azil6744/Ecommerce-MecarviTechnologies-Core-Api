@@ -47,22 +47,30 @@ class EcommerceCoupon extends Model
         return $this->belongsToMany(Product::class, 'ecommerce_coupon_product', 'coupon_id', 'product_id');
     }
 
-    public function isUsableFor(float $subtotal): bool
+    public function isUsableFor(float $subtotal, array $context = []): bool
     {
         if (! $this->is_active) return false;
         if ($this->starts_at && $this->starts_at->isFuture()) return false;
         if ($this->expires_at && $this->expires_at->isPast()) return false;
         if ($this->usage_limit !== null && $this->used_count >= $this->usage_limit) return false;
+        if ($subtotal < (float) $this->min_order_amount) return false;
 
-        return $subtotal >= (float) $this->min_order_amount;
+        $metadata = $this->metadata ?? [];
+        $maxOrderAmount = $metadata['max_order_amount'] ?? null;
+        if ($maxOrderAmount !== null && $maxOrderAmount !== '' && $subtotal > (float) $maxOrderAmount) return false;
+
+        if (! $this->appliesToProducts($context['product_ids'] ?? [])) return false;
+        if (! $this->passesCustomerLimit($context)) return false;
+
+        return true;
     }
 
-    public function discountFor(float $subtotal): float
+    public function discountFor(float $subtotal, array $context = []): float
     {
-        if (! $this->isUsableFor($subtotal)) return 0;
+        if (! $this->isUsableFor($subtotal, $context)) return 0;
 
         if ($this->discount_type === 'percentage') {
-            return round($subtotal * ((float) $this->discount_value / 100), 2);
+            return $this->capDiscount(round($subtotal * ((float) $this->discount_value / 100), 2));
         }
 
         if ($this->discount_type === 'free_shipping') {
@@ -71,10 +79,90 @@ class EcommerceCoupon extends Model
 
         if ($this->discount_type === 'buy_x_get_y') {
             $reward = (float) ($this->metadata['reward_amount'] ?? $this->metadata['discount_value'] ?? $this->discount_value ?? 0);
-            return min($subtotal, round($reward, 2));
+            return min($subtotal, $this->capDiscount(round($reward, 2)));
         }
 
-        return min($subtotal, round((float) $this->discount_value, 2));
+        return min($subtotal, $this->capDiscount(round((float) $this->discount_value, 2)));
+    }
+
+    public function shippingDiscountFor(float $shippingAmount, float $subtotal, array $context = []): float
+    {
+        if ($this->discount_type !== 'free_shipping' || ! $this->isUsableFor($subtotal, $context)) {
+            return 0;
+        }
+
+        $maxShippingCost = $this->metadata['max_shipping_cost'] ?? null;
+        $discount = round(max(0, $shippingAmount), 2);
+
+        if ($maxShippingCost !== null && $maxShippingCost !== '') {
+            $discount = min($discount, round((float) $maxShippingCost, 2));
+        }
+
+        return $discount;
+    }
+
+    public function appliesToProducts(array $productIds = []): bool
+    {
+        $productIds = array_values(array_filter(array_map('intval', $productIds)));
+        $metadata = $this->metadata ?? [];
+
+        if (($metadata['apply_scope'] ?? 'all_products') === 'all_products' && ! ($metadata['exclude_selected_products'] ?? false)) {
+            return true;
+        }
+
+        $couponProductIds = $this->relationLoaded('products')
+            ? $this->products->pluck('id')->map(fn ($id) => (int) $id)->all()
+            : $this->products()->pluck('products.id')->map(fn ($id) => (int) $id)->all();
+
+        if (($metadata['apply_scope'] ?? null) === 'specific_products' && empty($couponProductIds)) {
+            return false;
+        }
+
+        if (! empty($couponProductIds) && empty($productIds)) {
+            return false;
+        }
+
+        if (! empty($couponProductIds) && empty(array_intersect($couponProductIds, $productIds))) {
+            return false;
+        }
+
+        return true;
+    }
+
+    public function passesCustomerLimit(array $context = []): bool
+    {
+        $metadata = $this->metadata ?? [];
+        $limit = (int) ($metadata['per_customer_limit'] ?? 0);
+        if ($limit <= 0) {
+            return true;
+        }
+
+        $userId = $context['user_id'] ?? null;
+        $email = strtolower(trim((string) ($context['customer_email'] ?? '')));
+        if (! $userId && $email === '') {
+            return true;
+        }
+
+        $used = EcommerceOrder::query()
+            ->where(function ($query) {
+                $query->where('metadata->coupon_code', $this->code)
+                    ->orWhere('metadata->coupon->code', $this->code);
+            })
+            ->when($userId, fn ($query) => $query->where('user_id', $userId))
+            ->when(! $userId && $email !== '', fn ($query) => $query->whereRaw('LOWER(customer_email) = ?', [$email]))
+            ->count();
+
+        return $used < $limit;
+    }
+
+    private function capDiscount(float $discount): float
+    {
+        $maxDiscount = $this->metadata['max_discount_amount'] ?? null;
+        if ($maxDiscount !== null && $maxDiscount !== '' && (float) $maxDiscount > 0) {
+            return min($discount, round((float) $maxDiscount, 2));
+        }
+
+        return $discount;
     }
 
     public function getStatusAttribute(): string

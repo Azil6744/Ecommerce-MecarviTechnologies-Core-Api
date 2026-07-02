@@ -150,6 +150,11 @@ class EcommerceCouponController extends Controller
         $validated = $request->validate([
             'code' => 'required|string',
             'subtotal' => 'nullable|numeric|min:0',
+            'shipping_amount' => 'nullable|numeric|min:0',
+            'product_id' => 'nullable|integer|exists:products,id',
+            'product_ids' => 'nullable|array',
+            'product_ids.*' => 'integer|exists:products,id',
+            'customer_email' => 'nullable|email',
         ]);
 
         $coupon = EcommerceCoupon::query()
@@ -164,15 +169,24 @@ class EcommerceCouponController extends Controller
         $subtotal = (float) ($validated['subtotal'] ?? 0);
 
         $now = now();
+        $context = [
+            'product_ids' => array_values(array_filter(array_merge(
+                isset($validated['product_id']) ? [(int) $validated['product_id']] : [],
+                array_map('intval', $validated['product_ids'] ?? [])
+            ))),
+            'customer_email' => $validated['customer_email'] ?? null,
+        ];
+
         if (! $coupon->is_active || ($coupon->starts_at && $coupon->starts_at > $now) || ($coupon->expires_at && $coupon->expires_at < $now) || ($coupon->usage_limit !== null && $coupon->used_count >= $coupon->usage_limit)) {
             return response()->json(['success' => false, 'message' => 'Coupon is not active.'], 422);
         }
 
-        if ((float) $coupon->min_order_amount > 0 && $subtotal < (float) $coupon->min_order_amount) {
-            return response()->json(['success' => false, 'message' => 'Order does not meet the minimum amount for this coupon.'], 422);
+        if (! $coupon->isUsableFor($subtotal, $context)) {
+            return response()->json(['success' => false, 'message' => 'Coupon is not valid for this order.'], 422);
         }
 
-        $discount = $coupon->discountFor($subtotal);
+        $discount = $coupon->discountFor($subtotal, $context);
+        $shippingDiscount = $coupon->shippingDiscountFor((float) ($validated['shipping_amount'] ?? 0), $subtotal, $context);
 
         return response()->json([
             'success' => true,
@@ -183,6 +197,7 @@ class EcommerceCouponController extends Controller
                 'discount_type' => $coupon->discount_type,
                 'discount_value' => (float) $coupon->discount_value,
                 'discount_amount' => $discount,
+                'shipping_discount_amount' => $shippingDiscount,
                 'min_order_amount' => (float) $coupon->min_order_amount,
                 'is_active' => (bool) $coupon->is_active,
                 'status' => $coupon->status,

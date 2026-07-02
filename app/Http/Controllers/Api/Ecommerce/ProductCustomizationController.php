@@ -131,9 +131,21 @@ class ProductCustomizationController extends Controller
             $appliedCoupon = $draft->coupon_code
                 ? EcommerceCoupon::where('code', $draft->coupon_code)->first()
                 : null;
+            $couponContext = [
+                'product_ids' => [$product->id],
+                'user_id' => optional($request->user())->id ?? $draft->user_id,
+                'customer_email' => $validated['customer_email'],
+            ];
+
+            if ($draft->coupon_code && (! $appliedCoupon || ! $appliedCoupon->isUsableFor((float) ($draft->total_price + $draft->discount_amount), $couponContext))) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Coupon is not valid for this order.',
+                ], 422);
+            }
 
             if ($appliedCoupon?->discount_type === 'free_shipping') {
-                $shippingAmount = 0;
+                $shippingAmount = max(0, $shippingAmount - $appliedCoupon->shippingDiscountFor($shippingAmount, (float) ($draft->total_price + $draft->discount_amount), $couponContext));
             }
 
             $order = EcommerceOrder::create([
@@ -175,8 +187,8 @@ class ProductCustomizationController extends Controller
                 'product_options' => $customization,
             ]);
 
-            if ($draft->coupon_code) {
-                EcommerceCoupon::where('code', $draft->coupon_code)->increment('used_count');
+            if ($appliedCoupon) {
+                $appliedCoupon->increment('used_count');
             }
 
             $draft->update(['status' => 'converted']);
@@ -296,8 +308,9 @@ class ProductCustomizationController extends Controller
                 })
                 ->first();
 
-            if ($coupon && $coupon->isUsableFor($subtotal)) {
-                $discount = $coupon->discountFor($subtotal);
+            $context = ['product_ids' => [$product->id]];
+            if ($coupon && $coupon->isUsableFor($subtotal, $context)) {
+                $discount = $coupon->discountFor($subtotal, $context);
                 $appliedCoupon = $coupon;
             }
         }

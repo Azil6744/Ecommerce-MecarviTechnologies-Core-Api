@@ -21,6 +21,7 @@ Route::prefix('ecommerce')->group(function () {
     Route::get('/products', [\App\Http\Controllers\Api\Ecommerce\ProductController::class, 'index']);
     Route::get('/coupons/validate', [\App\Http\Controllers\Api\Admin\EcommerceCouponController::class, 'validateCoupon']);
     Route::get('/charity-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getCharity']);
+    Route::get('/charities', [\App\Http\Controllers\Api\Admin\CharityController::class, 'index']);
     Route::get('/tips-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getTips']);
     Route::get('/packaging-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getPackaging']);
     Route::get('/loyalty-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getLoyalty']);
