@@ -25,12 +25,21 @@ class EmailTemplateController extends Controller
         try {
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
+                'event_key' => 'nullable|string|max:255',
                 'subject' => 'nullable|string|max:255',
                 'category' => 'required|string|in:system,onboarding,orders,sales,promotional',
                 'preview_text' => 'nullable|string',
+                'heading' => 'nullable|string|max:255',
+                'body_text' => 'nullable|string',
+                'button_text' => 'nullable|string|max:255',
+                'button_url' => 'nullable|string|max:1000',
+                'footer_text' => 'nullable|string',
                 'body_html' => 'nullable|string',
                 'status' => 'sometimes|string|in:draft,published',
                 'variables' => 'nullable|array',
+                'send_to_customer' => 'boolean',
+                'send_to_admin' => 'boolean',
+                'admin_recipients' => 'nullable|array',
             ]);
             $validated['slug'] = Str::slug($validated['name']) . '-' . Str::random(4);
             $template = EmailTemplate::create($validated);
@@ -58,12 +67,21 @@ class EmailTemplateController extends Controller
             $template = EmailTemplate::findOrFail($id);
             $validated = $request->validate([
                 'name' => 'sometimes|string|max:255',
+                'event_key' => 'nullable|string|max:255',
                 'subject' => 'nullable|string|max:255',
                 'category' => 'sometimes|string|in:system,onboarding,orders,sales,promotional',
                 'preview_text' => 'nullable|string',
+                'heading' => 'nullable|string|max:255',
+                'body_text' => 'nullable|string',
+                'button_text' => 'nullable|string|max:255',
+                'button_url' => 'nullable|string|max:1000',
+                'footer_text' => 'nullable|string',
                 'body_html' => 'nullable|string',
                 'status' => 'sometimes|string|in:draft,published',
                 'variables' => 'nullable|array',
+                'send_to_customer' => 'boolean',
+                'send_to_admin' => 'boolean',
+                'admin_recipients' => 'nullable|array',
             ]);
             $template->update($validated);
             return response()->json(['success' => true, 'message' => 'Template updated.', 'data' => ['template' => $template]]);

@@ -153,6 +153,9 @@ Route::prefix('v1')->group(function () {
     Route::get('/public/home-payload', [\App\Http\Controllers\Api\PublicHomePayloadController::class, 'show'])
         ->name('api.v1.public.home-payload.show');
 
+    Route::post('/internal/notifications/user-registered', [\App\Http\Controllers\Api\InternalNotificationController::class, 'userRegistered'])
+        ->name('api.v1.internal.notifications.user-registered');
+
     // Get Home Page Content (Public)
     // GET /api/v1/home-page
     // Returns: Current home page configuration (public access for viewing)
@@ -877,6 +880,16 @@ Route::prefix('v1')->group(function () {
         Route::get('/admin/email-templates/{id}', [\App\Http\Controllers\Api\Admin\EmailTemplateController::class, 'show']);
         Route::put('/admin/email-templates/{id}', [\App\Http\Controllers\Api\Admin\EmailTemplateController::class, 'update']);
         Route::delete('/admin/email-templates/{id}', [\App\Http\Controllers\Api\Admin\EmailTemplateController::class, 'destroy']);
+
+        Route::get('/admin/email/overview', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'overview']);
+        Route::get('/admin/email/settings', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'settings']);
+        Route::post('/admin/email/settings', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'saveSettings']);
+        Route::get('/admin/email/templates', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'templates']);
+        Route::put('/admin/email/templates/{template}', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'updateTemplate']);
+        Route::post('/admin/email/templates/{template}/restore', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'restoreTemplate']);
+        Route::post('/admin/email/test', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'test']);
+        Route::get('/admin/email/logs', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'logs']);
+        Route::post('/admin/email/logs/{log}/retry', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'retry']);
 
         // Sales Report (aggregate)
         Route::get('/admin/sales-report', [AdminOrderController::class, 'stats']);

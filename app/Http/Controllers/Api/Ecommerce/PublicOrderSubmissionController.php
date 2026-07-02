@@ -8,6 +8,7 @@ use App\Models\EcommerceOrder;
 use App\Models\EcommerceOrderItem;
 use App\Models\EcommerceQuotation;
 use App\Models\Product;
+use App\Services\EmailNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -98,12 +99,20 @@ class PublicOrderSubmissionController extends Controller
             'valid_until' => now()->addDays(14)->toDateString(),
         ]);
 
+            app(EmailNotificationService::class)->sendEvent('quote_submitted', [
+                'customer_name' => $quote->customer_name,
+                'customer_email' => $quote->customer_email ?: $quote->contact_email,
+                'quote_number' => $quote->quote_number,
+                'quote_total' => '$' . number_format((float) $quote->total_estimated, 2),
+                'site_name' => config('app.name', 'Mecarvi Embroidery'),
+            ], $quote->customer_email ?: $quote->contact_email);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Quote request submitted successfully.',
-                'data' => [
-                    'quotation' => $quote,
-                    'order' => [
+            'data' => [
+                'quotation' => $quote,
+                'order' => [
                         'id' => null,
                         'order_number' => $quote->quote_number,
                     ],
@@ -158,6 +167,8 @@ class PublicOrderSubmissionController extends Controller
         if ($appliedCoupon) {
             $appliedCoupon->increment('used_count');
         }
+
+        app(EmailNotificationService::class)->sendOrderEvent('order_placed', $order->fresh('items'));
 
         return response()->json([
             'success' => true,

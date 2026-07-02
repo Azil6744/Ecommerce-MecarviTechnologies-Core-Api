@@ -9,6 +9,7 @@ use App\Models\EcommerceOrderItem;
 use App\Models\EcommerceQuotation;
 use App\Models\Product;
 use App\Models\ProductCustomizationDraft;
+use App\Services\EmailNotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -193,6 +194,8 @@ class ProductCustomizationController extends Controller
 
             $draft->update(['status' => 'converted']);
 
+            app(EmailNotificationService::class)->sendOrderEvent('order_placed', $order->fresh('items'));
+
             return response()->json([
                 'success' => true,
                 'message' => 'Order submitted successfully.',
@@ -232,6 +235,14 @@ class ProductCustomizationController extends Controller
         ]);
 
         $draft->update(['status' => 'submitted']);
+
+        app(EmailNotificationService::class)->sendEvent('quote_submitted', [
+            'customer_name' => $quote->customer_name,
+            'customer_email' => $quote->customer_email ?: $quote->contact_email,
+            'quote_number' => $quote->quote_number,
+            'quote_total' => '$' . number_format((float) $quote->total_estimated, 2),
+            'site_name' => config('app.name', 'Mecarvi Embroidery'),
+        ], $quote->customer_email ?: $quote->contact_email);
 
         return response()->json([
             'success' => true,

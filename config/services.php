@@ -56,4 +56,8 @@ return [
         'slug' => env('MCCARVY_SITE_SLUG', env('SITE_SLUG', 'embroidery')),
     ],
 
+    'internal_notifications' => [
+        'secret' => env('INTERNAL_NOTIFICATION_SECRET'),
+    ],
+
 ];

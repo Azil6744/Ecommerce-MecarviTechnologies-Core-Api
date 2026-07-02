@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\EcommerceAddress;
 use App\Models\EcommerceCart;
 use App\Models\EcommerceOrder;
+use App\Services\EmailNotificationService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -201,6 +202,8 @@ class EcommerceOrderController extends Controller
             'status' => 'cancelled',
             'label' => 'Cancelled by customer',
         ]);
+
+        app(EmailNotificationService::class)->sendOrderEvent('order_cancelled', $order->fresh('items'));
 
         return response()->json([
             'success' => true,

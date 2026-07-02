@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\EcommerceOrder;
+use App\Services\EmailNotificationService;
 use Illuminate\Http\Request;
 
 class AdminOrderController extends Controller
@@ -105,6 +106,7 @@ class AdminOrderController extends Controller
             ]);
 
             $order = EcommerceOrder::findOrFail($id);
+            $previousStatus = strtolower((string) $order->status);
             $payload = $request->only([
                 'status',
                 'payment_status',
@@ -199,6 +201,18 @@ class AdminOrderController extends Controller
                 'label' => 'Status updated to ' . str_replace('_', ' ', $request->status),
                 'note' => $request->note,
             ]);
+
+            $newStatus = strtolower((string) $request->status);
+            if ($previousStatus !== $newStatus) {
+                $eventKey = match ($newStatus) {
+                    'shipped' => 'order_shipped',
+                    'delivered', 'completed' => 'order_delivered',
+                    'cancelled' => 'order_cancelled',
+                    default => 'order_status_changed',
+                };
+
+                app(EmailNotificationService::class)->sendOrderEvent($eventKey, $order->fresh(['items']));
+            }
 
             return response()->json([
                 'success' => true,

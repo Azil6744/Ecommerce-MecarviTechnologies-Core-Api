@@ -11,6 +11,7 @@ use App\Models\EcommerceOrder;
 use App\Models\EcommerceOrderItem;
 use App\Models\EcommerceGiftCard;
 use App\Models\EcommerceCoupon;
+use App\Services\EmailNotificationService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 
@@ -489,6 +490,8 @@ class CheckoutController extends Controller
                         ->update(['user_id' => $order->user_id]);
                 }
             }
+
+            app(EmailNotificationService::class)->sendOrderEvent('order_placed', $order->fresh('items.product'));
 
             return response()->json([
                 'success' => true,

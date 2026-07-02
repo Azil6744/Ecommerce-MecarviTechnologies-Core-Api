@@ -3,6 +3,8 @@
 namespace App\Support;
 
 use App\Models\EmailTemplate;
+use App\Models\EmailNotificationSetting;
+use App\Services\EmailNotificationService;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
 
@@ -10,6 +12,18 @@ class GiftCardMailer
 {
     public static function sendIssued(string $email, array $data): bool
     {
+        if (EmailNotificationSetting::query()->value('is_enabled')) {
+            $logs = app(EmailNotificationService::class)->sendEvent('gift_card_issued', [
+                'customer_name' => $data['recipient_name'] ?? 'Customer',
+                'customer_email' => $email,
+                'gift_card_code' => $data['code'] ?? '',
+                'gift_card_balance' => '$' . number_format((float) ($data['balance'] ?? 0), 2),
+                'site_name' => config('app.name', 'Mecarvi Embroidery'),
+            ], $email);
+
+            return collect($logs)->contains(fn ($log) => $log->status === 'sent');
+        }
+
         return self::sendEmail(
             $email,
             'gift-card-issued',
