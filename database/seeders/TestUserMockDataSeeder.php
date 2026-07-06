@@ -62,6 +62,7 @@ class TestUserMockDataSeeder extends Seeder
         EcommerceCompareItem::where('user_id', $user->id)->delete();
         EcommerceReturn::where('user_id', $user->id)->delete();
         EcommerceConversation::where('user_id', $user->id)->delete();
+        \App\Models\EcommerceReferral::where('referrer_id', $user->id)->delete();
 
         // Get a demo product to link
         $product = Product::first();
@@ -499,6 +500,40 @@ class TestUserMockDataSeeder extends Seeder
             'total_referrals' => 4,
             'status' => 'active',
         ]);
+
+        // Seed Referred Users and Referral Records
+        $referredEmails = [
+            'john.smith@example.com' => 'John Smith',
+            'jane.doe@example.com' => 'Jane Doe',
+            'sarah.wilson@example.com' => 'Sarah Wilson',
+            'mike.ross@example.com' => 'Mike Ross',
+        ];
+
+        $daysAgo = [12, 10, 5, 2];
+        $index = 0;
+        foreach ($referredEmails as $emailRef => $nameRef) {
+            $userRef = User::whereRaw('LOWER(email) = ?', [$emailRef])->first();
+            if (!$userRef) {
+                $userRef = User::create([
+                    'name' => $nameRef,
+                    'email' => $emailRef,
+                    'username' => Str::slug($nameRef),
+                    'phone' => '+15550000' . $index,
+                    'role' => 'customer',
+                    'password' => Hash::make('password'),
+                    'email_verified_at' => now(),
+                ]);
+            }
+
+            \App\Models\EcommerceReferral::create([
+                'referrer_id' => $user->id,
+                'referred_id' => $userRef->id,
+                'reward_amount_referrer' => 15.00,
+                'reward_amount_referee' => 10.00,
+                'created_at' => Carbon::now()->subDays($daysAgo[$index % count($daysAgo)]),
+            ]);
+            $index++;
+        }
 
         // 12. Seed Wishlist
         $wishlist = EcommerceWishlist::create([

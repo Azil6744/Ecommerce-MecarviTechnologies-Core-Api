@@ -119,7 +119,24 @@ class EcommerceQuotationController extends Controller
 
     private function resolveQuotation(Request $request, int|string $id): EcommerceQuotation
     {
-        return $this->visibleQuery($request)->findOrFail($id);
+        $query = $this->visibleQuery($request);
+
+        if (is_string($id) && str_starts_with($id, 'Q-')) {
+            $item = (clone $query)->where('quote_number', $id)->first();
+            if ($item) return $item;
+
+            $numId = substr($id, 2);
+            if (is_numeric($numId)) {
+                $item = (clone $query)->find($numId);
+                if ($item) return $item;
+            }
+        }
+
+        if (is_numeric($id)) {
+            return $query->findOrFail($id);
+        }
+
+        return $query->where('quote_number', $id)->firstOrFail();
     }
 
     private function generateQuoteNumber(): string

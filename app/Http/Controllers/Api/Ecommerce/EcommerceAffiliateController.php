@@ -160,4 +160,18 @@ class EcommerceAffiliateController extends Controller
             'data' => $commission->load(['referrer', 'referred', 'order'])
         ]);
     }
+
+    public function myReferrals(Request $request)
+    {
+        $user = $request->user();
+        $referrals = \App\Models\EcommerceReferral::where('referrer_id', $user->id)
+            ->with(['referred'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $referrals
+        ]);
+    }
 }

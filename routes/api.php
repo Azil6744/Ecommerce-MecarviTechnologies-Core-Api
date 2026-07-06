@@ -95,6 +95,7 @@ use App\Http\Controllers\Api\Admin\EmployeeController;
 use App\Http\Controllers\Api\Admin\ChatController;
 use App\Http\Controllers\Api\Admin\CalendarController;
 use App\Http\Controllers\Api\Admin\FileManagerController;
+use App\Http\Controllers\Api\Admin\MarketingCampaignController;
 
 
 /*
@@ -890,6 +891,14 @@ Route::prefix('v1')->group(function () {
         Route::post('/admin/email/test', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'test']);
         Route::get('/admin/email/logs', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'logs']);
         Route::post('/admin/email/logs/{log}/retry', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'retry']);
+
+        // Marketing Campaigns
+        Route::get('/admin/marketing-campaigns', [MarketingCampaignController::class, 'index']);
+        Route::get('/admin/marketing-campaigns/compose/{channel}', [MarketingCampaignController::class, 'compose']);
+        Route::get('/admin/marketing-campaigns/{marketingCampaign}', [MarketingCampaignController::class, 'show']);
+        Route::post('/admin/marketing-campaigns', [MarketingCampaignController::class, 'store']);
+        Route::post('/admin/marketing-campaigns/send', [MarketingCampaignController::class, 'send']);
+        Route::post('/admin/marketing-campaigns/test', [MarketingCampaignController::class, 'test']);
 
         // Sales Report (aggregate)
         Route::get('/admin/sales-report', [AdminOrderController::class, 'stats']);

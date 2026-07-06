@@ -48,6 +48,7 @@ class CheckoutController extends Controller
             'item_packaging_configs' => 'nullable|array',
             'add_thank_you_card' => 'nullable|boolean',
             'add_extra_protection' => 'nullable|boolean',
+            'pickup_location_id' => 'nullable|integer|exists:store_pickup_locations,id',
         ]);
 
         try {
@@ -288,6 +289,7 @@ class CheckoutController extends Controller
                 'billing_address' => EcommerceOrderController::formatAddress($billingAddress),
                 'payment_method' => $validated['payment_method'],
                 'shipping_method' => $validated['shipping_method'] ?? null,
+                'pickup_location_id' => $validated['pickup_location_id'] ?? null,
                 'notes' => $validated['notes'] ?? null,
                 'metadata' => [
                     'packaging_option' => $validated['packaging_option'] ?? null,

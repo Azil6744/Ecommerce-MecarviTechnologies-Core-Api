@@ -17,7 +17,11 @@ class EcommerceConversationController extends Controller
         $user = $request->user();
         $query = EcommerceConversation::query()
             ->where('user_id', $user->id)
-            ->with(['user:id,name,email', 'latestMessage.sender:id,name,email'])
+            ->with([
+                'user:id,name,email',
+                'latestMessage.sender:id,name,email',
+                'messages.sender:id,name,email'
+            ])
             ->withCount('messages');
 
         if ($request->filled('linked_type')) {
@@ -47,7 +51,7 @@ class EcommerceConversationController extends Controller
             ->paginate((int) $request->query('per_page', 20));
 
         return response()->json([
-            'data' => $conversations->getCollection()->map(fn ($conversation) => $this->conversationPayload($conversation, false))->values(),
+            'data' => $conversations->getCollection()->map(fn ($conversation) => $this->conversationPayload($conversation, true))->values(),
             'meta' => [
                 'current_page' => $conversations->currentPage(),
                 'last_page' => $conversations->lastPage(),
@@ -71,14 +75,13 @@ class EcommerceConversationController extends Controller
         $userId = $request->user()->id;
 
         // Check if user already has an existing conversation for this entity/link
-        $convoQuery = EcommerceConversation::where('user_id', $userId);
+        $conversation = null;
         if (isset($validated['linked_type']) && isset($validated['linked_id'])) {
-            $convoQuery->where('linked_type', $validated['linked_type'])
-                       ->where('linked_id', $validated['linked_id']);
-        } else {
-            $convoQuery->whereNull('linked_type');
+            $conversation = EcommerceConversation::where('user_id', $userId)
+                ->where('linked_type', $validated['linked_type'])
+                ->where('linked_id', $validated['linked_id'])
+                ->first();
         }
-        $conversation = $convoQuery->first();
 
         if ($conversation) {
             // Update existing conversation

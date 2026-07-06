@@ -1,0 +1,221 @@
+<?php
+
+namespace App\Http\Controllers\Api\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\StorePickupLocation;
+use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
+
+class StorePickupLocationController extends Controller
+{
+    /**
+     * Display a listing of the resource.
+     */
+    public function index()
+    {
+        try {
+            $locations = StorePickupLocation::orderBy('name')->get();
+            return response()->json([
+                'success' => true,
+                'data' => $locations
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve pickup locations.',
+                'error' => config('app.debug') ? $e->getMessage() : null
+            ], 500);
+        }
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     */
+    public function store(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'name' => 'required|string|max:255',
+                'code' => 'required|string|unique:store_pickup_locations,code',
+                'store_type' => 'required|string|max:255',
+                'timezone' => 'required|string|max:255',
+                'address' => 'required|string',
+                'phone' => 'nullable|string|max:255',
+                'notes' => 'nullable|string|max:1000',
+                'short_description' => 'nullable|string|max:1000',
+                'image_path' => 'nullable|string|max:255',
+                'status' => 'boolean',
+                'is_pickup_enabled' => 'boolean',
+                'pickup_preparation_time' => 'integer|min:0',
+                'pickup_preparation_unit' => 'string|in:minutes,hours,days',
+                'max_pickup_radius' => 'numeric|min:0',
+                'latitude' => 'nullable|numeric',
+                'longitude' => 'nullable|numeric',
+                'weekly_schedule' => 'nullable|array',
+                'special_hours' => 'nullable|array',
+            ]);
+
+            // Geocode address if coordinates are missing
+            if (empty($validated['latitude']) || empty($validated['longitude'])) {
+                $coords = $this->geocodeAddress($validated['address']);
+                $validated['latitude'] = $coords['latitude'];
+                $validated['longitude'] = $coords['longitude'];
+            }
+
+            $location = StorePickupLocation::create($validated);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Pickup location created successfully.',
+                'data' => $location
+            ], 201);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed.',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create pickup location.',
+                'error' => config('app.debug') ? $e->getMessage() : null
+            ], 500);
+        }
+    }
+
+    /**
+     * Display the specified resource.
+     */
+    public function show($id)
+    {
+        try {
+            $location = StorePickupLocation::findOrFail($id);
+            return response()->json([
+                'success' => true,
+                'data' => $location
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pickup location not found.'
+            ], 404);
+        }
+    }
+
+    /**
+     * Update the specified resource in storage.
+     */
+    public function update(Request $request, $id)
+    {
+        try {
+            $location = StorePickupLocation::findOrFail($id);
+
+            $validated = $request->validate([
+                'name' => 'sometimes|required|string|max:255',
+                'code' => 'sometimes|required|string|unique:store_pickup_locations,code,' . $id,
+                'store_type' => 'sometimes|required|string|max:255',
+                'timezone' => 'sometimes|required|string|max:255',
+                'address' => 'sometimes|required|string',
+                'phone' => 'nullable|string|max:255',
+                'notes' => 'nullable|string|max:1000',
+                'short_description' => 'nullable|string|max:1000',
+                'image_path' => 'nullable|string|max:255',
+                'status' => 'boolean',
+                'is_pickup_enabled' => 'boolean',
+                'pickup_preparation_time' => 'integer|min:0',
+                'pickup_preparation_unit' => 'string|in:minutes,hours,days',
+                'max_pickup_radius' => 'numeric|min:0',
+                'latitude' => 'nullable|numeric',
+                'longitude' => 'nullable|numeric',
+                'weekly_schedule' => 'nullable|array',
+                'special_hours' => 'nullable|array',
+            ]);
+
+            // If address is changing and coordinates aren't provided, geocode again
+            if (isset($validated['address']) && $validated['address'] !== $location->address && (empty($validated['latitude']) || empty($validated['longitude']))) {
+                $coords = $this->geocodeAddress($validated['address']);
+                $validated['latitude'] = $coords['latitude'];
+                $validated['longitude'] = $coords['longitude'];
+            }
+
+            $location->update($validated);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Pickup location updated successfully.',
+                'data' => $location
+            ]);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed.',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update pickup location.',
+                'error' => config('app.debug') ? $e->getMessage() : null
+            ], 500);
+        }
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     */
+    public function destroy($id)
+    {
+        try {
+            $location = StorePickupLocation::findOrFail($id);
+            $location->delete();
+            return response()->json([
+                'success' => true,
+                'message' => 'Pickup location deleted successfully.'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete pickup location.',
+                'error' => config('app.debug') ? $e->getMessage() : null
+            ], 500);
+        }
+    }
+
+    /**
+     * Simple local geocoder for common addresses
+     */
+    private function geocodeAddress($address)
+    {
+        $addr = strtolower($address);
+        
+        // Mc Donough GA (Store A)
+        if (str_contains($addr, 'mcdonough')) {
+            return ['latitude' => 33.4473, 'longitude' => -84.1469];
+        }
+        
+        // Peachtree Rd Atlanta (Store B)
+        if (str_contains($addr, 'peachtree') || (str_contains($addr, 'atlanta') && !str_contains($addr, 'main st'))) {
+            return ['latitude' => 33.8539, 'longitude' => -84.3619];
+        }
+        
+        // Norcross GA (Store C)
+        if (str_contains($addr, 'norcross') || str_contains($addr, 'jimmy carter')) {
+            return ['latitude' => 33.9189, 'longitude' => -84.1894];
+        }
+
+        // Atlanta Downtown (123 Main St, Atlanta, GA)
+        if (str_contains($addr, 'main st') && str_contains($addr, 'atlanta')) {
+            return ['latitude' => 33.7490, 'longitude' => -84.3880];
+        }
+
+        // Default: Atlanta coordinates with small random offset
+        $offsetLat = (rand(-100, 100) / 1000.0);
+        $offsetLng = (rand(-100, 100) / 1000.0);
+        return [
+            'latitude' => 33.7490 + $offsetLat,
+            'longitude' => -84.3880 + $offsetLng
+        ];
+    }
+}

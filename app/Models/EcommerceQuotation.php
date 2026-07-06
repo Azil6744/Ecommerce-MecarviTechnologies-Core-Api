@@ -24,6 +24,9 @@ class EcommerceQuotation extends Model
         'status',
         'total_estimated',
         'valid_until',
+        'quote_price',
+        'quote_details',
+        'quoted_at',
     ];
 
     protected $casts = [
@@ -32,6 +35,8 @@ class EcommerceQuotation extends Model
         'quantity' => 'integer',
         'customization' => 'array',
         'metadata' => 'array',
+        'quote_price' => 'decimal:2',
+        'quoted_at' => 'datetime',
     ];
 
     public function user()
@@ -42,5 +47,28 @@ class EcommerceQuotation extends Model
     public function product()
     {
         return $this->belongsTo(Product::class);
+    }
+
+    /**
+     * Retrieve the model for a bound value.
+     */
+    public function resolveRouteBinding($value, $field = null)
+    {
+        if (is_string($value) && str_starts_with($value, 'Q-')) {
+            $item = $this->where('quote_number', $value)->first();
+            if ($item) return $item;
+
+            $numId = substr($value, 2);
+            if (is_numeric($numId)) {
+                $item = $this->find($numId);
+                if ($item) return $item;
+            }
+        }
+
+        if (is_numeric($value)) {
+            return $this->where('id', $value)->first();
+        }
+
+        return $this->where('quote_number', $value)->first();
     }
 }

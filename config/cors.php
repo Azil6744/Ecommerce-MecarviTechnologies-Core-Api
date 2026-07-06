@@ -21,7 +21,7 @@ return [
 
     'allowed_origins' => array_filter(array_map('trim', explode(',', env(
         'CORS_ALLOWED_ORIGINS',
-        'http://localhost:3000,http://localhost:3001,https://user.mecarvi.com,https://my.mecarvi.com,https://mecarvi.com,https://www.mecarvi.com,https://mecarviembroidery.com,https://www.mecarviembroidery.com,https://embroidery.mecarvi.com'
+        'http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001,https://user.mecarvi.com,https://my.mecarvi.com,https://mecarvi.com,https://www.mecarvi.com,https://mecarviembroidery.com,https://www.mecarviembroidery.com,https://embroidery.mecarvi.com'
     )))),
 
     'allowed_origins_patterns' => [],

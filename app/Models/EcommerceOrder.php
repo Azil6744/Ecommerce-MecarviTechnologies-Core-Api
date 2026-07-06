@@ -61,6 +61,11 @@ class EcommerceOrder extends Model
         return $this->hasMany(EcommerceOrderStatusEvent::class, 'order_id')->latest();
     }
 
+    public function pickupLocation()
+    {
+        return $this->belongsTo(StorePickupLocation::class, 'pickup_location_id');
+    }
+
     protected static function booted()
     {
         static::updated(function ($order) {

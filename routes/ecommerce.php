@@ -18,6 +18,7 @@ Route::prefix('ecommerce')->group(function () {
     Route::get('/categories', [\App\Http\Controllers\Api\Ecommerce\CategoryController::class, 'index']);
     Route::get('/shipping-methods', [\App\Http\Controllers\Api\Ecommerce\ShippingMethodController::class, 'index']);
     Route::get('/delivery-times', [\App\Http\Controllers\Api\Ecommerce\DeliveryTimeController::class, 'index']);
+    Route::post('/pickup-locations/eligible', [\App\Http\Controllers\Api\Ecommerce\PublicPickupLocationController::class, 'getEligibleLocations']);
     Route::get('/products', [\App\Http\Controllers\Api\Ecommerce\ProductController::class, 'index']);
     Route::get('/coupons/validate', [\App\Http\Controllers\Api\Admin\EcommerceCouponController::class, 'validateCoupon']);
     Route::get('/charity-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getCharity']);
@@ -139,6 +140,7 @@ Route::prefix('ecommerce')->group(function () {
         Route::post('/gift-cards/{id}/transfer', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'transfer']);
         Route::apiResource('gift-cards', \App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class);
         Route::apiResource('reviews', \App\Http\Controllers\Api\Ecommerce\EcommerceReviewController::class);
+        Route::get('affiliates/my/referrals', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'myReferrals']);
         Route::apiResource('affiliates', \App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class);
         Route::apiResource('product-questions', \App\Http\Controllers\Api\Ecommerce\EcommerceProductQuestionController::class);
         Route::post('product-questions/{question}/replies', [\App\Http\Controllers\Api\Ecommerce\EcommerceProductQuestionController::class, 'addReply']);
@@ -227,6 +229,7 @@ Route::prefix('ecommerce')->group(function () {
         Route::apiResource('admin/attributes', \App\Http\Controllers\Api\Admin\AdminAttributeController::class);
         Route::apiResource('admin/delivery-times', \App\Http\Controllers\Api\Admin\DeliveryTimeController::class);
         Route::post('admin/delivery-times/reorder', [\App\Http\Controllers\Api\Admin\DeliveryTimeController::class, 'reorder']);
+        Route::apiResource('admin/pickup-locations', \App\Http\Controllers\Api\Admin\StorePickupLocationController::class);
 
         // Disputes Management
         Route::get('/admin/disputes', [\App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class, 'index']);
