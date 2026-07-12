@@ -95,6 +95,41 @@ class EcommerceGiftCardControllerTest extends TestCase
             ->assertJsonPath('data.0.status', 'pending');
     }
 
+    public function test_admin_gift_card_list_is_not_scoped_to_recipient_user(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $recipient = User::factory()->create(['role' => 'customer']);
+
+        EcommerceGiftCard::create([
+            'user_id' => $recipient->id,
+            'code' => '310000000000001',
+            'recipient_name' => 'Recipient User',
+            'recipient_email' => 'recipient@example.com',
+            'initial_balance' => 100,
+            'current_balance' => 100,
+            'status' => 'active',
+            'currency' => 'USD',
+        ]);
+
+        EcommerceGiftCard::create([
+            'code' => '320000000000001',
+            'recipient_name' => 'Guest Recipient',
+            'recipient_email' => 'guest@example.com',
+            'initial_balance' => 50,
+            'current_balance' => 50,
+            'status' => 'active',
+            'currency' => 'USD',
+        ]);
+
+        $response = $this
+            ->withHeaders($this->centralAuthHeadersFor($admin))
+            ->getJson('/api/v1/admin/gift-cards');
+
+        $response
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+    }
+
     public function test_update_marks_redeemed_cards(): void
     {
         $admin = User::factory()->create(['role' => 'super_admin']);

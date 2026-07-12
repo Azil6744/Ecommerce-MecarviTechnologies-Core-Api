@@ -243,6 +243,13 @@ Route::prefix('ecommerce')->group(function () {
         Route::put('/admin/memberships/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'update']);
         Route::delete('/admin/memberships/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'destroy']);
 
+        // Admin Downloads Management
+        Route::get('/admin/downloads', [\App\Http\Controllers\Api\Ecommerce\EcommerceAdminDownloadController::class, 'index']);
+        Route::get('/admin/downloads/stats', [\App\Http\Controllers\Api\Ecommerce\EcommerceAdminDownloadController::class, 'stats']);
+        Route::post('/admin/downloads', [\App\Http\Controllers\Api\Ecommerce\EcommerceAdminDownloadController::class, 'store']);
+        Route::delete('/admin/downloads/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceAdminDownloadController::class, 'destroy']);
+        Route::match(['get', 'post'], '/admin/downloads/settings', [\App\Http\Controllers\Api\Ecommerce\EcommerceAdminDownloadController::class, 'settings']);
+
         // Affiliates Management
         Route::get('/admin/affiliates', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'index']);
         Route::get('/admin/affiliate-settings', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'getSettings']);

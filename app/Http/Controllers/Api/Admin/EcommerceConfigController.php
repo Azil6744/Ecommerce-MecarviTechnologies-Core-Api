@@ -116,7 +116,14 @@ class EcommerceConfigController extends Controller
                 'user_id' => 'required|integer|exists:users,id',
                 'points' => 'required|integer',
                 'transaction_type' => 'required|string|in:manual_added,manual_removed,reversed,expired,bonus',
-                'reason' => 'required|string|max:1000'
+                'reason' => 'required|string|max:1000',
+                'reason_details' => 'nullable|string',
+                'notes' => 'nullable|string',
+                'reference_type' => 'nullable|string',
+                'reference_id' => 'nullable|string',
+                'reference_date' => 'nullable|string',
+                'supporting_document' => 'nullable',
+                'expiration_date' => 'nullable|string',
             ]);
 
             $user = \App\Models\User::findOrFail($validated['user_id']);
@@ -138,6 +145,31 @@ class EcommerceConfigController extends Controller
                 $ratio = (float)($loyalty['points_to_dollar_ratio'] ?? 0.01);
             }
 
+            // Handle file upload if present
+            $docPath = null;
+            if ($request->hasFile('supporting_document')) {
+                $file = $request->file('supporting_document');
+                $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                // Ensure directory exists
+                $uploadDir = public_path('uploads/loyalty_docs');
+                if (!file_exists($uploadDir)) {
+                    mkdir($uploadDir, 0755, true);
+                }
+                $file->move($uploadDir, $filename);
+                $docPath = '/uploads/loyalty_docs/' . $filename;
+            } else if ($request->input('supporting_document') && is_string($request->input('supporting_document'))) {
+                $docPath = $request->input('supporting_document');
+            }
+
+            $expirationDate = null;
+            if ($request->input('expiration_date')) {
+                try {
+                    $expirationDate = \Carbon\Carbon::parse($request->input('expiration_date'));
+                } catch (\Exception $ex) {
+                    $expirationDate = null;
+                }
+            }
+
             $transaction = \App\Models\EcommerceLoyaltyTransaction::create([
                 'user_id' => $user->id,
                 'transaction_type' => $validated['transaction_type'],
@@ -145,7 +177,14 @@ class EcommerceConfigController extends Controller
                 'dollar_value' => abs($points) * $ratio,
                 'status' => 'available',
                 'reason' => $validated['reason'],
+                'reason_details' => $validated['reason_details'] ?? null,
+                'notes' => $validated['notes'] ?? null,
+                'reference_type' => $validated['reference_type'] ?? null,
+                'reference_id' => $validated['reference_id'] ?? null,
+                'reference_date' => $validated['reference_date'] ?? null,
+                'supporting_document' => $docPath,
                 'admin_id' => $request->user()?->id ?? 1, // Fallback to user ID 1 if not authenticated
+                'expiration_date' => $expirationDate,
             ]);
 
             return response()->json([

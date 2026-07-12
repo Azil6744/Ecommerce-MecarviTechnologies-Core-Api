@@ -107,16 +107,74 @@ class GiftCardMailer
         $oldOwnerEmail = $data['old_owner_email'] ?? '';
         $newOwnerEmail = $data['new_owner_email'] ?? '';
 
+        $designTheme = $data['design_theme'] ?? 'default';
+        $bgStyle = 'background: linear-gradient(135deg, #6A11CB 0%, #2575FC 100%);';
+        $textColor = '#ffffff';
+        $subLabelColor = '#cbd5e1';
+        $greetingHtml = 'GIFT CARD';
+
+        if ($designTheme === 'birthday') {
+            $bgStyle = 'background: linear-gradient(135deg, #FFF1EB 0%, #ACE0F9 100%);';
+            $textColor = '#07113f';
+            $subLabelColor = '#53607d';
+            $greetingHtml = '🎉 Happy Birthday!';
+        } elseif ($designTheme === 'thank_you') {
+            $bgStyle = 'background: linear-gradient(135deg, #FFF5C3 0%, #94E5FF 100%);';
+            $textColor = '#065f46';
+            $subLabelColor = '#065f46';
+            $greetingHtml = '🌸 Thank You';
+        } elseif ($designTheme === 'holiday') {
+            $bgStyle = 'background: linear-gradient(135deg, #D31027 0%, #EA384D 100%);';
+            $textColor = '#ffffff';
+            $subLabelColor = '#fca5a5';
+            $greetingHtml = '❄️ Happy Holidays';
+        } elseif ($designTheme === 'celebration') {
+            $bgStyle = 'background: linear-gradient(135deg, #1F1C2C 0%, #928DAB 100%);';
+            $textColor = '#fef08a';
+            $subLabelColor = '#cbd5e1';
+            $greetingHtml = '✨ Celebrate!';
+        } elseif ($designTheme === 'anniversary') {
+            $bgStyle = 'background: linear-gradient(135deg, #FAD0C4 0%, #FFD1FF 100%);';
+            $textColor = '#07113f';
+            $subLabelColor = '#53607d';
+            $greetingHtml = '❤️ Anniversary';
+        } elseif ($designTheme === 'congratulations') {
+            $bgStyle = 'background: linear-gradient(135deg, #F6D365 0%, #FDA085 100%);';
+            $textColor = '#7c2d12';
+            $subLabelColor = '#9a3412';
+            $greetingHtml = '🏆 Congrats!';
+        } elseif ($designTheme === 'wedding') {
+            $bgStyle = 'background: linear-gradient(135deg, #FFE259 0%, #FFA751 100%);';
+            $textColor = '#78350f';
+            $subLabelColor = '#92400e';
+            $greetingHtml = '🥂 Best Wishes';
+        } elseif ($designTheme === 'corporate') {
+            $bgStyle = 'background: linear-gradient(135deg, #30CFD0 0%, #330867 100%);';
+            $textColor = '#ffffff';
+            $subLabelColor = '#cbd5e1';
+            $greetingHtml = '💼 Gift for You';
+        } elseif (str_starts_with($designTheme, 'custom:')) {
+            $jsonStr = substr($designTheme, 7);
+            $customData = json_decode($jsonStr, true);
+            if ($customData) {
+                $bgStyle = 'background: linear-gradient(135deg, ' . ($customData['bg_start'] ?? '#6A11CB') . ', ' . ($customData['bg_end'] ?? '#2575FC') . ');';
+                $isLight = $customData['text_light'] ?? true;
+                $textColor = $isLight ? '#ffffff' : '#07113f';
+                $subLabelColor = $isLight ? '#cbd5e1' : '#53607d';
+                $greetingHtml = ($customData['emoji'] ?? '🎁') . ' ' . ($customData['greeting'] ?? 'A Gift For You');
+            }
+        }
+
         $style = "
             body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #334155; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
             .container { max-width: 600px; margin: 40px auto; padding: 32px; background: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); border: 1px solid #e2e8f0; }
             .header { text-align: center; margin-bottom: 32px; }
             .logo { font-size: 24px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.1em; }
-            .card { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); color: #ffffff; border-radius: 16px; padding: 32px; text-align: center; margin: 24px 0; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); position: relative; overflow: hidden; }
-            .card-title { font-size: 14px; text-transform: uppercase; letter-spacing: 0.2em; color: #94a3b8; margin-bottom: 24px; }
-            .card-code { font-family: 'Courier New', Courier, monospace; font-size: 28px; font-weight: 700; letter-spacing: 4px; color: #38bdf8; background: rgba(255, 255, 255, 0.1); padding: 12px; border-radius: 8px; display: inline-block; margin-bottom: 24px; }
-            .card-balance { font-size: 36px; font-weight: 800; color: #f8fafc; }
-            .card-balance span { font-size: 18px; font-weight: 500; color: #cbd5e1; }
+            .card { {$bgStyle} color: {$textColor}; border-radius: 16px; padding: 32px; text-align: center; margin: 24px 0; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); position: relative; overflow: hidden; }
+            .card-title { font-size: 14px; text-transform: uppercase; letter-spacing: 0.2em; color: {$subLabelColor}; margin-bottom: 24px; }
+            .card-code { font-family: 'Courier New', Courier, monospace; font-size: 28px; font-weight: 700; letter-spacing: 4px; color: " . ($textColor === '#ffffff' ? '#38bdf8' : '#4f46e5') . "; background: rgba(255, 255, 255, 0.15); padding: 12px; border-radius: 8px; display: inline-block; margin-bottom: 24px; border: 1px solid rgba(255, 255, 255, 0.2); }
+            .card-balance { font-size: 36px; font-weight: 800; color: {$textColor}; }
+            .card-balance span { font-size: 18px; font-weight: 500; color: {$subLabelColor}; }
             .info-section { margin-top: 32px; line-height: 1.6; }
             .personal-msg { background-color: #f1f5f9; border-left: 4px solid #64748b; padding: 16px; border-radius: 0 8px 8px 0; font-style: italic; margin: 20px 0; }
             .footer { text-align: center; margin-top: 32px; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 24px; }
@@ -135,7 +193,7 @@ class GiftCardMailer
                         " . ($senderName ? "<p><strong>From:</strong> {$senderName}</p>" : "") . "
                         
                         <div class='card'>
-                            <div class='card-title'>Gift Card Code</div>
+                            <div class='card-title'>{$greetingHtml}</div>
                             <div class='card-code'>{$code}</div>
                             <div class='card-balance'><span>$</span>{$balance}</div>
                         </div>

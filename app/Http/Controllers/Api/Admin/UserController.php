@@ -323,6 +323,7 @@ class UserController extends Controller
                     'name' => $user->name,
                     'email' => $user->email,
                     'role' => $user->role,
+                    'loyalty_points' => $user->loyalty_points,
                     'roles' => $user->roles->pluck('name')->toArray(),
                     'permissions' => $user->getAllPermissions()->pluck('name')->toArray(),
                     'email_verified_at' => $user->email_verified_at,
@@ -754,6 +755,7 @@ class UserController extends Controller
             'orders_count' => $ordersCount,
             'total_orders' => $ordersCount,
             'total_spent' => (float) ($user->total_spent ?? 0),
+            'loyalty_points' => (int) ($user->loyalty_points ?? 0),
             'created_at' => $user->created_at,
             'updated_at' => $user->updated_at,
         ];

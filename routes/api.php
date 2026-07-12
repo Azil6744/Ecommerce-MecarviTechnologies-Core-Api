@@ -686,6 +686,9 @@ Route::prefix('v1')->group(function () {
     Route::get('/gift-card-page', [GiftCardPageController::class, 'index'])
         ->name('api.v1.gift-card-page.index');
 
+    // Get Active Popup Template (Public)
+    Route::get('/popups/{eventKey}', [\App\Http\Controllers\Api\PopupController::class, 'show'])
+        ->name('api.v1.popups.show');
 
     /*
      |--------------------------------------------------------------------------
@@ -839,6 +842,9 @@ Route::prefix('v1')->group(function () {
         Route::post('/admin/customers/{id}/verify', [UserController::class, 'verifyCustomer']);
 
         // Gift Cards
+        Route::get('/admin/gift-card-settings', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'settings']);
+        Route::post('/admin/gift-card-settings', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'saveSettings']);
+        Route::get('/admin/gift-card-transactions', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'transactions']);
         Route::get('/admin/gift-cards', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'index']);
         Route::post('/admin/gift-cards', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'store']);
         Route::get('/admin/gift-cards/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'show']);
@@ -881,6 +887,13 @@ Route::prefix('v1')->group(function () {
         Route::get('/admin/email-templates/{id}', [\App\Http\Controllers\Api\Admin\EmailTemplateController::class, 'show']);
         Route::put('/admin/email-templates/{id}', [\App\Http\Controllers\Api\Admin\EmailTemplateController::class, 'update']);
         Route::delete('/admin/email-templates/{id}', [\App\Http\Controllers\Api\Admin\EmailTemplateController::class, 'destroy']);
+
+        // Popup Templates
+        Route::get('/admin/popup-templates', [\App\Http\Controllers\Api\Admin\PopupTemplateController::class, 'index']);
+        Route::post('/admin/popup-templates', [\App\Http\Controllers\Api\Admin\PopupTemplateController::class, 'store']);
+        Route::get('/admin/popup-templates/{id}', [\App\Http\Controllers\Api\Admin\PopupTemplateController::class, 'show']);
+        Route::put('/admin/popup-templates/{id}', [\App\Http\Controllers\Api\Admin\PopupTemplateController::class, 'update']);
+        Route::delete('/admin/popup-templates/{id}', [\App\Http\Controllers\Api\Admin\PopupTemplateController::class, 'destroy']);
 
         Route::get('/admin/email/overview', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'overview']);
         Route::get('/admin/email/settings', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'settings']);

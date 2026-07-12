@@ -241,7 +241,41 @@ class EcommerceDownloadController extends Controller
             }
         }
 
+        $customerFiles = \App\Models\EcommerceCustomerFile::query()
+            ->when(! ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()), function ($query) use ($user) {
+                $query->where('user_id', $user->id);
+            })
+            ->latest()
+            ->get();
+
+        foreach ($customerFiles as $cf) {
+            $entries->push($this->customerFileEntry($cf));
+        }
+
         return $entries->filter(fn ($entry) => ! empty($entry['download_source']))->values();
+    }
+
+    private function customerFileEntry(\App\Models\EcommerceCustomerFile $file): array
+    {
+        $path = (string) $file->file_path;
+        $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION) ?: $file->file_type ?: 'file');
+
+        return $this->makeEntry([
+            'id' => 'customerfile-' . $file->id,
+            'source_type' => 'customer_file',
+            'source_id' => (string) $file->id,
+            'order_id' => null,
+            'order_number' => null,
+            'title' => $file->file_name,
+            'category' => $file->category,
+            'format' => strtoupper($ext),
+            'status' => 'Ready',
+            'status_key' => 'ready',
+            'created_at' => optional($file->created_at)->toIso8601String(),
+            'download_source' => $path,
+            'download_name' => $this->safeFileName($file->file_name ?: 'download') . '.' . $ext,
+            'source_label' => 'Customer file',
+        ]);
     }
 
     private function proofEntry(EcommerceOrder $order, EcommerceOrderProof $proof): array

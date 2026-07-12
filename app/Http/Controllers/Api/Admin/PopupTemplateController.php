@@ -1,0 +1,88 @@
+<?php
+
+namespace App\Http\Controllers\Api\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\PopupTemplate;
+use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
+
+class PopupTemplateController extends Controller
+{
+    public function index()
+    {
+        try {
+            $templates = PopupTemplate::orderBy('updated_at', 'desc')->get();
+            return response()->json(['success' => true, 'data' => ['templates' => $templates]]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Failed to fetch popup templates.'], 500);
+        }
+    }
+
+    public function store(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'name' => 'required|string|max:255',
+                'event_key' => 'nullable|string|max:255|unique:popup_templates,event_key',
+                'heading' => 'nullable|string|max:255',
+                'body_html' => 'nullable|string',
+                'button_text' => 'nullable|string|max:255',
+                'button_url' => 'nullable|string|max:1000',
+                'status' => 'sometimes|string|in:draft,published',
+                'variables' => 'nullable|array',
+            ]);
+            
+            $template = PopupTemplate::create($validated);
+            return response()->json(['success' => true, 'message' => 'Popup template created.', 'data' => ['template' => $template]], 201);
+        } catch (ValidationException $e) {
+            return response()->json(['success' => false, 'message' => 'Validation failed.', 'errors' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Failed to create popup template.', 'error' => config('app.debug') ? $e->getMessage() : null], 500);
+        }
+    }
+
+    public function show($id)
+    {
+        try {
+            $template = PopupTemplate::findOrFail($id);
+            return response()->json(['success' => true, 'data' => ['template' => $template]]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Popup template not found.'], 404);
+        }
+    }
+
+    public function update(Request $request, $id)
+    {
+        try {
+            $template = PopupTemplate::findOrFail($id);
+            $validated = $request->validate([
+                'name' => 'sometimes|string|max:255',
+                'event_key' => 'nullable|string|max:255|unique:popup_templates,event_key,' . $id,
+                'heading' => 'nullable|string|max:255',
+                'body_html' => 'nullable|string',
+                'button_text' => 'nullable|string|max:255',
+                'button_url' => 'nullable|string|max:1000',
+                'status' => 'sometimes|string|in:draft,published',
+                'variables' => 'nullable|array',
+            ]);
+            
+            $template->update($validated);
+            return response()->json(['success' => true, 'message' => 'Popup template updated.', 'data' => ['template' => $template]]);
+        } catch (ValidationException $e) {
+            return response()->json(['success' => false, 'message' => 'Validation failed.', 'errors' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Failed to update popup template.', 'error' => config('app.debug') ? $e->getMessage() : null], 500);
+        }
+    }
+
+    public function destroy($id)
+    {
+        try {
+            PopupTemplate::findOrFail($id)->delete();
+            return response()->json(['success' => true, 'message' => 'Popup template deleted.']);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Failed to delete popup template.'], 500);
+        }
+    }
+}

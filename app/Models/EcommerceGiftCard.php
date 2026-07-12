@@ -36,6 +36,14 @@ class EcommerceGiftCard extends Model
         'issued_by_admin_id',
         'disabled_reason',
         'last_used_at',
+        
+        // Redesign UI fields
+        'recipient_phone',
+        'design_theme',
+        'allow_partial_redemption',
+        'restrict_first_redemption',
+        'notify_on_redemption',
+        'internal_notes',
     ];
 
     protected $casts = [
@@ -48,6 +56,9 @@ class EcommerceGiftCard extends Model
         'buyer_user_id' => 'integer',
         'issued_by_admin_id' => 'integer',
         'last_used_at' => 'datetime',
+        'allow_partial_redemption' => 'boolean',
+        'restrict_first_redemption' => 'boolean',
+        'notify_on_redemption' => 'boolean',
     ];
 
     protected static function boot()
@@ -72,8 +83,8 @@ class EcommerceGiftCard extends Model
             if (empty($giftCard->code)) {
                 throw new \InvalidArgumentException('Gift card code is required.');
             }
-            if (!preg_match('/^\d{15}$/', $giftCard->code)) {
-                throw new \InvalidArgumentException('Gift card code must be exactly 15 digits.');
+            if (!preg_match('/^\d{15}$/', $giftCard->code) && !preg_match('/^[A-Z0-9-]{4,50}$/i', $giftCard->code)) {
+                throw new \InvalidArgumentException('Gift card code must be a 15-digit number or valid alphanumeric string.');
             }
         });
 

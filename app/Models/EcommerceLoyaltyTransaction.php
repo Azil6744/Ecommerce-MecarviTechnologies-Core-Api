@@ -19,6 +19,12 @@ class EcommerceLoyaltyTransaction extends Model
         'dollar_value',
         'status',
         'reason',
+        'reason_details',
+        'notes',
+        'reference_type',
+        'reference_id',
+        'reference_date',
+        'supporting_document',
         'admin_id',
         'expiration_date',
     ];
