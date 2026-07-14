@@ -261,6 +261,12 @@ Route::prefix('ecommerce')->group(function () {
         Route::put('/admin/affiliates/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'update']);
         Route::delete('/admin/affiliates/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'destroy']);
 
+        // Affiliate Applications Management
+        Route::get('/admin/affiliate-applications', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'applicationsList']);
+        Route::post('/admin/affiliate-applications/{id}/approve', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'approveApplication']);
+        Route::post('/admin/affiliate-applications/{id}/reject', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'rejectApplication']);
+        Route::post('/affiliate-applications', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'apply']);
+
         // Tax Rates Configuration
         Route::get('/admin/tax-rates', [\App\Http\Controllers\Api\Admin\TaxRateController::class, 'index']);
         Route::post('/admin/tax-rates', [\App\Http\Controllers\Api\Admin\TaxRateController::class, 'store']);

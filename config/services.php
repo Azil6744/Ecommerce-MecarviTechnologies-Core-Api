@@ -57,7 +57,7 @@ return [
     ],
 
     'internal_notifications' => [
-        'secret' => env('INTERNAL_NOTIFICATION_SECRET'),
+        'secret' => env('INTERNAL_NOTIFICATION_SECRET', 'mccarvy_default_secret_key_12345'),
     ],
 
 ];

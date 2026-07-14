@@ -11,6 +11,7 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\PersonalAccessToken;
+use Illuminate\Support\Facades\Cache;
 
 class CentralAuthTokenMiddleware
 {
@@ -88,8 +89,14 @@ class CentralAuthTokenMiddleware
                 // Sync role if it changed or if Spatie role is missing
                 $centralRoleName = $this->localRole($centralUser['role'] ?? null);
                 if ($user->role !== $centralRoleName) {
-                    $user->role = $centralRoleName;
-                    $user->save();
+                    $privilegedRoles = ['super_admin', 'admin'];
+                    $isLocalPrivileged = in_array($user->role, $privilegedRoles, true);
+                    $isCentralStandard = in_array($centralRoleName, ['customer', 'editor', 'seller'], true);
+
+                    if (! ($isLocalPrivileged && $isCentralStandard)) {
+                        $user->role = $centralRoleName;
+                        $user->save();
+                    }
                 }
 
                 if ($centralRoleName && !$user->hasRole($centralRoleName)) {
@@ -252,6 +259,21 @@ class CentralAuthTokenMiddleware
 
     private function validateAgainstCentralAuth(string $token): ?array
     {
+        $cacheKey = 'central_auth_token:' . hash('sha256', $token);
+        $cacheDuration = (int) config('services.central_auth.token_cache_seconds', 300);
+
+        if ($cacheDuration > 0 && Cache::has($cacheKey)) {
+            $cachedVal = Cache::get($cacheKey);
+            if (is_array($cachedVal)) {
+                \Log::info('CentralAuthTokenMiddleware: Using cached token validation result');
+                return $cachedVal;
+            }
+            if ($cachedVal === 'invalid') {
+                \Log::warning('CentralAuthTokenMiddleware: Using cached rejection for token');
+                return null;
+            }
+        }
+
         foreach ($this->centralAuthBaseUrls() as $centralAuthUrl) {
             \Log::info('CentralAuthTokenMiddleware: Validating token against ' . $centralAuthUrl);
 
@@ -266,12 +288,18 @@ class CentralAuthTokenMiddleware
                 ]);
                 $validatedUser = $this->extractValidatedUser($validateResponse);
                 if ($validatedUser) {
+                    if ($cacheDuration > 0) {
+                        Cache::put($cacheKey, $validatedUser, $cacheDuration);
+                    }
                     return $validatedUser;
                 }
 
                 $meResponse = $client->get($centralAuthUrl . '/auth/me');
                 $meUser = $this->extractMeUser($meResponse);
                 if ($meUser) {
+                    if ($cacheDuration > 0) {
+                        Cache::put($cacheKey, $meUser, $cacheDuration);
+                    }
                     return $meUser;
                 }
 
@@ -288,6 +316,11 @@ class CentralAuthTokenMiddleware
                     'error' => $e->getMessage(),
                 ]);
             }
+        }
+
+        // Cache rejection for 60 seconds (or less if configured) to avoid spamming Central Auth
+        if ($cacheDuration > 0) {
+            Cache::put($cacheKey, 'invalid', min($cacheDuration, 60));
         }
 
         return null;
@@ -359,7 +392,10 @@ class CentralAuthTokenMiddleware
             // Link guest quotations
             if (class_exists(\App\Models\EcommerceQuotation::class)) {
                 \App\Models\EcommerceQuotation::whereNull('user_id')
-                    ->whereRaw('LOWER(customer_email) = ?', [$email])
+                    ->where(function ($query) use ($email) {
+                        $query->whereRaw('LOWER(customer_email) = ?', [$email])
+                              ->orWhereRaw('LOWER(contact_email) = ?', [$email]);
+                    })
                     ->update(['user_id' => $user->id]);
             }
 

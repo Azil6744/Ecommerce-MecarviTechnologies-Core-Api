@@ -174,4 +174,102 @@ class EcommerceAffiliateController extends Controller
             'data' => $referrals
         ]);
     }
+
+    public function applicationsList(Request $request)
+    {
+        $applications = \App\Models\EcommerceAffiliateApplication::with('user')
+            ->orderBy('created_at', 'desc')
+            ->paginate($request->get('per_page', 15));
+
+        return response()->json([
+            'success' => true,
+            'data' => $applications
+        ]);
+    }
+
+    public function approveApplication(Request $request, $id)
+    {
+        $app = \App\Models\EcommerceAffiliateApplication::findOrFail($id);
+        if ($app->status !== 'pending') {
+            return response()->json(['success' => false, 'message' => 'Application has already been processed.'], 400);
+        }
+
+        $app->update(['status' => 'approved']);
+
+        // Check if affiliate already exists for this user
+        $exists = EcommerceAffiliate::where('user_id', $app->user_id)->exists();
+        if (!$exists) {
+            $user = \App\Models\User::findOrFail($app->user_id);
+            // Generate a unique affiliate code
+            $code = strtoupper(substr($user->name ?? 'PARTNER', 0, 3) . rand(1000, 9999));
+            while (EcommerceAffiliate::where('affiliate_code', $code)->exists()) {
+                $code = strtoupper(substr($user->name ?? 'PARTNER', 0, 3) . rand(1000, 9999));
+            }
+
+            EcommerceAffiliate::create([
+                'user_id' => $app->user_id,
+                'affiliate_code' => $code,
+                'total_earnings' => 0.00,
+                'total_referrals' => 0,
+                'status' => 'Active',
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Affiliate application approved successfully.',
+        ]);
+    }
+
+    public function rejectApplication(Request $request, $id)
+    {
+        $app = \App\Models\EcommerceAffiliateApplication::findOrFail($id);
+        if ($app->status !== 'pending') {
+            return response()->json(['success' => false, 'message' => 'Application has already been processed.'], 400);
+        }
+
+        $app->update(['status' => 'rejected']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Affiliate application rejected successfully.',
+        ]);
+    }
+
+    public function apply(Request $request)
+    {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
+        }
+
+        // Check if already an affiliate
+        if (EcommerceAffiliate::where('user_id', $user->id)->exists()) {
+            return response()->json(['success' => false, 'message' => 'You are already an affiliate.'], 400);
+        }
+
+        // Check if pending application exists
+        $pending = \App\Models\EcommerceAffiliateApplication::where('user_id', $user->id)
+            ->where('status', 'pending')
+            ->exists();
+        if ($pending) {
+            return response()->json(['success' => false, 'message' => 'You already have a pending application.'], 400);
+        }
+
+        $validated = $request->validate([
+            'reason' => 'nullable|string',
+        ]);
+
+        $app = \App\Models\EcommerceAffiliateApplication::create([
+            'user_id' => $user->id,
+            'reason' => $validated['reason'] ?? null,
+            'status' => 'pending',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'data' => $app,
+            'message' => 'Affiliate application submitted successfully.',
+        ]);
+    }
 }

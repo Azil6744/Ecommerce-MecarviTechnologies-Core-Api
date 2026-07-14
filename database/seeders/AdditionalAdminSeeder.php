@@ -10,11 +10,14 @@ class AdditionalAdminSeeder extends Seeder
 {
     public function run(): void
     {
+        $additionalEmail = env('SEED_ADDITIONAL_ADMIN_EMAIL', 'editor@mecarvi.com');
+        $additionalPassword = env('SEED_ADDITIONAL_ADMIN_PASSWORD', 'McCarvyEditor2026!');
+
         $admin = User::updateOrCreate([
-            'email' => 'admin@mecarvi.com',
+            'email' => $additionalEmail,
         ], [
             'name' => 'Administrator',
-            'password' => Hash::make('Admin@123456'),
+            'password' => Hash::make($additionalPassword),
             'email_verified_at' => now(),
             'role' => 'super_admin',
         ]);

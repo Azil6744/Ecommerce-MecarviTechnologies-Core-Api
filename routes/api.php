@@ -86,15 +86,6 @@ use App\Http\Controllers\Api\Admin\AdminTicketController;
 use App\Http\Controllers\Api\Admin\AdminWalletController;
 use App\Http\Controllers\Api\Admin\AdminFinancialTransactionController;
 use App\Http\Controllers\Api\Admin\AdminSubscriptionPlanController;
-use App\Http\Controllers\Api\Admin\ProjectController;
-use App\Http\Controllers\Api\Admin\TaskController;
-use App\Http\Controllers\Api\Admin\TeamController;
-use App\Http\Controllers\Api\Admin\ClientController;
-use App\Http\Controllers\Api\Admin\DealController;
-use App\Http\Controllers\Api\Admin\EmployeeController;
-use App\Http\Controllers\Api\Admin\ChatController;
-use App\Http\Controllers\Api\Admin\CalendarController;
-use App\Http\Controllers\Api\Admin\FileManagerController;
 use App\Http\Controllers\Api\Admin\MarketingCampaignController;
 
 
@@ -156,6 +147,16 @@ Route::prefix('v1')->group(function () {
 
     Route::post('/internal/notifications/user-registered', [\App\Http\Controllers\Api\InternalNotificationController::class, 'userRegistered'])
         ->name('api.v1.internal.notifications.user-registered');
+
+    Route::get('/internal/check-email', [\App\Http\Controllers\Api\InternalNotificationController::class, 'checkEmail'])
+        ->name('api.v1.internal.check-email');
+
+    Route::get('/internal/fetch-user-credentials', [\App\Http\Controllers\Api\InternalNotificationController::class, 'fetchUserCredentials'])
+        ->name('api.v1.internal.fetch-user-credentials');
+
+    Route::get('/internal/verify-user-id', [\App\Http\Controllers\Api\InternalNotificationController::class, 'verifyUserId'])
+        ->name('api.v1.internal.verify-user-id');
+
 
     // Get Home Page Content (Public)
     // GET /api/v1/home-page
@@ -706,10 +707,43 @@ Route::prefix('v1')->group(function () {
         // GET /api/v1/user
         // Returns: Currently authenticated user information
         Route::get('/user', function (Request $request) {
+            $user = $request->user();
+            $token = $request->bearerToken();
+            $centralUrl = rtrim(config('services.central_auth.url'), '/');
+
+            $walletBalance = 0.00;
+            $loyaltyPoints = 0;
+
+            try {
+                if ($token) {
+                    $walletRes = \Illuminate\Support\Facades\Http::acceptJson()
+                        ->withToken($token)
+                        ->timeout(2)
+                        ->get($centralUrl . '/user/wallet');
+                    if ($walletRes->successful()) {
+                        $walletBalance = (float) $walletRes->json('data.balance');
+                    }
+
+                    $loyaltyRes = \Illuminate\Support\Facades\Http::acceptJson()
+                        ->withToken($token)
+                        ->timeout(2)
+                        ->get($centralUrl . '/user/loyalty');
+                    if ($loyaltyRes->successful()) {
+                        $loyaltyPoints = (int) $loyaltyRes->json('data.points');
+                    }
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('Failed to fetch central user ledger details: ' . $e->getMessage());
+            }
+
+            $userData = $user->toArray();
+            $userData['wallet_balance'] = $walletBalance;
+            $userData['loyalty_points'] = $loyaltyPoints;
+
             return response()->json([
                 'success' => true,
                 'data' => [
-                    'user' => $request->user(),
+                    'user' => $userData,
                 ],
             ]);
         })->name('api.v1.user');
@@ -2491,6 +2525,20 @@ Route::prefix('v1')->group(function () {
         Route::delete('/site-settings/{id}', [SiteSettingController::class, 'destroy'])
             ->name('api.v1.site-settings.destroy');
 
+        // Notification settings routes (Admin Only)
+        Route::get('/sms-settings', [\App\Http\Controllers\Api\Admin\sitesettings\NotificationSettingsController::class, 'getSmsSettings'])
+            ->name('api.v1.sms-settings.index');
+        Route::post('/sms-settings', [\App\Http\Controllers\Api\Admin\sitesettings\NotificationSettingsController::class, 'saveSmsSettings'])
+            ->name('api.v1.sms-settings.store');
+        Route::get('/push-notification-settings', [\App\Http\Controllers\Api\Admin\sitesettings\NotificationSettingsController::class, 'getPushSettings'])
+            ->name('api.v1.push-notification-settings.index');
+        Route::post('/push-notification-settings', [\App\Http\Controllers\Api\Admin\sitesettings\NotificationSettingsController::class, 'savePushSettings'])
+            ->name('api.v1.push-notification-settings.store');
+
+        // Shipping Zones & Rates routes (Admin Only)
+        Route::apiResource('/shipping-zones', \App\Http\Controllers\Api\Admin\ShippingZoneController::class);
+        Route::apiResource('/shipping-rates', \App\Http\Controllers\Api\Admin\ShippingRateController::class);
+
         /*
         |--------------------------------------------------------------------------
         | FAQ Intro Paragraph Management Routes
@@ -2703,37 +2751,6 @@ Route::prefix('v1')->group(function () {
         Route::post('/section-labels', [SectionLabelController::class, 'store'])
             ->name('api.v1.section-labels.store');
 
-        // Project Management (Admin Only)
-        Route::apiResource('projects', ProjectController::class);
-
-        // Task Management (Admin Only)
-        Route::apiResource('tasks', TaskController::class);
-
-        // Client Management (Admin Only)
-        Route::apiResource('clients', ClientController::class);
-
-        // Deal Management (Admin Only)
-        Route::apiResource('deals', DealController::class);
-
-        // Employee Management (Admin Only)
-        Route::apiResource('employees', EmployeeController::class);
-
-        // Team Management (Admin Only)
-        Route::apiResource('teams', TeamController::class);
-
-        // Chat Management (Admin Only)
-        Route::get('/chat/contacts', [ChatController::class, 'contacts']);
-        Route::get('/chat/{contactId}/messages', [ChatController::class, 'messages']);
-        Route::post('/chat/{contactId}/send', [ChatController::class, 'sendMessage']);
-
-        // Calendar Management (Admin Only)
-        Route::apiResource('calendar/events', CalendarController::class);
-
-        // File Manager (Admin Only)
-        Route::get('/files/dashboard', [FileManagerController::class, 'dashboard']);
-        Route::get('/files', [FileManagerController::class, 'index']);
-        Route::post('/files/upload', [FileManagerController::class, 'upload']);
-        Route::post('/files/verify-password', [FileManagerController::class, 'verifyPassword']);
 
     });
 

@@ -19,11 +19,14 @@ class AdminUserSeeder extends Seeder
      */
     public function run(): void
     {
+        $adminEmail = env('SEED_ADMIN_EMAIL', 'admin@mecarvi.com');
+        $adminPassword = env('SEED_ADMIN_PASSWORD', 'McCarvyAdmin2026!');
+
         $adminUser = User::updateOrCreate([
-            'email' => 'admin@gmail.com',
+            'email' => $adminEmail,
         ], [
             'name' => 'Super Admin',
-            'password' => Hash::make('123456'),
+            'password' => Hash::make($adminPassword),
             'email_verified_at' => now(),
             'role' => 'super_admin',
         ]);

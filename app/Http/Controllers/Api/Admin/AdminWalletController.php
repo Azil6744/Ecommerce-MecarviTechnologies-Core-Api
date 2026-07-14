@@ -3,50 +3,68 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\EcommerceWalletTransaction;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class AdminWalletController extends Controller
 {
-    /**
-     * Get all wallet transactions (admin view)
-     */
-    public function index(Request $request)
+    private function centralCall(string $method, string $path, array $data = [])
     {
-        $query = EcommerceWalletTransaction::with('user');
+        $centralUrl = rtrim(config('services.central_auth.url'), '/');
+        $secret = (string) config('services.internal_notifications.secret');
 
-        if ($request->has('user_id')) {
-            $query->where('user_id', $request->user_id);
+        $request = Http::acceptJson()
+            ->withHeaders(['X-Internal-Notification-Secret' => $secret])
+            ->timeout(5);
+
+        if (strtolower($method) === 'post') {
+            return $request->post($centralUrl . $path, $data);
         }
 
-        if ($request->has('transaction_type')) {
-            $query->where('transaction_type', $request->transaction_type);
-        }
-
-        $transactions = $query->paginate($request->get('per_page', 15));
-
-        return response()->json($transactions);
+        return $request->get($centralUrl . $path, $data);
     }
 
-    /**
-     * Get user wallet balance and summary
-     */
+    public function index(Request $request)
+    {
+        try {
+            $response = $this->centralCall('get', '/v1/internal/admin/wallet');
+            if ($response->successful()) {
+                return response()->json([
+                    'data' => $response->json('data'),
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Central admin index failed: ' . $e->getMessage());
+        }
+
+        return response()->json(['data' => []]);
+    }
+
     public function getUserWallet(User $user)
     {
-        $balance = $user->wallet_balance ?? 0;
-        $transactions = $user->walletTransactions()->latest()->take(10)->get();
+        try {
+            $response = $this->centralCall('get', '/v1/internal/admin/wallet/' . urlencode($user->email));
+            if ($response->successful()) {
+                $data = $response->json('data');
+                return response()->json([
+                    'user_id' => $user->id,
+                    'balance' => (float)($data['wallet']['balance'] ?? 0),
+                    'transactions' => $data['transactions'] ?? [],
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Central admin getUserWallet failed: ' . $e->getMessage());
+        }
 
         return response()->json([
             'user_id' => $user->id,
-            'balance' => $balance,
-            'transactions' => $transactions,
+            'balance' => 0.00,
+            'transactions' => [],
         ]);
     }
 
-    /**
-     * Add funds to user wallet (admin action)
-     */
     public function creditWallet(Request $request, User $user)
     {
         $request->validate([
@@ -54,27 +72,32 @@ class AdminWalletController extends Controller
             'reason' => 'required|string',
         ]);
 
-        $balance = ($user->wallet_balance ?? 0) + $request->amount;
-        $user->update(['wallet_balance' => $balance]);
+        try {
+            $response = $this->centralCall('post', '/v1/internal/admin/wallet/adjust', [
+                'email' => $user->email,
+                'type' => 'credit',
+                'amount' => $request->amount,
+                'description' => $request->reason,
+            ]);
 
-        EcommerceWalletTransaction::create([
-            'user_id' => $user->id,
-            'transaction_type' => 'credit',
-            'amount' => $request->amount,
-            'reason' => $request->reason,
-            'balance_after' => $balance,
-            'status' => 'completed',
-        ]);
+            if ($response->successful()) {
+                $tx = $response->json('data');
+                return response()->json([
+                    'message' => 'Wallet credited successfully',
+                    'balance' => (float)($tx['balance_after'] ?? 0),
+                ]);
+            }
 
-        return response()->json([
-            'message' => 'Wallet credited successfully',
-            'balance' => $balance,
-        ]);
+            return response()->json([
+                'message' => $response->json('message') ?: 'Failed to credit wallet',
+            ], $response->status());
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 500);
+        }
     }
 
-    /**
-     * Deduct funds from user wallet
-     */
     public function debitWallet(Request $request, User $user)
     {
         $request->validate([
@@ -82,29 +105,29 @@ class AdminWalletController extends Controller
             'reason' => 'required|string',
         ]);
 
-        $currentBalance = $user->wallet_balance ?? 0;
+        try {
+            $response = $this->centralCall('post', '/v1/internal/admin/wallet/adjust', [
+                'email' => $user->email,
+                'type' => 'debit',
+                'amount' => $request->amount,
+                'description' => $request->reason,
+            ]);
 
-        if ($currentBalance < $request->amount) {
+            if ($response->successful()) {
+                $tx = $response->json('data');
+                return response()->json([
+                    'message' => 'Amount deducted from wallet',
+                    'balance' => (float)($tx['balance_after'] ?? 0),
+                ]);
+            }
+
             return response()->json([
-                'message' => 'Insufficient wallet balance',
-            ], 422);
+                'message' => $response->json('message') ?: 'Failed to debit wallet',
+            ], $response->status());
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 500);
         }
-
-        $balance = $currentBalance - $request->amount;
-        $user->update(['wallet_balance' => $balance]);
-
-        EcommerceWalletTransaction::create([
-            'user_id' => $user->id,
-            'transaction_type' => 'debit',
-            'amount' => $request->amount,
-            'reason' => $request->reason,
-            'balance_after' => $balance,
-            'status' => 'completed',
-        ]);
-
-        return response()->json([
-            'message' => 'Amount deducted from wallet',
-            'balance' => $balance,
-        ]);
     }
 }

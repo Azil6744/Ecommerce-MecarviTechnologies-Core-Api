@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class ProfileController extends Controller
 {
@@ -33,8 +35,20 @@ class ProfileController extends Controller
             'phone' => 'nullable|string|max:20',
         ]);
 
-        $user = $request->user();
         $payload = $request->only(['name', 'email', 'username', 'phone']);
+
+        // Proxy update to Central Auth first
+        $centralResponse = $this->proxyToCentralAuth($request, '/profile', 'PUT', $payload);
+
+        if ($centralResponse && !$centralResponse->successful()) {
+            return response()->json([
+                'success' => false,
+                'message' => $centralResponse->json('message') ?? 'Failed to update profile centrally.',
+                'errors' => $centralResponse->json('errors') ?? [],
+            ], $centralResponse->status());
+        }
+
+        $user = $request->user();
         $allowed = [];
 
         foreach ($payload as $key => $value) {
@@ -62,15 +76,24 @@ class ProfileController extends Controller
             'password' => 'required|string|min:8|confirmed',
         ]);
 
-        $user = $request->user();
+        $payload = [
+            'current_password' => $request->current_password,
+            'password' => $request->password,
+            'password_confirmation' => $request->password_confirmation,
+        ];
 
-        if (!Hash::check($request->current_password, $user->password)) {
+        // Proxy update to Central Auth first
+        $centralResponse = $this->proxyToCentralAuth($request, '/profile/password', 'PUT', $payload);
+
+        if ($centralResponse && !$centralResponse->successful()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Current password is incorrect',
-            ], 422);
+                'message' => $centralResponse->json('message') ?? 'The current password is incorrect.',
+                'errors' => $centralResponse->json('errors') ?? [],
+            ], $centralResponse->status());
         }
 
+        $user = $request->user();
         $user->update(['password' => Hash::make($request->password)]);
 
         return response()->json([
@@ -98,11 +121,21 @@ class ProfileController extends Controller
             ], 422);
         }
 
-        if ($user->pin && $request->filled('current_pin') && !Hash::check($request->current_pin, $user->pin)) {
+        $payload = [
+            'current_pin' => $request->current_pin,
+            'pin' => $request->pin,
+            'pin_confirmation' => $request->pin_confirmation,
+        ];
+
+        // Proxy update to Central Auth first
+        $centralResponse = $this->proxyToCentralAuth($request, '/profile/pin', 'PUT', $payload);
+
+        if ($centralResponse && !$centralResponse->successful()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Current PIN is incorrect',
-            ], 422);
+                'message' => $centralResponse->json('message') ?? 'The current PIN is incorrect.',
+                'errors' => $centralResponse->json('errors') ?? [],
+            ], $centralResponse->status());
         }
 
         $user->update(['pin' => Hash::make($request->pin)]);
@@ -111,5 +144,69 @@ class ProfileController extends Controller
             'success' => true,
             'message' => 'PIN updated successfully',
         ]);
+    }
+
+    /**
+     * Determine candidate Central Auth API URLs.
+     */
+    private function centralAuthBaseUrls(): array
+    {
+        $candidates = [
+            config('services.central_auth.internal_url'),
+            config('services.central_auth.url'),
+            config('services.central_auth.api_url'),
+            'https://auth-api.mecarvi.com/api',
+            'http://127.0.0.1:8001/api',
+        ];
+
+        return array_values(array_unique(array_filter(array_map(function (?string $url) {
+            if (! $url) {
+                return null;
+            }
+
+            $normalized = rtrim($url, '/');
+            return str_ends_with($normalized, '/api') ? $normalized : $normalized . '/api';
+        }, $candidates))));
+    }
+
+    /**
+     * Proxy a request to Central Auth using the user's active session token.
+     */
+    private function proxyToCentralAuth(Request $request, string $endpoint, string $method, array $data): ?\Illuminate\Http\Client\Response
+    {
+        $token = $request->header('X-Central-Auth-Token') ?? $request->bearerToken();
+        if (! $token) {
+            return null;
+        }
+
+        foreach ($this->centralAuthBaseUrls() as $centralAuthUrl) {
+            try {
+                $client = Http::withHeaders([
+                    'Authorization' => 'Bearer ' . $token,
+                    'Accept' => 'application/json',
+                ])->timeout(10);
+
+                $url = $centralAuthUrl . $endpoint;
+                $response = null;
+
+                if ($method === 'PUT') {
+                    $response = $client->put($url, $data);
+                } elseif ($method === 'POST') {
+                    $response = $client->post($url, $data);
+                } elseif ($method === 'PATCH') {
+                    $response = $client->patch($url, $data);
+                } else {
+                    $response = $client->get($url, $data);
+                }
+
+                if ($response) {
+                    return $response;
+                }
+            } catch (\Throwable $e) {
+                Log::warning("ProfileController proxy failed for url {$centralAuthUrl}: " . $e->getMessage());
+            }
+        }
+
+        return null;
     }
 }

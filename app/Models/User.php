@@ -26,6 +26,7 @@ class User extends Authenticatable
         'phone',
         'pin',
         'role',
+        'avatar',
         'wallet_balance',
         'loyalty_points',
         'banned_at',

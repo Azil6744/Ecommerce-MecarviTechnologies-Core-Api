@@ -114,14 +114,58 @@ class CheckoutController extends Controller
                 }
 
                 if ($pointsRedeemed > 0) {
-                    if ($user->loyalty_points < $pointsRedeemed) {
+                    $centralUrl = env('CENTRAL_AUTH_URL', 'http://localhost:8000/api');
+                    $token = $request->header('X-Central-Auth-Token') ?? $request->bearerToken();
+                    $currentPoints = (int) $user->loyalty_points;
+
+                    if ($token) {
+                        try {
+                            $loyaltyRes = \Illuminate\Support\Facades\Http::acceptJson()
+                                ->withToken($token)
+                                ->timeout(3)
+                                ->get($centralUrl . '/user/loyalty');
+                            if ($loyaltyRes->successful()) {
+                                $currentPoints = (int) $loyaltyRes->json('data.points');
+                            }
+                        } catch (\Throwable $e) {
+                            \Log::warning('Checkout failed to fetch central user points: ' . $e->getMessage());
+                        }
+                    }
+
+                    if ($currentPoints < $pointsRedeemed) {
                         return response()->json([
                             'success' => false,
-                            'message' => "Insufficient loyalty points. You need {$pointsRedeemed} points but only have {$user->loyalty_points}."
+                            'message' => "Insufficient loyalty points. You need {$pointsRedeemed} points but only have {$currentPoints}."
                         ], 400);
                     }
-                    $user->loyalty_points -= $pointsRedeemed;
-                    $user->save();
+
+                    if ($token) {
+                        try {
+                            $adjustRes = \Illuminate\Support\Facades\Http::acceptJson()
+                                ->withToken($token)
+                                ->timeout(3)
+                                ->post($centralUrl . '/user/loyalty/adjust', [
+                                    'points' => $pointsRedeemed,
+                                    'transaction_type' => 'redeemed',
+                                    'reason' => 'Points redeemed for checkout order items.',
+                                ]);
+                            if (!$adjustRes->successful()) {
+                                return response()->json([
+                                    'success' => false,
+                                    'message' => 'Failed to deduct central loyalty points.'
+                                ], 400);
+                            }
+                        } catch (\Throwable $e) {
+                            \Log::error('Checkout failed to adjust central user points: ' . $e->getMessage());
+                            return response()->json([
+                                'success' => false,
+                                'message' => 'Loyalty system is temporarily unavailable. Please try again.'
+                            ], 500);
+                        }
+                    } else {
+                        $user->loyalty_points -= $pointsRedeemed;
+                        $user->save();
+                    }
                 }
             }
 
@@ -130,14 +174,58 @@ class CheckoutController extends Controller
             if ($user && !empty($validated['points_redeemed'])) {
                 $generalPointsRedeemed = (int)$validated['points_redeemed'];
                 if ($generalPointsRedeemed > 0) {
-                    if ($user->loyalty_points < $generalPointsRedeemed) {
+                    $centralUrl = env('CENTRAL_AUTH_URL', 'http://localhost:8000/api');
+                    $token = $request->header('X-Central-Auth-Token') ?? $request->bearerToken();
+                    $currentPoints = (int) $user->loyalty_points;
+
+                    if ($token) {
+                        try {
+                            $loyaltyRes = \Illuminate\Support\Facades\Http::acceptJson()
+                                ->withToken($token)
+                                ->timeout(3)
+                                ->get($centralUrl . '/user/loyalty');
+                            if ($loyaltyRes->successful()) {
+                                $currentPoints = (int) $loyaltyRes->json('data.points');
+                            }
+                        } catch (\Throwable $e) {
+                            \Log::warning('Checkout failed to fetch central user points: ' . $e->getMessage());
+                        }
+                    }
+
+                    if ($currentPoints < $generalPointsRedeemed) {
                         return response()->json([
                             'success' => false,
-                            'message' => "Insufficient loyalty points. You need {$generalPointsRedeemed} points but only have {$user->loyalty_points}."
+                            'message' => "Insufficient loyalty points. You need {$generalPointsRedeemed} points but only have {$currentPoints}."
                         ], 400);
                     }
-                    $user->loyalty_points -= $generalPointsRedeemed;
-                    $user->save();
+
+                    if ($token) {
+                        try {
+                            $adjustRes = \Illuminate\Support\Facades\Http::acceptJson()
+                                ->withToken($token)
+                                ->timeout(3)
+                                ->post($centralUrl . '/user/loyalty/adjust', [
+                                    'points' => $generalPointsRedeemed,
+                                    'transaction_type' => 'redeemed',
+                                    'reason' => 'Points redeemed for checkout discount.',
+                                ]);
+                            if (!$adjustRes->successful()) {
+                                return response()->json([
+                                    'success' => false,
+                                    'message' => 'Failed to deduct central loyalty points.'
+                                ], 400);
+                            }
+                        } catch (\Throwable $e) {
+                            \Log::error('Checkout failed to adjust central user points: ' . $e->getMessage());
+                            return response()->json([
+                                'success' => false,
+                                'message' => 'Loyalty system is temporarily unavailable. Please try again.'
+                            ], 500);
+                        }
+                    } else {
+                        $user->loyalty_points -= $generalPointsRedeemed;
+                        $user->save();
+                    }
                     $pointsRedeemed += $generalPointsRedeemed;
                 }
             }

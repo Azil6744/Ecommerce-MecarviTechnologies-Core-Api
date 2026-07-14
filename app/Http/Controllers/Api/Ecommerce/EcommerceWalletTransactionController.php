@@ -4,91 +4,159 @@ namespace App\Http\Controllers\Api\Ecommerce;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\EcommerceWalletTransaction;
-use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class EcommerceWalletTransactionController extends Controller
 {
     public function summary(Request $request)
     {
-        $user = $request->user();
-        $query = EcommerceWalletTransaction::query();
+        $token = $request->bearerToken();
+        $centralUrl = rtrim(config('services.central_auth.url'), '/');
+        
+        try {
+            if ($token) {
+                $response = Http::acceptJson()
+                    ->withToken($token)
+                    ->timeout(5)
+                    ->get($centralUrl . '/user/wallet');
+            } else {
+                $email = $request->user()->email;
+                $secret = (string) config('services.internal_notifications.secret');
+                $response = Http::acceptJson()
+                    ->withHeaders(['X-Internal-Notification-Secret' => $secret])
+                    ->timeout(5)
+                    ->get($centralUrl . '/v1/internal/admin/wallet/' . urlencode($email));
+            }
 
-        if ($user && !$user->isSuperAdmin() && Schema::hasColumn((new EcommerceWalletTransaction)->getTable(), 'user_id')) {
-            $query->where('user_id', $user->id);
+            if ($response->successful()) {
+                $data = $response->json('data');
+                if (isset($data['wallet'])) {
+                    $balance = (float)($data['wallet']['balance'] ?? 0);
+                    $transactions = collect($data['transactions'] ?? []);
+                    $credits = (float) $transactions->filter(fn ($t) => in_array(strtolower($t['type'] ?? ''), ['credit', 'deposit', 'refund', 'affiliate earned', 'affiliate_earned']))->sum('amount');
+                    $debits = (float) $transactions->filter(fn ($t) => !in_array(strtolower($t['type'] ?? ''), ['credit', 'deposit', 'refund', 'affiliate earned', 'affiliate_earned']))->sum('amount');
+                    return response()->json([
+                        'success' => true,
+                        'data' => [
+                            'balance' => $balance,
+                            'available_balance' => $balance,
+                            'usable_balance' => $balance,
+                            'credits' => $credits,
+                            'debits' => $debits,
+                            'transactions_count' => $transactions->count(),
+                            'last_updated' => $data['wallet']['updated_at'] ?? null,
+                        ],
+                    ]);
+                }
+                return response()->json([
+                    'success' => true,
+                    'data' => $data,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Central wallet summary failed: ' . $e->getMessage());
         }
-
-        $transactions = $query->latest()->get();
-        $balance = (float) ($transactions->first()?->balance_after ?? 0);
-        $credits = (float) $transactions
-            ->filter(fn ($transaction) => $this->isCredit($transaction))
-            ->sum('amount');
-        $debits = (float) $transactions
-            ->filter(fn ($transaction) => !$this->isCredit($transaction))
-            ->sum('amount');
 
         return response()->json([
             'success' => true,
             'data' => [
-                'balance' => $balance,
-                'credits' => $credits,
-                'debits' => $debits,
-                'transactions_count' => $transactions->count(),
-                'last_updated' => optional($transactions->first()?->updated_at ?? $transactions->first()?->created_at)?->toISOString(),
+                'balance' => 0.00,
+                'available_balance' => 0.00,
+                'usable_balance' => 0.00,
+                'credits' => 0.00,
+                'debits' => 0.00,
+                'transactions_count' => 0,
+                'last_updated' => null,
             ],
         ]);
     }
 
     public function index(Request $request)
     {
-        $user = $request->user();
-        // Check if admin to return all, or just user
-        if ($user && $user->isSuperAdmin()) {
-            return response()->json(['success' => true, 'data' => EcommerceWalletTransaction::all()]);
-        }
-        
-        // Get by user_id if column exists, otherwise all
-        if(Schema::hasColumn((new EcommerceWalletTransaction)->getTable(), 'user_id')) {
-            $query = EcommerceWalletTransaction::where('user_id', $user->id);
-            return response()->json(['success' => true, 'data' => $query->get()]);
+        $token = $request->bearerToken();
+        $centralUrl = rtrim(config('services.central_auth.url'), '/');
+
+        try {
+            if ($token) {
+                $response = Http::acceptJson()
+                    ->withToken($token)
+                    ->timeout(5)
+                    ->get($centralUrl . '/user/wallet/transactions');
+            } else {
+                $email = $request->user()->email;
+                $secret = (string) config('services.internal_notifications.secret');
+                $response = Http::acceptJson()
+                    ->withHeaders(['X-Internal-Notification-Secret' => $secret])
+                    ->timeout(5)
+                    ->get($centralUrl . '/v1/internal/admin/wallet/' . urlencode($email));
+            }
+
+            if ($response->successful()) {
+                $data = $response->json('data');
+                $txList = isset($data['transactions']) ? $data['transactions'] : $data;
+                return response()->json([
+                    'success' => true,
+                    'data' => $txList,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::error('Central wallet index failed: ' . $e->getMessage());
         }
 
-        return response()->json(['success' => true, 'data' => EcommerceWalletTransaction::all()]);
+        return response()->json(['success' => true, 'data' => []]);
     }
 
     public function store(Request $request)
     {
-        $data = $request->all();
-        if(Schema::hasColumn((new EcommerceWalletTransaction)->getTable(), 'user_id')) {
-            $data['user_id'] = $request->user()->id;
+        $token = $request->bearerToken();
+        $centralUrl = rtrim(config('services.central_auth.url'), '/');
+
+        try {
+            if ($token) {
+                $response = Http::acceptJson()
+                    ->withToken($token)
+                    ->timeout(5)
+                    ->post($centralUrl . '/user/wallet/transaction', $request->all());
+            } else {
+                $email = $request->user()->email;
+                $secret = (string) config('services.internal_notifications.secret');
+                $response = Http::acceptJson()
+                    ->withHeaders(['X-Internal-Notification-Secret' => $secret])
+                    ->timeout(5)
+                    ->post($centralUrl . '/v1/internal/admin/wallet/adjust', array_merge($request->all(), ['email' => $email]));
+            }
+
+            if ($response->successful()) {
+                return response()->json([
+                    'success' => true,
+                    'data' => $response->json('data'),
+                ]);
+            }
+            return response()->json([
+                'success' => false,
+                'message' => $response->json('message') ?: 'Failed to create transaction',
+            ], $response->status());
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
         }
-        $item = EcommerceWalletTransaction::create($data);
-        return response()->json(['success' => true, 'data' => $item]);
     }
 
     public function show(Request $request, $id)
     {
-        $item = EcommerceWalletTransaction::findOrFail($id);
-        return response()->json(['success' => true, 'data' => $item]);
+        return response()->json(['success' => false, 'message' => 'Method not supported in centralized mode.'], 501);
     }
 
     public function update(Request $request, $id)
     {
-        $item = EcommerceWalletTransaction::findOrFail($id);
-        $item->update($request->all());
-        return response()->json(['success' => true, 'data' => $item]);
+        return response()->json(['success' => false, 'message' => 'Method not supported in centralized mode.'], 501);
     }
 
     public function destroy(Request $request, $id)
     {
-        $item = EcommerceWalletTransaction::findOrFail($id);
-        $item->delete();
-        return response()->json(['success' => true, 'message' => 'Deleted successfully']);
-    }
-
-    private function isCredit(EcommerceWalletTransaction $transaction): bool
-    {
-        $type = strtolower((string) ($transaction->type ?? ''));
-        return in_array($type, ['credit', 'deposit', 'refund', 'affiliate earned', 'affiliate_earned']);
+        return response()->json(['success' => false, 'message' => 'Method not supported in centralized mode.'], 501);
     }
 }

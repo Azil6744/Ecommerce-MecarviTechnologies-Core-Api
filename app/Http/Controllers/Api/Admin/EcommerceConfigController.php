@@ -117,84 +117,40 @@ class EcommerceConfigController extends Controller
                 'points' => 'required|integer',
                 'transaction_type' => 'required|string|in:manual_added,manual_removed,reversed,expired,bonus',
                 'reason' => 'required|string|max:1000',
-                'reason_details' => 'nullable|string',
-                'notes' => 'nullable|string',
-                'reference_type' => 'nullable|string',
-                'reference_id' => 'nullable|string',
-                'reference_date' => 'nullable|string',
-                'supporting_document' => 'nullable',
-                'expiration_date' => 'nullable|string',
             ]);
 
             $user = \App\Models\User::findOrFail($validated['user_id']);
-            $points = (int)$validated['points'];
-            
-            // Adjust balance
-            if ($validated['transaction_type'] === 'manual_removed') {
-                $user->loyalty_points = max(0, $user->loyalty_points - abs($points));
-            } else {
-                $user->loyalty_points = max(0, $user->loyalty_points + $points);
-            }
-            $user->save();
 
-            // Create Transaction audit log
-            $ratio = 0.01;
-            $settings = SiteSetting::first();
-            if ($settings && $settings->loyalty_settings) {
-                $loyalty = json_decode($settings->loyalty_settings, true);
-                $ratio = (float)($loyalty['points_to_dollar_ratio'] ?? 0.01);
-            }
+            $centralUrl = rtrim(config('services.central_auth.url'), '/');
+            $secret = (string) config('services.internal_notifications.secret');
 
-            // Handle file upload if present
-            $docPath = null;
-            if ($request->hasFile('supporting_document')) {
-                $file = $request->file('supporting_document');
-                $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-                // Ensure directory exists
-                $uploadDir = public_path('uploads/loyalty_docs');
-                if (!file_exists($uploadDir)) {
-                    mkdir($uploadDir, 0755, true);
-                }
-                $file->move($uploadDir, $filename);
-                $docPath = '/uploads/loyalty_docs/' . $filename;
-            } else if ($request->input('supporting_document') && is_string($request->input('supporting_document'))) {
-                $docPath = $request->input('supporting_document');
-            }
+            $response = \Illuminate\Support\Facades\Http::acceptJson()
+                ->withHeaders(['X-Internal-Notification-Secret' => $secret])
+                ->timeout(5)
+                ->post($centralUrl . '/v1/internal/admin/loyalty/adjust', [
+                    'email' => $user->email,
+                    'points' => $validated['points'],
+                    'transaction_type' => $validated['transaction_type'],
+                    'reason' => $validated['reason'],
+                ]);
 
-            $expirationDate = null;
-            if ($request->input('expiration_date')) {
-                try {
-                    $expirationDate = \Carbon\Carbon::parse($request->input('expiration_date'));
-                } catch (\Exception $ex) {
-                    $expirationDate = null;
-                }
+            if ($response->successful()) {
+                $totalPoints = $response->json('total_points') ?? 0;
+                $tx = $response->json('data');
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Customer points adjusted successfully!',
+                    'data' => [
+                        'loyalty_points' => $totalPoints,
+                        'transaction' => $tx
+                    ]
+                ]);
             }
-
-            $transaction = \App\Models\EcommerceLoyaltyTransaction::create([
-                'user_id' => $user->id,
-                'transaction_type' => $validated['transaction_type'],
-                'points' => $validated['transaction_type'] === 'manual_removed' ? -abs($points) : $points,
-                'dollar_value' => abs($points) * $ratio,
-                'status' => 'available',
-                'reason' => $validated['reason'],
-                'reason_details' => $validated['reason_details'] ?? null,
-                'notes' => $validated['notes'] ?? null,
-                'reference_type' => $validated['reference_type'] ?? null,
-                'reference_id' => $validated['reference_id'] ?? null,
-                'reference_date' => $validated['reference_date'] ?? null,
-                'supporting_document' => $docPath,
-                'admin_id' => $request->user()?->id ?? 1, // Fallback to user ID 1 if not authenticated
-                'expiration_date' => $expirationDate,
-            ]);
 
             return response()->json([
-                'success' => true,
-                'message' => 'Customer points adjusted successfully!',
-                'data' => [
-                    'loyalty_points' => $user->loyalty_points,
-                    'transaction' => $transaction
-                ]
-            ]);
+                'success' => false,
+                'message' => $response->json('message') ?: 'Failed to adjust points',
+            ], $response->status());
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -210,18 +166,35 @@ class EcommerceConfigController extends Controller
     public function getTransactions(Request $request)
     {
         try {
-            $query = \App\Models\EcommerceLoyaltyTransaction::with(['user', 'admin', 'order']);
+            $centralUrl = rtrim(config('services.central_auth.url'), '/');
+            $secret = (string) config('services.internal_notifications.secret');
 
-            if ($request->has('user_id')) {
-                $query->where('user_id', $request->query('user_id'));
+            $response = \Illuminate\Support\Facades\Http::acceptJson()
+                ->withHeaders(['X-Internal-Notification-Secret' => $secret])
+                ->timeout(5)
+                ->get($centralUrl . '/v1/internal/admin/loyalty/transactions');
+
+            if ($response->successful()) {
+                $transactions = collect($response->json('data'));
+
+                // If user_id is provided, filter by user email
+                if ($request->has('user_id')) {
+                    $user = \App\Models\User::find($request->query('user_id'));
+                    if ($user) {
+                        $transactions = $transactions->filter(fn($t) => strtolower($t['user']['email'] ?? '') === strtolower($user->email))->values();
+                    }
+                }
+
+                return response()->json([
+                    'success' => true,
+                    'data' => $transactions
+                ]);
             }
 
-            $transactions = $query->orderBy('created_at', 'desc')->get();
-
             return response()->json([
-                'success' => true,
-                'data' => $transactions
-            ]);
+                'success' => false,
+                'message' => 'Failed to fetch transactions list',
+            ], $response->status());
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
