@@ -105,6 +105,13 @@ class CentralAuthTokenMiddleware
                 }
             }
 
+            if ($user && $user->banned_at !== null) {
+                \Log::warning('CentralAuthTokenMiddleware: Banned user attempted access: ' . $user->email);
+                return response()->json([
+                    'message' => 'Your account has been banned on this website.',
+                ], 403);
+            }
+
             $this->linkGuestDataForUser($user);
 
             $this->authenticateRequestAs($request, $user);
@@ -285,6 +292,7 @@ class CentralAuthTokenMiddleware
 
                 $validateResponse = $client->post($centralAuthUrl . '/auth/validate-token', [
                     'token' => $token,
+                    'site_slug' => config('services.mccarvy_site.slug', 'embroidery'),
                 ]);
                 $validatedUser = $this->extractValidatedUser($validateResponse);
                 if ($validatedUser) {

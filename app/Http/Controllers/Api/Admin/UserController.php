@@ -679,6 +679,17 @@ class UserController extends Controller
             $customer->deactivated_at = $validated['status'] === 'deactivated' ? Carbon::now() : null;
             $customer->save();
 
+            // Forward status update to Central Auth
+            try {
+                $this->centralCall('post', '/v1/internal/admin/users/ban-status', [
+                    'email' => $customer->email,
+                    'site_slug' => config('services.mccarvy_site.slug', 'embroidery'),
+                    'status' => $validated['status'],
+                ]);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Failed to sync ban status to Central Auth for ' . $customer->email . ': ' . $e->getMessage());
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Customer status updated.',
@@ -759,5 +770,21 @@ class UserController extends Controller
             'created_at' => $user->created_at,
             'updated_at' => $user->updated_at,
         ];
+    }
+
+    private function centralCall(string $method, string $path, array $data = [])
+    {
+        $centralUrl = rtrim(config('services.central_auth.url'), '/');
+        $secret = (string) config('services.internal_notifications.secret');
+
+        $request = \Illuminate\Support\Facades\Http::acceptJson()
+            ->withHeaders(['X-Internal-Notification-Secret' => $secret])
+            ->timeout(5);
+
+        if (strtolower($method) === 'post') {
+            return $request->post($centralUrl . $path, $data);
+        }
+
+        return $request->get($centralUrl . $path, $data);
     }
 }
