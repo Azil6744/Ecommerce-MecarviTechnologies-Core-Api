@@ -135,7 +135,16 @@ class EcommerceOrderController extends Controller
 
         $user = $request->user();
         if (! ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && Schema::hasColumn((new EcommerceOrder)->getTable(), 'user_id')) {
-            $query->where('user_id', $user->id);
+            if ($user) {
+                $query->where(function ($q) use ($user) {
+                    $q->where('user_id', $user->id)
+                      ->orWhere(function ($sub) use ($user) {
+                          $sub->whereNull('user_id')
+                              ->whereRaw('LOWER(customer_email) = ?', [strtolower($user->email)]);
+                      });
+                });
+            }
+            // Guest (unauthenticated): no user_id filter — order_number in URL is the access control
         }
         
         $item = $query->firstOrFail();
@@ -163,7 +172,16 @@ class EcommerceOrderController extends Controller
 
         $user = $request->user();
         if (! ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && Schema::hasColumn((new EcommerceOrder)->getTable(), 'user_id')) {
-            $query->where('user_id', $user->id);
+            if ($user) {
+                $query->where(function ($q) use ($user) {
+                    $q->where('user_id', $user->id)
+                      ->orWhere(function ($sub) use ($user) {
+                          $sub->whereNull('user_id')
+                              ->whereRaw('LOWER(customer_email) = ?', [strtolower($user->email)]);
+                      });
+                });
+            }
+            // Guest (unauthenticated): order_number + email params are the access control
         }
 
         $order = $query->latest()->firstOrFail();
@@ -339,7 +357,15 @@ class EcommerceOrderController extends Controller
 
         $user = $request->user();
         if (! ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && Schema::hasColumn((new EcommerceOrder)->getTable(), 'user_id')) {
-            $query->where('user_id', $user->id);
+            if ($user) {
+                $query->where(function ($q) use ($user) {
+                    $q->where('user_id', $user->id)
+                      ->orWhere(function ($sub) use ($user) {
+                          $sub->whereNull('user_id')
+                              ->whereRaw('LOWER(customer_email) = ?', [strtolower($user->email)]);
+                      });
+                });
+            }
         }
 
         return $query->firstOrFail();
@@ -395,20 +421,24 @@ class EcommerceOrderController extends Controller
         ];
     }
 
-    public static function formatAddress(?EcommerceAddress $address): ?string
+    public static function formatAddress($address): ?string
     {
         if (! $address) {
             return null;
         }
 
+        if (is_array($address)) {
+            $address = (object) $address;
+        }
+
         return implode("\n", array_values(array_filter([
             trim(($address->first_name ?? '') . ' ' . ($address->last_name ?? '')) ?: null,
-            $address->company,
-            $address->address ?? $address->address_line_1,
-            $address->address_line_2,
+            $address->company ?? null,
+            $address->address ?? $address->address_line_1 ?? null,
+            $address->address_line_2 ?? null,
             trim(($address->city ?? '') . ', ' . ($address->state ?? '') . ' ' . ($address->zip_code ?? $address->postal_code ?? '')) ?: null,
-            $address->country,
-            $address->phone,
+            $address->country ?? null,
+            $address->phone ?? null,
         ])));
     }
 }

@@ -51,6 +51,13 @@ class CentralAuthTokenMiddleware
             if (! $centralUser) {
                 $localUser = $this->validateAgainstLocalSanctum($token);
                 if ($localUser) {
+                    if ($localUser->banned_at !== null) {
+                        \Log::warning('CentralAuthTokenMiddleware: Banned user (local Sanctum) attempted access: ' . $localUser->email);
+                        return response()->json([
+                            'message' => 'Your account has been banned on this website.',
+                        ], 403);
+                    }
+
                     $this->authenticateRequestAs($request, $localUser);
                     \Log::info('CentralAuthTokenMiddleware: Token valid as local Sanctum token for ' . $localUser->email);
 

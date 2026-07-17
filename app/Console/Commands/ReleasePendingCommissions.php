@@ -49,20 +49,13 @@ class ReleasePendingCommissions extends Command
                     $referrer = User::lockForUpdate()->find($commission->referrer_id);
 
                     if ($referrer && $commission->commission_amount > 0) {
-                        $newBalance = round((float)($referrer->wallet_balance ?? 0) + (float)$commission->commission_amount, 2);
-                        
-                        // Update referrer wallet balance
-                        $referrer->update(['wallet_balance' => $newBalance]);
-
-                        // Log transaction
-                        EcommerceWalletTransaction::create([
-                            'user_id' => $referrer->id,
-                            'type' => 'Affiliate Earned',
-                            'amount' => $commission->commission_amount,
-                            'balance_after' => $newBalance,
-                            'description' => 'Referral commission released for order #' . ($commission->order ? $commission->order->order_number : $commission->order_id),
-                            'status' => 'Completed',
-                        ]);
+                        \App\Services\WalletService::adjustWallet(
+                            $referrer->id,
+                            $commission->commission_amount,
+                            'Affiliate Earned',
+                            'Referral commission released for order #' . ($commission->order ? $commission->order->order_number : $commission->order_id),
+                            $commission->order_id
+                        );
 
                         // Increment affiliate earnings
                         $affiliate = $referrer->affiliate;

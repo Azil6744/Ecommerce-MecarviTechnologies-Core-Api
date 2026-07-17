@@ -86,7 +86,7 @@ class EcommerceConfigController extends Controller
             ]);
 
             // Sync legacy columns in site_settings for checkout code compatibility
-            $settings->loyalty_points_earned_per_unit_price = (float)($validated['points_per_dollar'] > 0 ? (1.0 / (float)$validated['points_per_dollar']) * 50.0 : 50.0);
+            $settings->loyalty_points_earned_per_unit_price = 1.0;
             $settings->loyalty_points_earned_points = (int)($validated['points_per_dollar'] ?: 2);
 
             $settings->loyalty_settings = json_encode($validated);

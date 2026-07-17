@@ -141,17 +141,13 @@ class EcommerceAffiliateController extends Controller
         // Add to referrer's wallet
         $referrer = $commission->referrer;
         if ($referrer) {
-            $newBalance = round((float)($referrer->wallet_balance ?? 0) + (float)$commission->commission_amount, 2);
-            $referrer->update(['wallet_balance' => $newBalance]);
-
-            \App\Models\EcommerceWalletTransaction::create([
-                'user_id' => $referrer->id,
-                'type' => 'Affiliate Credit',
-                'amount' => $commission->commission_amount,
-                'balance_after' => $newBalance,
-                'description' => 'Referral commission payout for order #' . ($commission->order ? $commission->order->order_number : 'N/A'),
-                'status' => 'Completed',
-            ]);
+            \App\Services\WalletService::adjustWallet(
+                $referrer->id,
+                $commission->commission_amount,
+                'Affiliate Credit',
+                'Referral commission payout for order #' . ($commission->order ? $commission->order->order_number : 'N/A'),
+                $commission->order_id
+            );
         }
 
         return response()->json([

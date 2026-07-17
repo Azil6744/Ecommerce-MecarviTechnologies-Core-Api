@@ -22,7 +22,7 @@ Route::prefix('ecommerce')->group(function () {
     Route::get('/products', [\App\Http\Controllers\Api\Ecommerce\ProductController::class, 'index']);
     Route::get('/coupons/validate', [\App\Http\Controllers\Api\Admin\EcommerceCouponController::class, 'validateCoupon']);
     Route::get('/charity-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getCharity']);
-    Route::get('/charities', [\App\Http\Controllers\Api\Admin\CharityController::class, 'index']);
+    Route::get('/charities', [\App\Http\Controllers\Api\Admin\CharityController::class, 'publicIndex']);
     Route::get('/tips-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getTips']);
     Route::get('/packaging-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getPackaging']);
     Route::get('/loyalty-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getLoyalty']);
@@ -60,8 +60,17 @@ Route::prefix('ecommerce')->group(function () {
         ->middleware('central.auth:optional');
     Route::post('/gift-cards/validate', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'validateCode'])
         ->middleware('central.auth:optional');
-    
-    // Guest Cart (Session/Cookie based cart could be handled here if needed, 
+    Route::post('/checkout', [\App\Http\Controllers\Api\Ecommerce\CheckoutController::class, 'process'])
+        ->middleware('central.auth:optional');
+    // Order tracking & show are optional-auth so guests can look up their orders
+    Route::get('/orders/stats', [\App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class, 'stats'])
+        ->middleware('central.auth:optional');
+    Route::get('/orders/track', [\App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class, 'track'])
+        ->middleware('central.auth:optional');
+    Route::get('/orders/{order}', [\App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class, 'show'])
+        ->middleware('central.auth:optional');
+
+    // Guest Cart (Session/Cookie based cart could be handled here if needed,
     // but usually we force auth for b2b or manage via local storage on frontend)
 
     // Protected E-Commerce Routes (Auth Required)
@@ -90,7 +99,6 @@ Route::prefix('ecommerce')->group(function () {
         Route::delete('/compare-products/{product}', [\App\Http\Controllers\Api\Ecommerce\CompareProductController::class, 'destroy']);
 
         // Checkout, Payments & Orders
-        Route::post('/checkout', [\App\Http\Controllers\Api\Ecommerce\CheckoutController::class, 'process']);
         Route::post('/payment/process', [\App\Http\Controllers\Api\Ecommerce\PaymentController::class, 'process']);
         Route::match(['get', 'post'], '/payment/paypal/success', [\App\Http\Controllers\Api\Ecommerce\PaymentController::class, 'paypalSuccess']);
         Route::match(['get', 'post'], '/payment/paypal/cancel', [\App\Http\Controllers\Api\Ecommerce\PaymentController::class, 'paypalCancel']);
@@ -101,7 +109,7 @@ Route::prefix('ecommerce')->group(function () {
         Route::post('/orders/{order}/tip', [\App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class, 'tip']);
         Route::get('/orders/{order}/invoice', [\App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class, 'invoice']);
         Route::post('/orders/{order}/reorder', [\App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class, 'reorder']);
-        Route::apiResource('orders', \App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class);
+        Route::apiResource('orders', \App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class)->except(['show']);
 
         // Account Profile & Addresses
         Route::get('/profile', [\App\Http\Controllers\Api\Ecommerce\ProfileController::class, 'show']);

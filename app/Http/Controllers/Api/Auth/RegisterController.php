@@ -77,32 +77,41 @@ class RegisterController extends Controller
 
                     // Credit Referrer Wallet
                     if ($rewardReferrer > 0) {
-                        $newReferrerBalance = ($referrer->wallet_balance ?? 0) + $rewardReferrer;
-                        $referrer->update(['wallet_balance' => $newReferrerBalance]);
-
-                        \App\Models\EcommerceWalletTransaction::create([
-                            'user_id' => $referrer->id,
-                            'type' => 'Affiliate Earned',
-                            'amount' => $rewardReferrer,
-                            'balance_after' => $newReferrerBalance,
-                            'description' => 'Referral reward for inviting ' . $user->name,
-                            'status' => 'Completed',
-                        ]);
+                        \App\Services\WalletService::adjustWallet(
+                            $referrer->id,
+                            $rewardReferrer,
+                            'Affiliate Earned',
+                            'Referral reward for inviting ' . $user->name
+                        );
                     }
 
                     // Credit Referee (New User) Wallet
                     if ($rewardReferee > 0) {
-                        $newRefereeBalance = ($user->wallet_balance ?? 0) + $rewardReferee;
-                        $user->update(['wallet_balance' => $newRefereeBalance]);
+                        \App\Services\WalletService::adjustWallet(
+                            $user->id,
+                            $rewardReferee,
+                            'Affiliate Earned',
+                            'Welcome reward for joining via referral code ' . $referralCode
+                        );
+                    }
+                }
+            }
 
-                        \App\Models\EcommerceWalletTransaction::create([
-                            'user_id' => $user->id,
-                            'type' => 'Affiliate Earned',
-                            'amount' => $rewardReferee,
-                            'balance_after' => $newRefereeBalance,
-                            'description' => 'Welcome reward for joining via referral code ' . $referralCode,
-                            'status' => 'Completed',
-                        ]);
+            // Check for signup bonus in loyalty settings
+            $settings = \App\Models\SiteSetting::first();
+            if ($settings && $settings->loyalty_settings) {
+                $loyalty = json_decode($settings->loyalty_settings, true);
+                if (filter_var($loyalty['enabled'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+                    $signupBonus = isset($loyalty['signup_bonus']) ? (int) $loyalty['signup_bonus'] : 100;
+                    if ($signupBonus > 0) {
+                        \App\Services\LoyaltyService::adjustPoints(
+                            $user->id,
+                            $signupBonus,
+                            'bonus',
+                            'Signup bonus rewards points.',
+                            null,
+                            'available'
+                        );
                     }
                 }
             }

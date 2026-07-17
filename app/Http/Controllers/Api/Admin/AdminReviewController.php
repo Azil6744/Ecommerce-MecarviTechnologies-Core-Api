@@ -45,7 +45,28 @@ class AdminReviewController extends Controller
             'status' => 'required|in:approved,rejected',
         ]);
 
+        $oldStatus = $review->status;
         $review->update(['status' => $request->status]);
+
+        if ($request->status === 'approved' && $oldStatus !== 'approved' && $review->user_id) {
+            $settings = \App\Models\SiteSetting::first();
+            if ($settings && $settings->loyalty_settings) {
+                $loyalty = json_decode($settings->loyalty_settings, true);
+                if (filter_var($loyalty['enabled'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+                    $reviewBonus = isset($loyalty['review_bonus']) ? (int) $loyalty['review_bonus'] : 120;
+                    if ($reviewBonus > 0) {
+                        \App\Services\LoyaltyService::adjustPoints(
+                            $review->user_id,
+                            $reviewBonus,
+                            'review_reward',
+                            "Loyalty points for approved review.",
+                            null,
+                            'available'
+                        );
+                    }
+                }
+            }
+        }
 
         return response()->json($review);
     }

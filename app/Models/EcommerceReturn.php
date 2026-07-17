@@ -87,17 +87,13 @@ class EcommerceReturn extends Model
                                 } elseif ($commission->status === 'completed') {
                                     $referrer = \App\Models\User::find($commission->referrer_id);
                                     if ($referrer) {
-                                        $newBalance = round((float)($referrer->wallet_balance ?? 0) - $deduction, 2);
-                                        $referrer->update(['wallet_balance' => $newBalance]);
-
-                                        \App\Models\EcommerceWalletTransaction::create([
-                                            'user_id' => $referrer->id,
-                                            'type' => 'Affiliate Deduction',
-                                            'amount' => -$deduction,
-                                            'balance_after' => $newBalance,
-                                            'description' => 'Commission deduction for order #' . ($order ? $order->order_number : $return->order_number) . ' return',
-                                            'status' => 'Completed',
-                                        ]);
+                                        \App\Services\WalletService::adjustWallet(
+                                            $referrer->id,
+                                            $deduction,
+                                            'Affiliate Deduction',
+                                            'Commission deduction for order #' . ($order ? $order->order_number : $return->order_number) . ' return',
+                                            $return->order_id
+                                        );
                                     }
 
                                     if ($isFullRefund || $deduction >= (float)$commission->commission_amount) {

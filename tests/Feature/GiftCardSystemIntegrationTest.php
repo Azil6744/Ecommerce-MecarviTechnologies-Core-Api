@@ -18,6 +18,10 @@ class GiftCardSystemIntegrationTest extends TestCase
 
     private function centralAuthHeadersFor(User $user): array
     {
+        $roleName = $user->role ?: 'customer';
+        \Spatie\Permission\Models\Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
+        $user->assignRole($roleName);
+
         $token = $user->createToken('feature-test')->plainTextToken;
 
         return [

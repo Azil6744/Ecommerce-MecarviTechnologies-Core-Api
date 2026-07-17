@@ -71,26 +71,49 @@ class AdminReturnController extends Controller
      */
     public function approve(Request $request, EcommerceReturn $return)
     {
+        $return->loadMissing('order');
+        
         $return->update([
             'status' => 'approved',
             'approved_at' => now(),
         ]);
 
         // Process refund to user wallet
-        if ($return->user_id) {
-            $user = $return->user;
-            if ($user && $return->refund_amount > 0) {
-                $newBalance = round((float)($user->wallet_balance ?? 0) + (float)$return->refund_amount, 2);
-                $user->update(['wallet_balance' => $newBalance]);
+        if ($return->user_id && $return->refund_amount > 0) {
+            \App\Services\WalletService::adjustWallet(
+                $return->user_id,
+                $return->refund_amount,
+                'Refund credit',
+                'Refund for returned order #' . $return->order_number,
+                $return->order_id
+            );
+        }
 
-                \App\Models\EcommerceWalletTransaction::create([
-                    'user_id' => $user->id,
-                    'type' => 'Refund credit',
-                    'amount' => $return->refund_amount,
-                    'balance_after' => $newBalance,
-                    'description' => 'Refund for returned order #' . $return->order_number,
-                    'status' => 'Completed',
-                ]);
+        // Reverse earned loyalty points on refund
+        if ($return->user_id && $return->order) {
+            $order = $return->order;
+            $pointsEarned = (int) ($order->loyalty_points_earned ?? 0);
+            if ($pointsEarned > 0) {
+                $orderTotal = (float) ($order->subtotal ?: $order->total_amount);
+                $refundAmount = (float) $return->refund_amount;
+                $isFullRefund = ($refundAmount <= 0) || ($refundAmount >= $orderTotal);
+
+                $pointsToReverse = $isFullRefund
+                    ? $pointsEarned
+                    : (int) round($pointsEarned * ($refundAmount / ($orderTotal ?: 1.00)));
+
+                $pointsToReverse = min($pointsEarned, $pointsToReverse);
+
+                if ($pointsToReverse > 0) {
+                    \App\Services\LoyaltyService::adjustPoints(
+                        $return->user_id,
+                        $pointsToReverse,
+                        'reversed',
+                        "Reversed points due to refund for order {$return->order_number}",
+                        $return->order_id,
+                        'reversed'
+                    );
+                }
             }
         }
 

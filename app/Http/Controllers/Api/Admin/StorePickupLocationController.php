@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\StorePickupLocation;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Http;
 
 class StorePickupLocationController extends Controller
 {
@@ -188,6 +189,29 @@ class StorePickupLocationController extends Controller
      */
     private function geocodeAddress($address)
     {
+        $apiKey = env('GOOGLE_MAPS_API_KEY');
+        if (!empty($apiKey)) {
+            try {
+                $response = Http::get('https://maps.googleapis.com/maps/api/geocode/json', [
+                    'address' => $address,
+                    'key' => $apiKey
+                ]);
+
+                if ($response->successful()) {
+                    $data = $response->json();
+                    if (!empty($data['results'])) {
+                        $location = $data['results'][0]['geometry']['location'];
+                        return [
+                            'latitude' => floatval($location['lat']),
+                            'longitude' => floatval($location['lng'])
+                        ];
+                    }
+                }
+            } catch (\Exception $e) {
+                \Log::error('Google Geocoding failed: ' . $e->getMessage());
+            }
+        }
+
         $addr = strtolower($address);
         
         // Mc Donough GA (Store A)

@@ -875,22 +875,24 @@ Route::prefix('v1')->group(function () {
         Route::patch('/admin/customers/{id}/status', [UserController::class, 'updateCustomerStatus']);
         Route::post('/admin/customers/{id}/verify', [UserController::class, 'verifyCustomer']);
 
-        // Gift Cards
-        Route::get('/admin/gift-card-settings', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'settings']);
-        Route::post('/admin/gift-card-settings', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'saveSettings']);
-        Route::get('/admin/gift-card-transactions', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'transactions']);
-        Route::get('/admin/gift-cards', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'index']);
-        Route::post('/admin/gift-cards', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'store']);
-        Route::get('/admin/gift-cards/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'show']);
-        Route::put('/admin/gift-cards/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'update']);
-        Route::delete('/admin/gift-cards/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'destroy']);
-        Route::post('/admin/gift-cards/{id}/adjust-balance', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'adjustBalance']);
-        Route::post('/admin/gift-cards/{id}/disable', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'disable']);
-        Route::post('/admin/gift-cards/{id}/enable', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'enable']);
+        // Gift Cards & Gift Card Orders (Admin Only)
+        Route::middleware(['admin.only'])->group(function () {
+            Route::get('/admin/gift-card-settings', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'settings']);
+            Route::post('/admin/gift-card-settings', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'saveSettings']);
+            Route::get('/admin/gift-card-transactions', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'transactions']);
+            Route::get('/admin/gift-cards', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'index']);
+            Route::post('/admin/gift-cards', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'store']);
+            Route::get('/admin/gift-cards/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'show']);
+            Route::put('/admin/gift-cards/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'update']);
+            Route::delete('/admin/gift-cards/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'destroy']);
+            Route::post('/admin/gift-cards/{id}/adjust-balance', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'adjustBalance']);
+            Route::post('/admin/gift-cards/{id}/disable', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'disable']);
+            Route::post('/admin/gift-cards/{id}/enable', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'enable']);
 
-        // Gift Card Orders
-        Route::get('/admin/gift-card-orders', [\App\Http\Controllers\Api\Ecommerce\GiftCardOrderController::class, 'index']);
-        Route::post('/admin/gift-card-orders/{id}/issue', [\App\Http\Controllers\Api\Ecommerce\GiftCardOrderController::class, 'issue']);
+            // Gift Card Orders
+            Route::get('/admin/gift-card-orders', [\App\Http\Controllers\Api\Ecommerce\GiftCardOrderController::class, 'index']);
+            Route::post('/admin/gift-card-orders/{id}/issue', [\App\Http\Controllers\Api\Ecommerce\GiftCardOrderController::class, 'issue']);
+        });
 
         // Charity Management
         Route::get('/admin/charities', [\App\Http\Controllers\Api\Admin\CharityController::class, 'index']);

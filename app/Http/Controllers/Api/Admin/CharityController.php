@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 
 class CharityController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $charities = Charity::orderBy('created_at', 'desc')->get();
         
@@ -28,6 +28,19 @@ class CharityController extends Controller
             'success' => true,
             'data' => $charities,
             'stats' => $stats
+        ]);
+    }
+
+    /**
+     * Public endpoint: returns only Active charities for the checkout page.
+     */
+    public function publicIndex()
+    {
+        $charities = Charity::where('status', 'Active')->orderBy('created_at', 'desc')->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $charities,
         ]);
     }
 

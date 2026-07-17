@@ -135,12 +135,16 @@ class AdminOrderController extends Controller
                         ->where('status', 'pending')
                         ->first();
                     if ($pendingTxn) {
-                        $pendingTxn->update(['status' => 'available']);
-                        $user = \App\Models\User::find($order->user_id);
-                        if ($user) {
-                            $user->loyalty_points = max(0, $user->loyalty_points + $pendingTxn->points);
-                            $user->save();
-                        }
+                        $points = $pendingTxn->points;
+                        $pendingTxn->delete(); // Delete pending log as adjustPoints creates a new available log
+                        \App\Services\LoyaltyService::adjustPoints(
+                            $order->user_id,
+                            $points,
+                            'earned',
+                            "Points earned for order {$order->order_number}",
+                            $order->id,
+                            'available'
+                        );
                     }
                 } elseif (in_array($request->status, ['cancelled'], true)) {
                     // Reverse earned points
@@ -150,21 +154,14 @@ class AdminOrderController extends Controller
                         ->get();
                     foreach ($earnedTxns as $t) {
                         if ($t->status === 'available') {
-                            $user = \App\Models\User::find($order->user_id);
-                            if ($user) {
-                                $user->loyalty_points = max(0, $user->loyalty_points - $t->points);
-                                $user->save();
-                            }
-                            // Create a reversal entry
-                            \App\Models\EcommerceLoyaltyTransaction::create([
-                                'user_id' => $order->user_id,
-                                'order_id' => $order->id,
-                                'transaction_type' => 'reversed',
-                                'points' => -$t->points,
-                                'dollar_value' => $t->dollar_value,
-                                'status' => 'reversed',
-                                'reason' => "Reversed points due to order cancellation.",
-                            ]);
+                            \App\Services\LoyaltyService::adjustPoints(
+                                $order->user_id,
+                                abs($t->points),
+                                'reversed',
+                                "Reversed points due to order cancellation.",
+                                $order->id,
+                                'reversed'
+                            );
                         }
                         $t->update(['status' => 'reversed']);
                     }
@@ -175,21 +172,14 @@ class AdminOrderController extends Controller
                         ->where('status', 'redeemed')
                         ->get();
                     foreach ($redeemedTxns as $t) {
-                        $user = \App\Models\User::find($order->user_id);
-                        if ($user) {
-                            $user->loyalty_points = max(0, $user->loyalty_points + abs($t->points));
-                            $user->save();
-                        }
-                        // Create a return manual adjustment
-                        \App\Models\EcommerceLoyaltyTransaction::create([
-                            'user_id' => $order->user_id,
-                            'order_id' => $order->id,
-                            'transaction_type' => 'manual_added',
-                            'points' => abs($t->points),
-                            'dollar_value' => $t->dollar_value,
-                            'status' => 'available',
-                            'reason' => "Returned redeemed points due to order cancellation.",
-                        ]);
+                        \App\Services\LoyaltyService::adjustPoints(
+                            $order->user_id,
+                            abs($t->points),
+                            'manual_added',
+                            "Returned redeemed points due to order cancellation.",
+                            $order->id,
+                            'available'
+                        );
                         $t->update(['status' => 'reversed']);
                     }
                 }
@@ -289,6 +279,9 @@ class AdminOrderController extends Controller
             'shipping_amount' => (float) ($order->shipping_amount ?? 0),
             'discount_amount' => (float) ($order->discount_amount ?? 0),
             'tax_amount' => (float) ($order->tax_amount ?? 0),
+            'tip_amount' => (float) ($order->tip_amount ?? 0),
+            'donation_amount' => (float) ($order->donation_amount ?? 0),
+            'selected_charity' => $order->selected_charity ?? null,
             'total_amount' => (float) $order->total_amount,
             'shipping_address' => $order->shipping_address,
             'billing_address' => $order->billing_address,

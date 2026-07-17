@@ -13,6 +13,10 @@ class EcommerceGiftCardControllerTest extends TestCase
 
     private function centralAuthHeadersFor(User $user): array
     {
+        $roleName = $user->role ?: 'customer';
+        \Spatie\Permission\Models\Role::firstOrCreate(['name' => $roleName, 'guard_name' => 'web']);
+        $user->assignRole($roleName);
+
         $token = $user->createToken('feature-test')->plainTextToken;
 
         return [
@@ -171,49 +175,64 @@ class EcommerceGiftCardControllerTest extends TestCase
 
     public function test_store_assigns_authenticated_user_and_defaults_currency(): void
     {
-        $customer = User::factory()->create(['role' => 'customer']);
-
+        $admin = User::factory()->create(['role' => 'admin']);
+ 
         $response = $this
-            ->withHeaders($this->centralAuthHeadersFor($customer))
+            ->withHeaders($this->centralAuthHeadersFor($admin))
             ->postJson('/api/v1/admin/gift-cards', [
                 'recipient_name' => 'Created Recipient',
                 'recipient_email' => 'created@example.com',
                 'amount' => 75,
             ]);
-
+ 
         $response->assertCreated();
-
+ 
         $generatedCode = $response->json('data.code');
         $this->assertMatchesRegularExpression('/^\d{15}$/', $generatedCode);
         $this->assertSame('USD', $response->json('data.currency'));
         $this->assertSame(75.0, (float) $response->json('data.current_balance'));
-
+ 
         $this->assertDatabaseHas('ecommerce_gift_cards', [
             'code' => $generatedCode,
             'currency' => 'USD',
         ]);
     }
-
+ 
     public function test_store_generates_code_when_not_provided(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+ 
+        $response = $this
+            ->withHeaders($this->centralAuthHeadersFor($admin))
+            ->postJson('/api/v1/admin/gift-cards', [
+                'recipient_name' => 'Generated Code Recipient',
+                'recipient_email' => 'generated@example.com',
+                'amount' => 25,
+            ]);
+ 
+        $response->assertCreated();
+ 
+        $generatedCode = $response->json('data.code');
+ 
+        $this->assertIsString($generatedCode);
+        $this->assertMatchesRegularExpression('/^\d{15}$/', $generatedCode);
+        $this->assertDatabaseHas('ecommerce_gift_cards', [
+            'code' => $generatedCode,
+        ]);
+    }
+
+    public function test_customer_is_forbidden_from_accessing_admin_gift_card_endpoints(): void
     {
         $customer = User::factory()->create(['role' => 'customer']);
 
         $response = $this
             ->withHeaders($this->centralAuthHeadersFor($customer))
             ->postJson('/api/v1/admin/gift-cards', [
-                'recipient_name' => 'Generated Code Recipient',
-                'recipient_email' => 'generated@example.com',
-                'amount' => 25,
+                'recipient_name' => 'Should Fail Recipient',
+                'recipient_email' => 'fail@example.com',
+                'amount' => 50,
             ]);
 
-        $response->assertCreated();
-
-        $generatedCode = $response->json('data.code');
-
-        $this->assertIsString($generatedCode);
-        $this->assertMatchesRegularExpression('/^\d{15}$/', $generatedCode);
-        $this->assertDatabaseHas('ecommerce_gift_cards', [
-            'code' => $generatedCode,
-        ]);
+        $response->assertStatus(403);
     }
 }

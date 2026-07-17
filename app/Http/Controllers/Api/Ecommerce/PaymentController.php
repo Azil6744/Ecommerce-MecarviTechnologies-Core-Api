@@ -78,7 +78,7 @@ class PaymentController extends Controller
     {
         $request->validate([
             'order_id' => 'required|exists:ecommerce_orders,id',
-            'payment_method' => 'required|in:stripe,paypal',
+            'payment_method' => 'required|in:stripe,paypal,wallet',
             'payment_token' => 'required_if:payment_method,stripe|string', // Stripe uses token
         ]);
 
@@ -113,6 +113,8 @@ class PaymentController extends Controller
             }
 
             return $this->processPayPal($order);
+        } else if ($request->payment_method === 'wallet') {
+            return $this->processWallet($request, $order);
         }
     }
 
@@ -274,6 +276,71 @@ class PaymentController extends Controller
         return response()->json([
             'success' => false,
             'message' => 'User cancelled the PayPal payment.',
+        ]);
+    }
+
+    /**
+     * Process Wallet Payment
+     */
+    private function processWallet(Request $request, EcommerceOrder $order)
+    {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Authentication required to pay with wallet.'
+            ], 401);
+        }
+
+        $centralUrl = env('CENTRAL_AUTH_URL', 'http://localhost:8000/api');
+        $token = $request->header('X-Central-Auth-Token') ?? $request->bearerToken();
+        $walletBalance = 0.00;
+
+        if ($token) {
+            try {
+                $walletRes = \Illuminate\Support\Facades\Http::acceptJson()
+                    ->withToken($token)
+                    ->timeout(3)
+                    ->get($centralUrl . '/user/wallet');
+                if ($walletRes->successful()) {
+                    $walletBalance = (float) $walletRes->json('data.balance');
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('PaymentController failed to fetch central user wallet: ' . $e->getMessage());
+            }
+        }
+
+        if ($walletBalance < $order->total_amount) {
+            return response()->json([
+                'success' => false,
+                'message' => "Insufficient wallet balance. You need $" . number_format($order->total_amount, 2) . " but only have $" . number_format($walletBalance, 2) . "."
+            ], 400);
+        }
+
+        $debitSuccess = \App\Services\WalletService::adjustWallet(
+            $user->id,
+            $order->total_amount,
+            'debit',
+            "Payment for order #{$order->order_number}",
+            $order->order_number
+        );
+
+        if (!$debitSuccess) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to deduct payment from your wallet. Please try again.'
+            ], 500);
+        }
+
+        $order->status = 'paid';
+        $order->payment_status = 'paid';
+        $order->payment_method = 'wallet';
+        $order->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Payment successful via Wallet.',
+            'transaction_reference' => 'wallet_' . $order->order_number,
         ]);
     }
 }

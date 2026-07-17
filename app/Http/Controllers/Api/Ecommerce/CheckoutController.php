@@ -43,12 +43,16 @@ class CheckoutController extends Controller
             'pay_with_points_item_ids' => 'nullable|array',
             'pay_with_points_item_ids.*' => 'integer',
             'points_redeemed' => 'nullable|integer|min:0',
-            'selected_charity' => 'nullable|string|max:255',
+            'selected_charity' => 'nullable|string|max:255|exists:charities,name',
             'packaging_amount' => 'nullable|numeric|min:0',
             'item_packaging_configs' => 'nullable|array',
             'add_thank_you_card' => 'nullable|boolean',
             'add_extra_protection' => 'nullable|boolean',
             'pickup_location_id' => 'nullable|integer|exists:store_pickup_locations,id',
+            'customer_name' => 'nullable|string|max:255',
+            'customer_email' => 'nullable|email|max:255',
+            'guest_shipping_address' => 'nullable|array',
+            'guest_billing_address' => 'nullable|array',
         ]);
 
         try {
@@ -77,8 +81,19 @@ class CheckoutController extends Controller
                 ], 422);
             }
 
-            // 1. Process Loyalty Points redemption if selected
+            // 1. Fetch settings and calculate points-to-dollar discount ratio
+            $settings = \App\Models\SiteSetting::first();
+            $ratio = 0.01;
+            if ($settings && $settings->loyalty_settings) {
+                $loyalty = json_decode($settings->loyalty_settings, true);
+                $ratio = (float)($loyalty['points_to_dollar_ratio'] ?? 0.01);
+            }
+
             $pointsRedeemed = 0;
+            $generalPointsRedeemed = 0;
+            $itemPointsRedeemed = 0;
+
+            // Calculate points needed for pay_with_points items
             if ($user && !empty($validated['pay_with_points_item_ids'])) {
                 $pointsItemIds = $validated['pay_with_points_item_ids'];
                 $pointsProducts = \App\Models\Product::whereIn('id', $pointsItemIds)->get()->keyBy('id');
@@ -88,7 +103,7 @@ class CheckoutController extends Controller
                         if (in_array($cartItem->product_id, $pointsItemIds)) {
                             $prod = $pointsProducts->get($cartItem->product_id);
                             if ($prod && $prod->loyalty_points_price) {
-                                $pointsRedeemed += $prod->loyalty_points_price * $cartItem->quantity;
+                                $itemPointsRedeemed += $prod->loyalty_points_price * $cartItem->quantity;
                                 $cartItem->total_price = 0.00;
                                 $cartItem->unit_price = 0.00;
                             }
@@ -102,7 +117,7 @@ class CheckoutController extends Controller
                             $prod = $pointsProducts->get($productId);
                             if ($prod && $prod->loyalty_points_price) {
                                 $qty = (int)($item['quantity'] ?? 1);
-                                $pointsRedeemed += $prod->loyalty_points_price * $qty;
+                                $itemPointsRedeemed += $prod->loyalty_points_price * $qty;
                                 $item['total_price'] = 0.00;
                                 $item['unit_price'] = 0.00;
                                 $item['price'] = 0.00;
@@ -112,126 +127,45 @@ class CheckoutController extends Controller
                     }
                     $requestItems = collect($updatedRequestItems);
                 }
-
-                if ($pointsRedeemed > 0) {
-                    $centralUrl = env('CENTRAL_AUTH_URL', 'http://localhost:8000/api');
-                    $token = $request->header('X-Central-Auth-Token') ?? $request->bearerToken();
-                    $currentPoints = (int) $user->loyalty_points;
-
-                    if ($token) {
-                        try {
-                            $loyaltyRes = \Illuminate\Support\Facades\Http::acceptJson()
-                                ->withToken($token)
-                                ->timeout(3)
-                                ->get($centralUrl . '/user/loyalty');
-                            if ($loyaltyRes->successful()) {
-                                $currentPoints = (int) $loyaltyRes->json('data.points');
-                            }
-                        } catch (\Throwable $e) {
-                            \Log::warning('Checkout failed to fetch central user points: ' . $e->getMessage());
-                        }
-                    }
-
-                    if ($currentPoints < $pointsRedeemed) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => "Insufficient loyalty points. You need {$pointsRedeemed} points but only have {$currentPoints}."
-                        ], 400);
-                    }
-
-                    if ($token) {
-                        try {
-                            $adjustRes = \Illuminate\Support\Facades\Http::acceptJson()
-                                ->withToken($token)
-                                ->timeout(3)
-                                ->post($centralUrl . '/user/loyalty/adjust', [
-                                    'points' => $pointsRedeemed,
-                                    'transaction_type' => 'redeemed',
-                                    'reason' => 'Points redeemed for checkout order items.',
-                                ]);
-                            if (!$adjustRes->successful()) {
-                                return response()->json([
-                                    'success' => false,
-                                    'message' => 'Failed to deduct central loyalty points.'
-                                ], 400);
-                            }
-                        } catch (\Throwable $e) {
-                            \Log::error('Checkout failed to adjust central user points: ' . $e->getMessage());
-                            return response()->json([
-                                'success' => false,
-                                'message' => 'Loyalty system is temporarily unavailable. Please try again.'
-                            ], 500);
-                        }
-                    } else {
-                        $user->loyalty_points -= $pointsRedeemed;
-                        $user->save();
-                    }
-                }
+                $pointsRedeemed += $itemPointsRedeemed;
             }
 
-            // General checkout subtotal loyalty points discount redemption
-            $generalPointsRedeemed = 0;
+            // Calculate points needed for general subtotal discount
             if ($user && !empty($validated['points_redeemed'])) {
                 $generalPointsRedeemed = (int)$validated['points_redeemed'];
-                if ($generalPointsRedeemed > 0) {
-                    $centralUrl = env('CENTRAL_AUTH_URL', 'http://localhost:8000/api');
-                    $token = $request->header('X-Central-Auth-Token') ?? $request->bearerToken();
-                    $currentPoints = (int) $user->loyalty_points;
+                $pointsRedeemed += $generalPointsRedeemed;
+            }
 
-                    if ($token) {
-                        try {
-                            $loyaltyRes = \Illuminate\Support\Facades\Http::acceptJson()
-                                ->withToken($token)
-                                ->timeout(3)
-                                ->get($centralUrl . '/user/loyalty');
-                            if ($loyaltyRes->successful()) {
-                                $currentPoints = (int) $loyaltyRes->json('data.points');
-                            }
-                        } catch (\Throwable $e) {
-                            \Log::warning('Checkout failed to fetch central user points: ' . $e->getMessage());
+            // If user is redeeming points, validate their balance from the Central Auth API
+            if ($pointsRedeemed > 0) {
+                $centralUrl = env('CENTRAL_AUTH_URL', 'http://localhost:8000/api');
+                $token = $request->header('X-Central-Auth-Token') ?? $request->bearerToken();
+                $currentPoints = (int) $user->loyalty_points;
+
+                if ($token) {
+                    try {
+                        $loyaltyRes = \Illuminate\Support\Facades\Http::acceptJson()
+                            ->withToken($token)
+                            ->timeout(3)
+                            ->get($centralUrl . '/user/loyalty');
+                        if ($loyaltyRes->successful()) {
+                            $currentPoints = (int) $loyaltyRes->json('data.points');
                         }
+                    } catch (\Throwable $e) {
+                        \Log::warning('Checkout failed to fetch central user points: ' . $e->getMessage());
                     }
+                }
 
-                    if ($currentPoints < $generalPointsRedeemed) {
-                        return response()->json([
-                            'success' => false,
-                            'message' => "Insufficient loyalty points. You need {$generalPointsRedeemed} points but only have {$currentPoints}."
-                        ], 400);
-                    }
-
-                    if ($token) {
-                        try {
-                            $adjustRes = \Illuminate\Support\Facades\Http::acceptJson()
-                                ->withToken($token)
-                                ->timeout(3)
-                                ->post($centralUrl . '/user/loyalty/adjust', [
-                                    'points' => $generalPointsRedeemed,
-                                    'transaction_type' => 'redeemed',
-                                    'reason' => 'Points redeemed for checkout discount.',
-                                ]);
-                            if (!$adjustRes->successful()) {
-                                return response()->json([
-                                    'success' => false,
-                                    'message' => 'Failed to deduct central loyalty points.'
-                                ], 400);
-                            }
-                        } catch (\Throwable $e) {
-                            \Log::error('Checkout failed to adjust central user points: ' . $e->getMessage());
-                            return response()->json([
-                                'success' => false,
-                                'message' => 'Loyalty system is temporarily unavailable. Please try again.'
-                            ], 500);
-                        }
-                    } else {
-                        $user->loyalty_points -= $generalPointsRedeemed;
-                        $user->save();
-                    }
-                    $pointsRedeemed += $generalPointsRedeemed;
+                if ($currentPoints < $pointsRedeemed) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Insufficient loyalty points. You need {$pointsRedeemed} points but only have {$currentPoints}."
+                    ], 400);
                 }
             }
 
             $shippingAmount = round((float) ($validated['shipping_amount'] ?? 0), 2);
-            $discountAmount = round((float) ($validated['discount_amount'] ?? 0), 2);
+            $couponDiscount = round((float) ($validated['discount_amount'] ?? 0), 2);
 
             $itemsSubtotal = $cartItems->isNotEmpty()
                 ? (float) $cartItems->sum('total_price')
@@ -262,12 +196,12 @@ class CheckoutController extends Controller
                 }
 
                 $appliedCoupon = $coupon;
-                $discountAmount = max($discountAmount, $coupon->discountFor($itemsSubtotal, $couponContext));
+                $couponDiscount = max($couponDiscount, $coupon->discountFor($itemsSubtotal, $couponContext));
             } else {
                 $appliedCoupon = $this->bestAutoCoupon($itemsSubtotal, $couponContext);
                 if ($appliedCoupon) {
                     $couponCode = $appliedCoupon->code;
-                    $discountAmount = max($discountAmount, $appliedCoupon->discountFor($itemsSubtotal, $couponContext));
+                    $couponDiscount = max($couponDiscount, $appliedCoupon->discountFor($itemsSubtotal, $couponContext));
                 }
             }
 
@@ -275,8 +209,10 @@ class CheckoutController extends Controller
                 $shippingAmount = max(0, round($shippingAmount - $appliedCoupon->shippingDiscountFor($shippingAmount, $itemsSubtotal, $couponContext), 2));
             }
 
-            // 2. Fetch active settings for Taxes, Loyalty Point Earn, and Charity
-            $settings = \App\Models\SiteSetting::first();
+            // Calculate loyalty points discount value
+            $loyaltyPointsDiscount = round($generalPointsRedeemed * $ratio, 2);
+            $totalDiscount = round($couponDiscount + $loyaltyPointsDiscount, 2);
+
             $taxRate = $settings && $settings->tax_enabled ? (float)$settings->tax_rate : 0.00;
             $taxAmount = $settings && $settings->tax_enabled ? round($itemsSubtotal * ($taxRate / 100), 2) : round((float) ($validated['tax_amount'] ?? 0), 2);
 
@@ -284,8 +220,16 @@ class CheckoutController extends Controller
             $donationAmount = round((float) ($validated['donation_amount'] ?? 0), 2);
             $packagingAmount = round((float) ($validated['packaging_amount'] ?? 0), 2);
 
-            // Subtotal + shipping + tax + tip + donation + packaging - discount
-            $originalTotalAmount = round((float) ($itemsSubtotal + $shippingAmount + $taxAmount + $tipAmount + $donationAmount + $packagingAmount - $discountAmount), 2);
+            $charityEnabled = $settings ? (bool)$settings->charity_donation_enabled : true;
+            if ($donationAmount > 0 && !$charityEnabled) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Charity donations are currently disabled.',
+                ], 400);
+            }
+
+            // Subtotal + shipping + tax + tip + donation + packaging - totalDiscount
+            $originalTotalAmount = round((float) ($itemsSubtotal + $shippingAmount + $taxAmount + $tipAmount + $donationAmount + $packagingAmount - $totalDiscount), 2);
             $totalAmount = max(0.00, $originalTotalAmount);
 
             // Gift card validation
@@ -345,29 +289,59 @@ class CheckoutController extends Controller
                 $totalAmount = max(0.00, round($totalAmount - $totalGiftCardApplied, 2));
             }
 
-            $shippingAddress = $this->addressForUser($user?->id, $validated['shipping_address_id'] ?? null);
-            $billingAddress = $this->addressForUser($user?->id, $validated['billing_address_id'] ?? $validated['shipping_address_id'] ?? null);
+            $shippingAddress = null;
+            if (!empty($validated['shipping_address_id'])) {
+                $shippingAddress = $this->addressForUser($user?->id, $validated['shipping_address_id']);
+            } else if (!empty($validated['guest_shipping_address'])) {
+                $shippingAddress = $validated['guest_shipping_address'];
+            }
 
-            // 3. Award Loyalty Points on order paid amount
+            $billingAddress = null;
+            if (!empty($validated['billing_address_id'])) {
+                $billingAddress = $this->addressForUser($user?->id, $validated['billing_address_id']);
+            } else if (!empty($validated['guest_billing_address'])) {
+                $billingAddress = $validated['guest_billing_address'];
+            } else if (!empty($validated['guest_shipping_address'])) {
+                $billingAddress = $validated['guest_shipping_address'];
+            }
+
+            // 3. Award Loyalty Points on eligible subtotal paid amount
             $pointsEarned = 0;
-            if ($user && $totalAmount > 0) {
-                $earnPerUnitPrice = $settings && $settings->loyalty_points_earned_per_unit_price > 0 ? (float)$settings->loyalty_points_earned_per_unit_price : 50.00;
-                $earnPoints = $settings ? (int)$settings->loyalty_points_earned_points : 2;
-                $pointsEarned = (int)(floor($totalAmount / $earnPerUnitPrice) * $earnPoints);
-                
-                // Points start as pending, only awarded to user balance when completed/delivered.
+            if ($user) {
+                $includeTax = false;
+                $includeShipping = false;
+                if ($settings && $settings->loyalty_settings) {
+                    $loyalty = json_decode($settings->loyalty_settings, true);
+                    $includeTax = filter_var($loyalty['include_tax_in_calculation'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                    $includeShipping = filter_var($loyalty['include_shipping_in_calculation'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                }
+
+                $eligibleAmount = $itemsSubtotal - $totalDiscount;
+                if ($includeShipping) {
+                    $eligibleAmount += $shippingAmount;
+                }
+                if ($includeTax) {
+                    $eligibleAmount += $taxAmount;
+                }
+                $eligibleAmount = max(0.00, $eligibleAmount);
+
+                if ($eligibleAmount > 0) {
+                    $earnPerUnitPrice = $settings && $settings->loyalty_points_earned_per_unit_price > 0 ? (float)$settings->loyalty_points_earned_per_unit_price : 50.00;
+                    $earnPoints = $settings ? (int)$settings->loyalty_points_earned_points : 2;
+                    $pointsEarned = (int)(floor($eligibleAmount / $earnPerUnitPrice) * $earnPoints);
+                }
             }
 
             $orderData = [
                 'user_id' => $user?->id,
-                'customer_name' => $user?->name ?? 'Guest Customer',
-                'customer_email' => $user?->email ?? 'guest@example.com',
+                'customer_name' => $user?->name ?? $validated['customer_name'] ?? 'Guest Customer',
+                'customer_email' => $user?->email ?? $validated['customer_email'] ?? 'guest@example.com',
                 'status' => 'pending',
                 'payment_status' => 'unpaid',
                 'total_amount' => $totalAmount,
                 'subtotal' => round($itemsSubtotal, 2),
                 'shipping_amount' => $shippingAmount,
-                'discount_amount' => $discountAmount,
+                'discount_amount' => $totalDiscount,
                 'tax_amount' => $taxAmount,
                 'tip_amount' => $tipAmount,
                 'donation_amount' => $donationAmount,
@@ -411,11 +385,11 @@ class CheckoutController extends Controller
                 $donorEmail = $user ? $user->email : ($order->customer_email ?? 'guest@example.com');
 
                 $pmBrand = 'Visa';
-                $pmDetails = '**** 4242';
+                $pmDetails = 'Card';
                 $methodLower = strtolower((string)($validated['payment_method'] ?? ''));
                 if ($methodLower === 'paypal') {
                     $pmBrand = 'PayPal';
-                    $pmDetails = 'PayPal';
+                    $pmDetails = 'PayPal Account';
                 } else if ($methodLower === 'apple_pay') {
                     $pmBrand = 'Apple Pay';
                     $pmDetails = 'Apple Pay';
@@ -425,6 +399,24 @@ class CheckoutController extends Controller
                 } else if ($methodLower === 'saved_card') {
                     $pmBrand = 'Visa';
                     $pmDetails = 'Saved Card';
+                } else if ($methodLower === 'stripe') {
+                    $pmBrand = 'Stripe';
+                    $pmDetails = 'Stripe Payment';
+                } else if ($methodLower === 'wallet') {
+                    $pmBrand = 'Wallet';
+                    $pmDetails = 'Wallet Balance';
+                } else if ($methodLower === 'cashapp') {
+                    $pmBrand = 'CashApp';
+                    $pmDetails = 'CashApp Pay';
+                } else if ($methodLower === 'voucher') {
+                    $pmBrand = 'Voucher';
+                    $pmDetails = 'Store Voucher';
+                } else if ($methodLower === 'giftcard') {
+                    $pmBrand = 'Gift Card';
+                    $pmDetails = 'Gift Card';
+                } else if ($methodLower === 'financing') {
+                    $pmBrand = 'Financing';
+                    $pmDetails = 'Installments';
                 }
 
                 \App\Models\Donation::create([
@@ -443,15 +435,21 @@ class CheckoutController extends Controller
                 ]);
             }
 
-            // Log Loyalty points transactions in the database
+            // Sync/Deduct Loyalty points in Central Auth API and create local transaction logs
             if ($user) {
-                $ratio = 0.01;
-                if ($settings && $settings->loyalty_settings) {
-                    $loyalty = json_decode($settings->loyalty_settings, true);
-                    $ratio = (float)($loyalty['points_to_dollar_ratio'] ?? 0.01);
+                // Deduct redeemed points from Central Auth API
+                if ($pointsRedeemed > 0) {
+                    \App\Services\LoyaltyService::adjustPoints(
+                        $user->id,
+                        $pointsRedeemed,
+                        'redeemed',
+                        "Redeemed points on order {$order->order_number}",
+                        $order->id,
+                        'redeemed'
+                    );
                 }
 
-                // Points earned (pending status)
+                // Points earned (pending status locally)
                 if ($pointsEarned > 0) {
                     \App\Models\EcommerceLoyaltyTransaction::create([
                         'user_id' => $user->id,
@@ -461,19 +459,6 @@ class CheckoutController extends Controller
                         'dollar_value' => $pointsEarned * $ratio,
                         'status' => 'pending',
                         'reason' => "Points pending for order {$order->order_number}",
-                    ]);
-                }
-
-                // Points redeemed (redeemed status)
-                if ($pointsRedeemed > 0) {
-                    \App\Models\EcommerceLoyaltyTransaction::create([
-                        'user_id' => $user->id,
-                        'order_id' => $order->id,
-                        'transaction_type' => 'redeemed',
-                        'points' => -$pointsRedeemed,
-                        'dollar_value' => $pointsRedeemed * $ratio,
-                        'status' => 'redeemed',
-                        'reason' => "Redeemed points on order {$order->order_number}",
                     ]);
                 }
             }
@@ -566,6 +551,55 @@ class CheckoutController extends Controller
                         'unit_price' => (float) ($item['unit_price'] ?? $item['price'] ?? 0),
                         'total_price' => (float) ($item['total_price'] ?? (($item['unit_price'] ?? $item['price'] ?? 0) * ($item['quantity'] ?? 1))),
                         'product_options' => $item['product_options'] ?? $item['options'] ?? [],
+                    ]);
+                }
+            }
+
+            // If paying with Wallet, verify balance and adjust centrally
+            if (strtolower($validated['payment_method'] ?? '') === 'wallet') {
+                if (!$user) {
+                    throw new \Exception('Authentication required to pay with wallet.');
+                }
+
+                // If there's an outstanding balance and it wasn't fully paid by gift cards
+                if ($order->total_amount > 0 && $order->payment_status !== 'paid') {
+                    $centralUrl = env('CENTRAL_AUTH_URL', 'http://localhost:8000/api');
+                    $token = $request->header('X-Central-Auth-Token') ?? $request->bearerToken();
+                    $walletBalance = 0.00;
+
+                    if ($token) {
+                        try {
+                            $walletRes = \Illuminate\Support\Facades\Http::acceptJson()
+                                ->withToken($token)
+                                ->timeout(3)
+                                ->get($centralUrl . '/user/wallet');
+                            if ($walletRes->successful()) {
+                                $walletBalance = (float) $walletRes->json('data.balance');
+                            }
+                        } catch (\Throwable $e) {
+                            \Log::warning('Checkout failed to fetch central user wallet: ' . $e->getMessage());
+                        }
+                    }
+
+                    if ($walletBalance < $order->total_amount) {
+                        throw new \Exception("Insufficient wallet balance. You need $" . number_format($order->total_amount, 2) . " but only have $" . number_format($walletBalance, 2) . ".");
+                    }
+
+                    $debitSuccess = \App\Services\WalletService::adjustWallet(
+                        $user->id,
+                        $order->total_amount,
+                        'debit',
+                        "Payment for order #{$order->order_number}",
+                        $order->order_number
+                    );
+
+                    if (!$debitSuccess) {
+                        throw new \Exception('Failed to deduct payment from your wallet. Please try again.');
+                    }
+
+                    $order->update([
+                        'payment_status' => 'paid',
+                        'status' => 'confirmed',
                     ]);
                 }
             }

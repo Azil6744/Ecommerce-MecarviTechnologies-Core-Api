@@ -31,6 +31,10 @@ class SiteSetting extends Model
         'charity_donation_enabled',
         'charity_default_amount',
         'packaging_settings',
+        'loyalty_settings',
+        'charity_settings',
+        'tips_settings',
+        'referral_commission_percentage',
     ];
 
     protected $casts = [
