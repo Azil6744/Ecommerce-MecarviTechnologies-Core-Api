@@ -43,6 +43,12 @@ class SiteSettingController extends Controller
                 'login_logo_url' => $settings->login_logo_url,
                 'favicon' => $settings->favicon,
                 'favicon_url' => $settings->favicon_url,
+                'business_panel_logo' => $settings->business_panel_logo,
+                'business_panel_logo_url' => $settings->business_panel_logo_url,
+                'user_panel_logo' => $settings->user_panel_logo,
+                'user_panel_logo_url' => $settings->user_panel_logo_url,
+                'email_template_logo' => $settings->email_template_logo,
+                'email_template_logo_url' => $settings->email_template_logo_url,
                 'button' => [
                     'name' => $settings->button_name,
                     'url' => $settings->button_url,
@@ -149,6 +155,30 @@ class SiteSettingController extends Controller
             } else {
                 $rules['login_logo'] = ['nullable', 'string', 'max:2100000'];
             }
+
+            if ($request->hasFile('business_panel_logo')) {
+                $rules['business_panel_logo'] = ['nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp,svg,ico,bmp,tiff,tif', 'max:51200'];
+            } elseif ($request->hasFile('business_panel_logo_file')) {
+                $rules['business_panel_logo_file'] = ['sometimes', 'nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp,svg,ico,bmp,tiff,tif', 'max:51200'];
+            } else {
+                $rules['business_panel_logo'] = ['nullable', 'string', 'max:2100000'];
+            }
+
+            if ($request->hasFile('user_panel_logo')) {
+                $rules['user_panel_logo'] = ['nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp,svg,ico,bmp,tiff,tif', 'max:51200'];
+            } elseif ($request->hasFile('user_panel_logo_file')) {
+                $rules['user_panel_logo_file'] = ['sometimes', 'nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp,svg,ico,bmp,tiff,tif', 'max:51200'];
+            } else {
+                $rules['user_panel_logo'] = ['nullable', 'string', 'max:2100000'];
+            }
+
+            if ($request->hasFile('email_template_logo')) {
+                $rules['email_template_logo'] = ['nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp,svg,ico,bmp,tiff,tif', 'max:51200'];
+            } elseif ($request->hasFile('email_template_logo_file')) {
+                $rules['email_template_logo_file'] = ['sometimes', 'nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp,svg,ico,bmp,tiff,tif', 'max:51200'];
+            } else {
+                $rules['email_template_logo'] = ['nullable', 'string', 'max:2100000'];
+            }
             $request->validate($rules);
 
             $settings = SiteSetting::first();
@@ -204,9 +234,21 @@ class SiteSettingController extends Controller
             if ($request->has('login_logo') && ! $request->hasFile('login_logo') && is_string($request->input('login_logo'))) {
                 $settings->login_logo = $request->input('login_logo') ?: null;
             }
+            if ($request->has('business_panel_logo') && ! $request->hasFile('business_panel_logo') && is_string($request->input('business_panel_logo'))) {
+                $settings->business_panel_logo = $request->input('business_panel_logo') ?: null;
+            }
+            if ($request->has('user_panel_logo') && ! $request->hasFile('user_panel_logo') && is_string($request->input('user_panel_logo'))) {
+                $settings->user_panel_logo = $request->input('user_panel_logo') ?: null;
+            }
+            if ($request->has('email_template_logo') && ! $request->hasFile('email_template_logo') && is_string($request->input('email_template_logo'))) {
+                $settings->email_template_logo = $request->input('email_template_logo') ?: null;
+            }
             $this->handleLogoUpload($request, $settings);
             $this->handleFaviconUpload($request, $settings);
             $this->handleLoginLogoUpload($request, $settings);
+            $this->handleBusinessPanelLogoUpload($request, $settings);
+            $this->handleUserPanelLogoUpload($request, $settings);
+            $this->handleEmailTemplateLogoUpload($request, $settings);
             $this->applyButtonFromRequest($request, $settings);
             $settings->save();
 
@@ -719,6 +761,102 @@ class SiteSettingController extends Controller
         }
     }
 
+    private function handleBusinessPanelLogoUpload(Request $request, SiteSetting $settings): void
+    {
+        $file = $request->hasFile('business_panel_logo') ? $request->file('business_panel_logo') : ($request->hasFile('business_panel_logo_file') ? $request->file('business_panel_logo_file') : null);
+        if ($file) {
+            if ($settings->business_panel_logo && ! str_starts_with($settings->business_panel_logo, 'http') && ! str_starts_with($settings->business_panel_logo, '/')) {
+                Storage::disk('public')->delete($settings->business_panel_logo);
+            }
+            $path = $file->store('site-settings', 'public');
+            $settings->business_panel_logo = $path;
+            $settings->save();
+            return;
+        }
+
+        if ($request->has('business_panel_logo') && is_string($request->input('business_panel_logo'))) {
+            $logoInput = $request->input('business_panel_logo');
+            if (preg_match('/^data:image\/([\w+]+);base64,/', $logoInput, $matches)) {
+                if ($settings->business_panel_logo && ! str_starts_with($settings->business_panel_logo, 'http') && ! str_starts_with($settings->business_panel_logo, '/')) {
+                    Storage::disk('public')->delete($settings->business_panel_logo);
+                }
+                $imageType = str_replace('+xml', '', $matches[1]);
+                $imageData = base64_decode(preg_replace('/^data:image\/[\w+]+;base64,/', '', $logoInput));
+                if ($imageData !== false) {
+                    $filename = 'business_panel_logo_' . time() . '.' . $imageType;
+                    $path = 'site-settings/' . $filename;
+                    Storage::disk('public')->put($path, $imageData);
+                    $settings->business_panel_logo = $path;
+                    $settings->save();
+                }
+            }
+        }
+    }
+
+    private function handleUserPanelLogoUpload(Request $request, SiteSetting $settings): void
+    {
+        $file = $request->hasFile('user_panel_logo') ? $request->file('user_panel_logo') : ($request->hasFile('user_panel_logo_file') ? $request->file('user_panel_logo_file') : null);
+        if ($file) {
+            if ($settings->user_panel_logo && ! str_starts_with($settings->user_panel_logo, 'http') && ! str_starts_with($settings->user_panel_logo, '/')) {
+                Storage::disk('public')->delete($settings->user_panel_logo);
+            }
+            $path = $file->store('site-settings', 'public');
+            $settings->user_panel_logo = $path;
+            $settings->save();
+            return;
+        }
+
+        if ($request->has('user_panel_logo') && is_string($request->input('user_panel_logo'))) {
+            $logoInput = $request->input('user_panel_logo');
+            if (preg_match('/^data:image\/([\w+]+);base64,/', $logoInput, $matches)) {
+                if ($settings->user_panel_logo && ! str_starts_with($settings->user_panel_logo, 'http') && ! str_starts_with($settings->user_panel_logo, '/')) {
+                    Storage::disk('public')->delete($settings->user_panel_logo);
+                }
+                $imageType = str_replace('+xml', '', $matches[1]);
+                $imageData = base64_decode(preg_replace('/^data:image\/[\w+]+;base64,/', '', $logoInput));
+                if ($imageData !== false) {
+                    $filename = 'user_panel_logo_' . time() . '.' . $imageType;
+                    $path = 'site-settings/' . $filename;
+                    Storage::disk('public')->put($path, $imageData);
+                    $settings->user_panel_logo = $path;
+                    $settings->save();
+                }
+            }
+        }
+    }
+
+    private function handleEmailTemplateLogoUpload(Request $request, SiteSetting $settings): void
+    {
+        $file = $request->hasFile('email_template_logo') ? $request->file('email_template_logo') : ($request->hasFile('email_template_logo_file') ? $request->file('email_template_logo_file') : null);
+        if ($file) {
+            if ($settings->email_template_logo && ! str_starts_with($settings->email_template_logo, 'http') && ! str_starts_with($settings->email_template_logo, '/')) {
+                Storage::disk('public')->delete($settings->email_template_logo);
+            }
+            $path = $file->store('site-settings', 'public');
+            $settings->email_template_logo = $path;
+            $settings->save();
+            return;
+        }
+
+        if ($request->has('email_template_logo') && is_string($request->input('email_template_logo'))) {
+            $logoInput = $request->input('email_template_logo');
+            if (preg_match('/^data:image\/([\w+]+);base64,/', $logoInput, $matches)) {
+                if ($settings->email_template_logo && ! str_starts_with($settings->email_template_logo, 'http') && ! str_starts_with($settings->email_template_logo, '/')) {
+                    Storage::disk('public')->delete($settings->email_template_logo);
+                }
+                $imageType = str_replace('+xml', '', $matches[1]);
+                $imageData = base64_decode(preg_replace('/^data:image\/[\w+]+;base64,/', '', $logoInput));
+                if ($imageData !== false) {
+                    $filename = 'email_template_logo_' . time() . '.' . $imageType;
+                    $path = 'site-settings/' . $filename;
+                    Storage::disk('public')->put($path, $imageData);
+                    $settings->email_template_logo = $path;
+                    $settings->save();
+                }
+            }
+        }
+    }
+
     private function normalizeBooleanInput(Request $request, string $field): void
     {
         if (! $request->has($field)) {
@@ -779,6 +917,12 @@ class SiteSettingController extends Controller
             'login_logo_url' => $settings->login_logo_url,
             'favicon' => $settings->favicon,
             'favicon_url' => $settings->favicon_url,
+            'business_panel_logo' => $settings->business_panel_logo,
+            'business_panel_logo_url' => $settings->business_panel_logo_url,
+            'user_panel_logo' => $settings->user_panel_logo,
+            'user_panel_logo_url' => $settings->user_panel_logo_url,
+            'email_template_logo' => $settings->email_template_logo,
+            'email_template_logo_url' => $settings->email_template_logo_url,
             'button' => [
                 'name' => $settings->button_name,
                 'url' => $settings->button_url,
@@ -832,6 +976,12 @@ class SiteSettingController extends Controller
             'login_logo_url' => null,
             'favicon' => null,
             'favicon_url' => null,
+            'business_panel_logo' => null,
+            'business_panel_logo_url' => null,
+            'user_panel_logo' => null,
+            'user_panel_logo_url' => null,
+            'email_template_logo' => null,
+            'email_template_logo_url' => null,
             'button' => ['name' => null, 'url' => null],
             'theme_primary_color' => '#ff6c00',
             'theme_secondary_color' => '#ff00a7',

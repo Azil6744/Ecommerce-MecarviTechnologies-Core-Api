@@ -19,6 +19,9 @@ class SiteSetting extends Model
         'logo',
         'login_logo',
         'favicon',
+        'business_panel_logo',
+        'user_panel_logo',
+        'email_template_logo',
         'button_name',
         'button_url',
         'theme_primary_color',
@@ -92,5 +95,50 @@ class SiteSetting extends Model
         }
 
         return asset('storage/' . $loginLogo);
+    }
+
+    /**
+     * Business panel logo URL: if stored path, return asset('storage/...'); otherwise return as-is.
+     */
+    public function getBusinessPanelLogoUrlAttribute(): ?string
+    {
+        if (! $this->business_panel_logo) {
+            return null;
+        }
+        $val = $this->business_panel_logo;
+        if (str_starts_with($val, 'http://') || str_starts_with($val, 'https://') || str_starts_with($val, '/')) {
+            return $val;
+        }
+        return asset('storage/' . $val);
+    }
+
+    /**
+     * User panel logo URL: if stored path, return asset('storage/...'); otherwise return as-is.
+     */
+    public function getUserPanelLogoUrlAttribute(): ?string
+    {
+        if (! $this->user_panel_logo) {
+            return null;
+        }
+        $val = $this->user_panel_logo;
+        if (str_starts_with($val, 'http://') || str_starts_with($val, 'https://') || str_starts_with($val, '/')) {
+            return $val;
+        }
+        return asset('storage/' . $val);
+    }
+
+    /**
+     * Email template logo URL: if stored path, return asset('storage/...'); otherwise return as-is.
+     */
+    public function getEmailTemplateLogoUrlAttribute(): ?string
+    {
+        if (! $this->email_template_logo) {
+            return null;
+        }
+        $val = $this->email_template_logo;
+        if (str_starts_with($val, 'http://') || str_starts_with($val, 'https://') || str_starts_with($val, '/')) {
+            return $val;
+        }
+        return asset('storage/' . $val);
     }
 }

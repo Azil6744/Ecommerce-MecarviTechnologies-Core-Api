@@ -14,5 +14,7 @@ class ProductPageHeroSection extends Model
         'description_title',
         'hero_description',
         'section_bg_color',
+        'image_url',
+        'background_image',
     ];
 }

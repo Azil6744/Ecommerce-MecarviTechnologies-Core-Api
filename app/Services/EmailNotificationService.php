@@ -127,6 +127,11 @@ class EmailNotificationService
         $template = EmailTemplate::where('event_key', $eventKey)->first();
         $results = [];
 
+        // Trigger SMS notification if a phone number is provided
+        if (isset($data['customer_phone']) && $data['customer_phone']) {
+            $this->sendSmsNotification($eventKey, $data, $data['customer_phone']);
+        }
+
         if (! $setting->is_enabled) {
             return [$this->logSkipped($eventKey, $template, $customerEmail ?: 'unknown', 'Email sending is disabled.', $data)];
         }
@@ -179,6 +184,7 @@ class EmailNotificationService
         return [
             'customer_name' => $order->customer_name ?: 'Customer',
             'customer_email' => $order->customer_email,
+            'customer_phone' => $order->customer_phone,
             'order_number' => $order->order_number,
             'order_total' => '$' . number_format((float) $order->total_amount, 2),
             'order_status' => Str::headline((string) $order->status),
@@ -319,5 +325,29 @@ class EmailNotificationService
         }
 
         return $content;
+    }
+
+    private function sendSmsNotification(string $eventKey, array $data, ?string $phone): void
+    {
+        if (!$phone) {
+            return;
+        }
+
+        $message = match ($eventKey) {
+            'order_placed' => "Thank you for your order, " . ($data['customer_name'] ?? 'Customer') . "! Your order #" . ($data['order_number'] ?? '') . " of " . ($data['order_total'] ?? '') . " has been placed successfully.",
+            'order_shipped' => "Hi " . ($data['customer_name'] ?? 'Customer') . ", your order #" . ($data['order_number'] ?? '') . " has been shipped!" . (($data['tracking_number'] ?? '') !== '' ? " Tracking: " . $data['tracking_number'] : ""),
+            'order_delivered' => "Hi " . ($data['customer_name'] ?? 'Customer') . ", your order #" . ($data['order_number'] ?? '') . " has been delivered successfully!",
+            'order_cancelled' => "Hi " . ($data['customer_name'] ?? 'Customer') . ", your order #" . ($data['order_number'] ?? '') . " has been cancelled.",
+            default => null,
+        };
+
+        if ($message) {
+            try {
+                $smsService = app(\App\Services\SmsService::class);
+                $smsService->sendSms($phone, $message);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error("Failed to send notification SMS: " . $e->getMessage());
+            }
+        }
     }
 }

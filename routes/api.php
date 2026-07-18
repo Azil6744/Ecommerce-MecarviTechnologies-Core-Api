@@ -2532,6 +2532,8 @@ Route::prefix('v1')->group(function () {
             ->name('api.v1.sms-settings.index');
         Route::post('/sms-settings', [\App\Http\Controllers\Api\Admin\sitesettings\NotificationSettingsController::class, 'saveSmsSettings'])
             ->name('api.v1.sms-settings.store');
+        Route::post('/sms-settings/test', [\App\Http\Controllers\Api\Admin\sitesettings\NotificationSettingsController::class, 'testSms'])
+            ->name('api.v1.sms-settings.test');
         Route::get('/push-notification-settings', [\App\Http\Controllers\Api\Admin\sitesettings\NotificationSettingsController::class, 'getPushSettings'])
             ->name('api.v1.push-notification-settings.index');
         Route::post('/push-notification-settings', [\App\Http\Controllers\Api\Admin\sitesettings\NotificationSettingsController::class, 'savePushSettings'])

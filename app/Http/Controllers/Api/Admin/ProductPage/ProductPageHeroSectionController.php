@@ -7,6 +7,7 @@ use App\Models\ProductPageHeroSection;
 use App\Traits\BroadcastsContentUpdates;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Storage;
 
 class ProductPageHeroSectionController extends Controller
 {
@@ -46,17 +47,39 @@ class ProductPageHeroSectionController extends Controller
                 'description_title' => ['nullable', 'string', 'max:255'],
                 'hero_description' => ['nullable', 'string'],
                 'section_bg_color' => ['nullable', 'string', 'max:20'],
+                'image_url' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg,webp', 'max:5120'],
+                'background_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,svg,webp', 'max:5120'],
             ]);
 
-            $section = ProductPageHeroSection::updateOrCreate(
-                ['id' => ProductPageHeroSection::first()?->id ?? 0],
-                [
-                    'hero_title' => $validated['hero_title'] ?? null,
-                    'description_title' => $validated['description_title'] ?? null,
-                    'hero_description' => $validated['hero_description'] ?? null,
-                    'section_bg_color' => $validated['section_bg_color'] ?? '#ff6a00',
-                ]
-            );
+            $existingSection = ProductPageHeroSection::first();
+
+            $updateData = [
+                'hero_title' => $validated['hero_title'] ?? null,
+                'description_title' => $validated['description_title'] ?? null,
+                'hero_description' => $validated['hero_description'] ?? null,
+                'section_bg_color' => $validated['section_bg_color'] ?? '#ff6a00',
+            ];
+
+            if ($request->hasFile('image_url')) {
+                if ($existingSection && $existingSection->image_url) {
+                    Storage::disk('public')->delete($existingSection->image_url);
+                }
+                $updateData['image_url'] = $request->file('image_url')->store('product-page-hero-section', 'public');
+            }
+
+            if ($request->hasFile('background_image')) {
+                if ($existingSection && $existingSection->background_image) {
+                    Storage::disk('public')->delete($existingSection->background_image);
+                }
+                $updateData['background_image'] = $request->file('background_image')->store('product-page-hero-section', 'public');
+            }
+
+            if ($existingSection) {
+                $existingSection->update($updateData);
+                $section = $existingSection;
+            } else {
+                $section = ProductPageHeroSection::create($updateData);
+            }
 
             $this->broadcastContentUpdate('product-page-hero-section', 'updated', ['id' => $section->id]);
 

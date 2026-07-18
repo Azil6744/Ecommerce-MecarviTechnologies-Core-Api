@@ -57,6 +57,33 @@ class NotificationSettingsController extends Controller
         ]);
     }
 
+    public function testSms(Request $request)
+    {
+        if (! $request->user()?->hasAdminAccess()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        $validated = $request->validate([
+            'recipient_number' => 'required|string|max:50',
+            'message' => 'required|string|max:500',
+        ]);
+
+        $smsService = new \App\Services\SmsService();
+        $success = $smsService->sendSms($validated['recipient_number'], $validated['message']);
+
+        if ($success) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Test SMS sent successfully.',
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to send test SMS. Please check logs for detailed error.',
+        ], 422);
+    }
+
     public function getPushSettings(Request $request)
     {
         if (! $request->user()?->hasAdminAccess()) {
