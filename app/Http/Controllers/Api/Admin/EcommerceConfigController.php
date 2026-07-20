@@ -213,14 +213,40 @@ class EcommerceConfigController extends Controller
             $settings = SiteSetting::firstOrCreate([]);
             $charity = $settings->charity_settings ? json_decode($settings->charity_settings, true) : null;
 
+            $defaultCategories = ['Children', 'Education', 'Disaster Relief', 'Environment', 'Health', 'Animals'];
+            $defaultAssistanceOptions = [
+                'Rental Assistance',
+                'Shelter / Housing',
+                'Utility Assistance',
+                'Clothing Assistance',
+                'Food Support',
+                'Job Training',
+                'Transportation',
+                'Mental Health Support',
+                'Healthcare Support',
+                'Elderly Care',
+                'Education Support',
+                'Childcare Support',
+                'Disaster Relief'
+            ];
+
             if (!$charity) {
                 $charity = [
                     'enabled' => false,
                     'charity_name' => 'Red Cross',
                     'charity_description' => 'Global humanitarian network providing relief and support.',
                     'suggested_amounts' => '1,5,10',
-                    'allow_custom_amount' => true
+                    'allow_custom_amount' => true,
+                    'categories' => $defaultCategories,
+                    'assistance_options' => $defaultAssistanceOptions
                 ];
+            } else {
+                if (!isset($charity['categories'])) {
+                    $charity['categories'] = $defaultCategories;
+                }
+                if (!isset($charity['assistance_options'])) {
+                    $charity['assistance_options'] = $defaultAssistanceOptions;
+                }
             }
 
             return response()->json([
@@ -249,7 +275,11 @@ class EcommerceConfigController extends Controller
                 'charity_name' => 'required|string|max:255',
                 'charity_description' => 'required|string',
                 'suggested_amounts' => 'required|string',
-                'allow_custom_amount' => 'required|boolean'
+                'allow_custom_amount' => 'required|boolean',
+                'categories' => 'nullable|array',
+                'categories.*' => 'string',
+                'assistance_options' => 'nullable|array',
+                'assistance_options.*' => 'string'
             ]);
 
             // Sync legacy columns in site_settings for checkout code compatibility

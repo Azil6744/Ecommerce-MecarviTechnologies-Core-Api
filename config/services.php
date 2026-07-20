@@ -32,7 +32,9 @@ return [
     ],
 
     'stripe' => [
+        'key' => env('STRIPE_KEY'),
         'secret' => env('STRIPE_SECRET'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
 
     'paypal' => [
@@ -54,6 +56,10 @@ return [
 
     'mccarvy_site' => [
         'slug' => env('MCCARVY_SITE_SLUG', env('SITE_SLUG', 'embroidery')),
+    ],
+
+    'pin_authorization' => [
+        'secret' => env('PIN_AUTHORIZATION_SECRET', env('APP_KEY')),
     ],
 
     'internal_notifications' => [

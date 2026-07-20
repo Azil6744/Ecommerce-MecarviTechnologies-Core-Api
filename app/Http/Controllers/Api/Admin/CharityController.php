@@ -5,9 +5,43 @@ namespace App\Http\Controllers\Api\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Charity;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class CharityController extends Controller
 {
+    /**
+     * Resolve the logo field: handle base64 data URL or preset string.
+     * Returns the storage path or preset name.
+     */
+    private function resolveLogo(Request $request, ?string $oldPath = null): ?string
+    {
+        if ($request->has('logo_svg_type') && is_string($request->input('logo_svg_type'))) {
+            $imageString = $request->input('logo_svg_type');
+
+            if (preg_match('/^data:image\/(\w+);base64,/', $imageString, $matches)) {
+                $imageType = $matches[1];
+                $imageData = base64_decode(preg_replace('/^data:image\/\w+;base64,/', '', $imageString));
+
+                if ($imageData !== false) {
+                    // Delete old custom logo if replacing
+                    if ($oldPath && !in_array($oldPath, ['feeding_america', 'unicef_usa', 'red_cross', 'nature_conservancy', 'best_friends', 'helping_hands', 'st_jude', 'irc', 'generic_charity'])) {
+                        Storage::disk('public')->delete($oldPath);
+                    }
+                    $filename = 'charity_' . time() . '_' . Str::random(6) . '.' . $imageType;
+                    $imagePath = 'charities/' . $filename;
+                    Storage::disk('public')->put($imagePath, $imageData);
+                    return $imagePath;
+                }
+            }
+
+            // Return plain preset string or existing image path
+            return $imageString;
+        }
+
+        return 'generic_charity';
+    }
+
     public function index(Request $request)
     {
         $charities = Charity::orderBy('created_at', 'desc')->get();
@@ -62,7 +96,8 @@ class CharityController extends Controller
             'logo_svg_type' => 'nullable|string',
         ]);
 
-        $validated['logo_svg_type'] = $validated['logo_svg_type'] ?? 'generic_charity';
+        $logoPath = $this->resolveLogo($request);
+        $validated['logo_svg_type'] = $logoPath;
 
         $charity = Charity::create($validated);
 
@@ -92,6 +127,9 @@ class CharityController extends Controller
             'assistance_tags' => 'required|array',
             'logo_svg_type' => 'nullable|string',
         ]);
+
+        $logoPath = $this->resolveLogo($request, $charity->logo_svg_type);
+        $validated['logo_svg_type'] = $logoPath;
 
         $charity->update($validated);
 

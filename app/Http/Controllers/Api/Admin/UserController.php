@@ -616,6 +616,77 @@ class UserController extends Controller
         }
     }
 
+    public function businessUsers(Request $request)
+    {
+        try {
+            $query = User::with(['roles'])
+                ->withCount(['orders'])
+                ->withSum('orders as total_spent', 'total_amount')
+                ->where(function ($q) {
+                    $businessRoles = ['business', 'business_user', 'business-customer', 'company'];
+                    $q->whereIn('role', $businessRoles)
+                        ->orWhereHas('roles', function ($roleQuery) use ($businessRoles) {
+                            $roleQuery->whereIn('name', $businessRoles);
+                        });
+                });
+
+            $this->applyUserDirectoryFilters($query, $request);
+
+            $businessUsers = $query->orderBy('created_at', 'desc')
+                ->paginate($request->get('per_page', 20));
+
+            $businessUsers->getCollection()->transform(function ($user) {
+                return $this->businessUserPayload($user);
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $businessUsers,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch business users.',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
+    public function sellerStores(Request $request)
+    {
+        try {
+            $query = User::with(['roles'])
+                ->withCount(['orders'])
+                ->withSum('orders as total_spent', 'total_amount')
+                ->where(function ($q) {
+                    $q->where('role', 'seller')
+                        ->orWhereHas('roles', function ($roleQuery) {
+                            $roleQuery->where('name', 'seller');
+                        });
+                });
+
+            $this->applyUserDirectoryFilters($query, $request);
+
+            $sellers = $query->orderBy('created_at', 'desc')
+                ->paginate($request->get('per_page', 20));
+
+            $sellers->getCollection()->transform(function ($user) {
+                return $this->sellerStorePayload($user);
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $sellers,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch seller stores.',
+                'error' => config('app.debug') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
     public function storeCustomer(Request $request)
     {
         try {
@@ -770,6 +841,49 @@ class UserController extends Controller
             'created_at' => $user->created_at,
             'updated_at' => $user->updated_at,
         ];
+    }
+
+    private function applyUserDirectoryFilters($query, Request $request): void
+    {
+        if ($request->has('search') && $request->search) {
+            $s = $request->search;
+            $query->where(function ($q) use ($s) {
+                $q->where('name', 'like', "%{$s}%")
+                    ->orWhere('email', 'like', "%{$s}%")
+                    ->orWhere('phone', 'like', "%{$s}%");
+            });
+        }
+
+        if ($request->has('status') && $request->status) {
+            if ($request->status === 'banned') {
+                $query->whereNotNull('banned_at');
+            } elseif ($request->status === 'deactivated') {
+                $query->whereNotNull('deactivated_at');
+            } elseif ($request->status === 'active') {
+                $query->whereNull('banned_at')->whereNull('deactivated_at');
+            }
+        }
+    }
+
+    private function businessUserPayload(User $user): array
+    {
+        return array_merge($this->customerPayload($user), [
+            'business_name' => null,
+            'company_name' => null,
+            'store_name' => null,
+        ]);
+    }
+
+    private function sellerStorePayload(User $user): array
+    {
+        $payload = $this->customerPayload($user);
+
+        return array_merge($payload, [
+            'store_name' => $payload['name'] ? $payload['name'] . "'s Store" : 'Seller Store',
+            'business_name' => null,
+            'company_name' => null,
+            'store_status' => $payload['email_verified_at'] ? 'verified' : 'pending',
+        ]);
     }
 
     private function centralCall(string $method, string $path, array $data = [])

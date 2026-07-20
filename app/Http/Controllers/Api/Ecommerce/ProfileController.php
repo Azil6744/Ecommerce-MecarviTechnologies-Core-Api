@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Ecommerce;
 
 use App\Http\Controllers\Controller;
+use App\Support\PasswordValidationRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
@@ -73,8 +74,8 @@ class ProfileController extends Controller
     {
         $request->validate([
             'current_password' => 'required',
-            'password' => 'required|string|min:8|confirmed',
-        ]);
+            'password' => PasswordValidationRules::rules(),
+        ], PasswordValidationRules::messages());
 
         $payload = [
             'current_password' => $request->current_password,

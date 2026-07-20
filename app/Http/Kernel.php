@@ -64,8 +64,10 @@ class Kernel extends HttpKernel
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'admin.only' => \App\Http\Middleware\AdminOnly::class,
+        'admin.mfa' => \App\Http\Middleware\EnsureAdminMfaVerified::class,
         'role' => \App\Http\Middleware\RoleMiddleware::class,
         'verify.ownership' => \App\Http\Middleware\VerifyOwnership::class,
         'central.auth' => \App\Http\Middleware\CentralAuthTokenMiddleware::class,
+        'pin.verified' => \App\Http\Middleware\EnsurePinAuthorization::class,
     ];
 }

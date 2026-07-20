@@ -214,8 +214,8 @@ class WalletSystemIntegrationTest extends TestCase
         $registerResponse = $this->postJson('/api/v1/register', [
             'name' => 'Referred Customer',
             'email' => 'referred@example.com',
-            'password' => 'password123',
-            'password_confirmation' => 'password123',
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
             'referral_code' => 'TESTCODE123',
         ]);
 

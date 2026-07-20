@@ -32,6 +32,7 @@ class EcommerceReviewController extends Controller
         if(Schema::hasColumn((new EcommerceReview)->getTable(), 'user_id')) {
             $data['user_id'] = $request->user()->id;
         }
+        $data['status'] = EcommerceReview::STATUS_PENDING;
         $item = EcommerceReview::create($data);
         return response()->json(['success' => true, 'data' => $item]);
     }
@@ -53,7 +54,7 @@ class EcommerceReviewController extends Controller
             'rating' => $validated['rating'],
             'title' => $validated['title'] ?? null,
             'comment' => $validated['comment'] ?? null,
-            'status' => 'pending',
+            'status' => EcommerceReview::STATUS_PENDING,
         ]);
 
         return response()->json(['success' => true, 'data' => $review], 201);

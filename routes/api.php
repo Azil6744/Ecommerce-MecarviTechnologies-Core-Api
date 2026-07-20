@@ -867,13 +867,19 @@ Route::prefix('v1')->group(function () {
 
         // Subscription Plans
         Route::apiResource('/admin/subscription-plans', AdminSubscriptionPlanController::class);
+        Route::apiResource('/admin/membership-benefits', \App\Http\Controllers\Api\Admin\AdminMembershipBenefitController::class);
 
         // Customers (uses UserController with role filter)
         Route::get('/admin/customers', [UserController::class, 'customers']);
+        Route::get('/admin/business-users', [UserController::class, 'businessUsers']);
         Route::get('/admin/customers/stats', [UserController::class, 'customerStats']);
         Route::post('/admin/customers', [UserController::class, 'storeCustomer']);
         Route::patch('/admin/customers/{id}/status', [UserController::class, 'updateCustomerStatus']);
         Route::post('/admin/customers/{id}/verify', [UserController::class, 'verifyCustomer']);
+
+        // Sellers
+        Route::get('/admin/sellers/business-stores', [UserController::class, 'sellerStores']);
+        Route::get('/admin/sellers/verifications', [\App\Http\Controllers\Api\Admin\CustomerVerificationController::class, 'sellerIndex']);
 
         // Gift Cards & Gift Card Orders (Admin Only)
         Route::middleware(['admin.only'])->group(function () {

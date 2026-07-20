@@ -8,14 +8,36 @@ use Illuminate\Http\Request;
 
 class CustomerVerificationController extends Controller
 {
+    public function sellerIndex(Request $request)
+    {
+        $request->merge(['type' => 'seller']);
+
+        return $this->index($request);
+    }
+
     public function index(Request $request)
     {
         $status = $request->query('status', 'pending');
+        $type = $request->query('type');
 
         $query = EcommerceCustomerVerification::with('user')->latest();
 
         if ($status !== 'all') {
             $query->where('status', $status);
+        }
+
+        if ($type === 'seller') {
+            $query->where(function ($q) {
+                $q->where('document_type', 'like', '%seller%')
+                    ->orWhere('document_type', 'like', '%business%')
+                    ->orWhere('document_type', 'like', '%store%')
+                    ->orWhereHas('user', function ($userQuery) {
+                        $userQuery->where('role', 'seller')
+                            ->orWhereHas('roles', function ($roleQuery) {
+                                $roleQuery->where('name', 'seller');
+                            });
+                    });
+            });
         }
 
         $verifications = $query->get();

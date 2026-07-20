@@ -319,4 +319,26 @@ class EcommerceCouponController extends Controller
     {
         $coupon->products()->sync(array_values(array_unique(array_map('intval', $productIds))));
     }
+
+    public function publicIndex(Request $request)
+    {
+        $coupons = \App\Models\EcommerceCoupon::query()
+            ->where('is_active', true)
+            ->where(function ($query) {
+                $query->whereNull('starts_at')->orWhere('starts_at', '<=', now());
+            })
+            ->where(function ($query) {
+                $query->whereNull('expires_at')->orWhere('expires_at', '>=', now());
+            })
+            ->where(function ($query) {
+                $query->whereNull('usage_limit')->orWhereColumn('used_count', '<', 'usage_limit');
+            })
+            ->orderBy('id')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $coupons->map(fn (\App\Models\EcommerceCoupon $coupon) => $coupon->toPublicArray())->values(),
+        ]);
+    }
 }

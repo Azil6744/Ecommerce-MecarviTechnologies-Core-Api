@@ -12,7 +12,10 @@ use App\Models\EcommerceOrderItem;
 use App\Models\EcommerceGiftCard;
 use App\Models\EcommerceCoupon;
 use App\Services\EmailNotificationService;
+use App\Services\MembershipBenefitService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Carbon;
 
 class CheckoutController extends Controller
@@ -212,6 +215,17 @@ class CheckoutController extends Controller
             // Calculate loyalty points discount value
             $loyaltyPointsDiscount = round($generalPointsRedeemed * $ratio, 2);
             $totalDiscount = round($couponDiscount + $loyaltyPointsDiscount, 2);
+            $membershipBenefits = app(MembershipBenefitService::class)->evaluate(
+                $this->activeCentralMemberships($request),
+                $itemsSubtotal,
+                $shippingAmount,
+                config('services.mccarvy_site.slug', 'embroidery'),
+                $appliedCoupon !== null
+            );
+
+            if ($membershipBenefits['membership_discount_amount'] > 0) {
+                $totalDiscount = round($totalDiscount + $membershipBenefits['membership_discount_amount'], 2);
+            }
 
             $taxRate = $settings && $settings->tax_enabled ? (float)$settings->tax_rate : 0.00;
             $taxAmount = $settings && $settings->tax_enabled ? round($itemsSubtotal * ($taxRate / 100), 2) : round((float) ($validated['tax_amount'] ?? 0), 2);
@@ -342,6 +356,11 @@ class CheckoutController extends Controller
                 'subtotal' => round($itemsSubtotal, 2),
                 'shipping_amount' => $shippingAmount,
                 'discount_amount' => $totalDiscount,
+                'membership_id' => $membershipBenefits['membership_id'],
+                'membership_plan_name' => $membershipBenefits['membership_plan_name'],
+                'membership_discount_amount' => $membershipBenefits['membership_discount_amount'],
+                'membership_benefits_snapshot' => $membershipBenefits['membership_benefits_snapshot'],
+                'membership_benefit_usage' => $membershipBenefits['membership_benefit_usage'],
                 'tax_amount' => $taxAmount,
                 'tip_amount' => $tipAmount,
                 'donation_amount' => $donationAmount,
@@ -362,6 +381,7 @@ class CheckoutController extends Controller
                     'gift_message' => $validated['gift_message'] ?? null,
                     'coupon_code' => $appliedCoupon?->code,
                     'coupon' => $appliedCoupon?->toManagementArray(),
+                    'membership_benefits' => $membershipBenefits,
                     'checkout_payload' => $validated,
                 ],
                 'order_number' => EcommerceOrder::generateOrderNumber(),
@@ -663,5 +683,31 @@ class CheckoutController extends Controller
                 ? 0
                 : $coupon->discountFor($itemsSubtotal, $context))
             ->first();
+    }
+
+    private function activeCentralMemberships(Request $request): array
+    {
+        $token = $request->header('X-Central-Auth-Token') ?? $request->bearerToken();
+        if (! $token) {
+            return [];
+        }
+
+        try {
+            $centralUrl = rtrim(config('services.central_auth.url'), '/');
+            $response = Http::acceptJson()
+                ->withToken($token)
+                ->timeout(5)
+                ->get($centralUrl . '/user/memberships');
+
+            if (! $response->successful()) {
+                return [];
+            }
+
+            $memberships = $response->json('data') ?? [];
+            return is_array($memberships) ? $memberships : [];
+        } catch (\Throwable $e) {
+            Log::warning('Checkout failed to fetch central memberships: ' . $e->getMessage());
+            return [];
+        }
     }
 }

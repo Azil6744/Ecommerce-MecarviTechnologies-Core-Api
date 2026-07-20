@@ -20,7 +20,7 @@ class AdminUserSeeder extends Seeder
     public function run(): void
     {
         $adminEmail = env('SEED_ADMIN_EMAIL', 'admin@mecarvi.com');
-        $adminPassword = env('SEED_ADMIN_PASSWORD', 'McCarvyAdmin2026!');
+        $adminPassword = env('SEED_ADMIN_PASSWORD', 'MecaRviAdmin@2021$');
 
         $adminUser = User::updateOrCreate([
             'email' => $adminEmail,
@@ -35,8 +35,8 @@ class AdminUserSeeder extends Seeder
 
         $this->command->info('Admin user created successfully!');
         $this->command->warn('Default credentials:');
-        $this->command->line('Email: admin@gmail.com');
-        $this->command->line('Password: 123456');
+        $this->command->line('Email: admin@mecarvi.com');
+        $this->command->line('Password: MecaRviAdmin@2021$');
         $this->command->warn('Please change the password immediately after first login!');
     }
 }

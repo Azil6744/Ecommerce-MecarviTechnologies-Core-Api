@@ -59,6 +59,12 @@ class CentralAuthTokenMiddleware
                     }
 
                     $this->authenticateRequestAs($request, $localUser);
+                    $request->attributes->set('central_auth_user', [
+                        'id' => $localUser->id,
+                        'email' => $localUser->email,
+                        'role' => $localUser->role,
+                    ]);
+                    $request->attributes->set('central_auth_token', $token);
                     \Log::info('CentralAuthTokenMiddleware: Token valid as local Sanctum token for ' . $localUser->email);
 
                     return $next($request);
@@ -70,6 +76,8 @@ class CentralAuthTokenMiddleware
             }
 
             \Log::info('CentralAuthTokenMiddleware: Token valid for ' . $centralUser['email']);
+            $request->attributes->set('central_auth_user', $centralUser);
+            $request->attributes->set('central_auth_token', $token);
 
             $email = strtolower(trim((string) $centralUser['email']));
             $user = User::whereRaw('LOWER(email) = ?', [$email])->first();

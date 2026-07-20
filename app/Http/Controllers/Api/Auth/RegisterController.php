@@ -4,9 +4,9 @@ namespace App\Http\Controllers\Api\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\PasswordValidationRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
 class RegisterController extends Controller
@@ -27,9 +27,9 @@ class RegisterController extends Controller
             $validated = $request->validate([
                 'name' => ['required', 'string', 'max:255'],
                 'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
-                'password' => ['required', 'string', 'confirmed', Password::defaults()],
+                'password' => PasswordValidationRules::rules(),
                 'referral_code' => ['sometimes', 'nullable', 'string'],
-            ]);
+            ], PasswordValidationRules::messages());
 
             // Create the new user
             $user = User::create([

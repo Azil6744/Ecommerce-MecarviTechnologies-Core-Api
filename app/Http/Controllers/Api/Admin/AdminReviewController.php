@@ -42,13 +42,13 @@ class AdminReviewController extends Controller
     public function approve(Request $request, EcommerceReview $review)
     {
         $request->validate([
-            'status' => 'required|in:approved,rejected',
+            'status' => 'required|in:' . EcommerceReview::STATUS_APPROVED . ',' . EcommerceReview::STATUS_REJECTED,
         ]);
 
         $oldStatus = $review->status;
         $review->update(['status' => $request->status]);
 
-        if ($request->status === 'approved' && $oldStatus !== 'approved' && $review->user_id) {
+        if ($request->status === EcommerceReview::STATUS_APPROVED && strtolower((string) $oldStatus) !== EcommerceReview::STATUS_APPROVED && $review->user_id) {
             $settings = \App\Models\SiteSetting::first();
             if ($settings && $settings->loyalty_settings) {
                 $loyalty = json_decode($settings->loyalty_settings, true);
