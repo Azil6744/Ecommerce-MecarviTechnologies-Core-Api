@@ -13,12 +13,54 @@ class PaymentGatewayController extends Controller
     {
         try {
             $gateways = PaymentGateway::orderBy('sort_order')->get();
+            if ($gateways->isEmpty()) {
+                $defaultGateways = [
+                    ['name' => 'Wallet', 'display_label' => 'Wallet Balance', 'provider' => 'wallet', 'description' => 'Pay using your Mecarvi Wallet balance.', 'is_active' => true, 'sort_order' => 1],
+                    ['name' => 'PayPal', 'display_label' => 'PayPal', 'provider' => 'paypal', 'description' => 'Pay securely with your PayPal account.', 'is_active' => true, 'sort_order' => 2],
+                    ['name' => 'Cash App Pay', 'display_label' => 'Cash App', 'provider' => 'cashapp', 'description' => 'Pay instantly with Cash App.', 'is_active' => true, 'sort_order' => 3],
+                    ['name' => 'Voucher', 'display_label' => 'Store Voucher', 'provider' => 'voucher', 'description' => 'Use store voucher or gift voucher.', 'is_active' => true, 'sort_order' => 4],
+                    ['name' => 'Gift Cards', 'display_label' => 'Gift Card', 'provider' => 'giftcard', 'description' => 'Use your Mecarvi Gift Card balance.', 'is_active' => true, 'sort_order' => 5],
+                    ['name' => 'Financing / Installments', 'display_label' => 'Financing', 'provider' => 'financing', 'description' => 'Easy monthly payments with flexible options.', 'is_active' => true, 'sort_order' => 6],
+                ];
+                foreach ($defaultGateways as $gw) {
+                    PaymentGateway::create($gw);
+                }
+                $gateways = PaymentGateway::orderBy('sort_order')->get();
+            }
             return response()->json([
                 'success' => true,
                 'data' => ['gateways' => $gateways],
             ]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Failed to fetch gateways.', 'error' => config('app.debug') ? $e->getMessage() : null], 500);
+        }
+    }
+
+    public function publicIndex()
+    {
+        try {
+            $gateways = PaymentGateway::where('is_active', true)->orderBy('sort_order')->get();
+            if ($gateways->isEmpty()) {
+                $defaultGateways = [
+                    ['name' => 'Wallet', 'display_label' => 'Wallet Balance', 'provider' => 'wallet', 'description' => 'Pay using your Mecarvi Wallet balance.', 'is_active' => true, 'sort_order' => 1],
+                    ['name' => 'PayPal', 'display_label' => 'PayPal', 'provider' => 'paypal', 'description' => 'Pay securely with your PayPal account.', 'is_active' => true, 'sort_order' => 2],
+                    ['name' => 'Cash App Pay', 'display_label' => 'Cash App', 'provider' => 'cashapp', 'description' => 'Pay instantly with Cash App.', 'is_active' => true, 'sort_order' => 3],
+                    ['name' => 'Voucher', 'display_label' => 'Store Voucher', 'provider' => 'voucher', 'description' => 'Use store voucher or gift voucher.', 'is_active' => true, 'sort_order' => 4],
+                    ['name' => 'Gift Cards', 'display_label' => 'Gift Card', 'provider' => 'giftcard', 'description' => 'Use your Mecarvi Gift Card balance.', 'is_active' => true, 'sort_order' => 5],
+                    ['name' => 'Financing / Installments', 'display_label' => 'Financing', 'provider' => 'financing', 'description' => 'Easy monthly payments with flexible options.', 'is_active' => true, 'sort_order' => 6],
+                ];
+                foreach ($defaultGateways as $gw) {
+                    PaymentGateway::create($gw);
+                }
+                $gateways = PaymentGateway::where('is_active', true)->orderBy('sort_order')->get();
+            }
+
+            return response()->json([
+                'success' => true,
+                'data' => ['gateways' => $gateways],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Failed to fetch payment gateways.', 'error' => config('app.debug') ? $e->getMessage() : null], 500);
         }
     }
 

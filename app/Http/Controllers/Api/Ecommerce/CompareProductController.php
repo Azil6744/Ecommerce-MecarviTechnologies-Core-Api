@@ -12,8 +12,16 @@ class CompareProductController extends Controller
 {
     public function index(Request $request)
     {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json([
+                'success' => true,
+                'data' => [],
+            ]);
+        }
+
         $items = EcommerceCompareItem::query()
-            ->where('user_id', $request->user()->id)
+            ->where('user_id', $user->id)
             ->with([
                 'product.category.parent',
                 'product.previewAssets' => fn ($query) => $query->where('is_active', true),
@@ -32,16 +40,24 @@ class CompareProductController extends Controller
 
     public function store(Request $request)
     {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User unauthenticated.',
+            ], 401);
+        }
+
         $validated = $request->validate([
             'product_id' => ['required', 'exists:products,id'],
         ]);
 
         $count = EcommerceCompareItem::query()
-            ->where('user_id', $request->user()->id)
+            ->where('user_id', $user->id)
             ->count();
 
         $existing = EcommerceCompareItem::query()
-            ->where('user_id', $request->user()->id)
+            ->where('user_id', $user->id)
             ->where('product_id', $validated['product_id'])
             ->first();
 
@@ -53,7 +69,7 @@ class CompareProductController extends Controller
         }
 
         EcommerceCompareItem::query()->firstOrCreate([
-            'user_id' => $request->user()->id,
+            'user_id' => $user->id,
             'product_id' => $validated['product_id'],
         ]);
 
@@ -62,8 +78,16 @@ class CompareProductController extends Controller
 
     public function destroy(Request $request, Product $product)
     {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json([
+                'success' => true,
+                'data' => [],
+            ]);
+        }
+
         EcommerceCompareItem::query()
-            ->where('user_id', $request->user()->id)
+            ->where('user_id', $user->id)
             ->where('product_id', $product->id)
             ->delete();
 
@@ -72,8 +96,17 @@ class CompareProductController extends Controller
 
     public function clear(Request $request)
     {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Compared products cleared successfully.',
+                'data' => [],
+            ]);
+        }
+
         EcommerceCompareItem::query()
-            ->where('user_id', $request->user()->id)
+            ->where('user_id', $user->id)
             ->delete();
 
         return response()->json([

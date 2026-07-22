@@ -10,9 +10,20 @@ use Illuminate\Http\Request;
 
 class CartController extends Controller
 {
-    private function activeCartFor(Request $request): EcommerceCart
+    private function activeCartFor(Request $request): ?EcommerceCart
     {
         $user = $request->user();
+
+        if (!$user) {
+            $sessionId = $request->header('X-Session-ID') ?: $request->header('X-Guest-Session-ID');
+            if ($sessionId) {
+                return EcommerceCart::firstOrCreate(
+                    ['session_id' => $sessionId, 'status' => 'active'],
+                    ['total_amount' => 0]
+                );
+            }
+            return null;
+        }
 
         return EcommerceCart::firstOrCreate(
             ['user_id' => $user->id, 'status' => 'active'],
@@ -33,9 +44,12 @@ class CartController extends Controller
      */
     public function index(Request $request)
     {
-        $cart = $this->activeCartFor($request)->load('items.product');
+        $cart = $this->activeCartFor($request);
+        if (!$cart) {
+            return response()->json(['items' => [], 'total_amount' => 0]);
+        }
 
-        return response()->json($cart);
+        return response()->json($cart->load('items.product'));
     }
 
     /**
