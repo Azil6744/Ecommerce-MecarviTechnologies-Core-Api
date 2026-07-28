@@ -143,7 +143,7 @@ class EcommerceWalletTransactionController extends Controller
             return response()->json(
                 $response->json() ?: [
                     'success' => false,
-                    'message' => 'Failed to create transaction',
+                    'message' => 'Failed to create transaction: ' . substr($response->body(), 0, 150),
                 ],
                 $response->status()
             );

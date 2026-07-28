@@ -16,10 +16,16 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $options = [
+            'headers' => [
+                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            ],
+        ];
+
         if (in_array(config('app.env'), ['local', 'testing'])) {
-            \Illuminate\Support\Facades\Http::globalOptions([
-                'verify' => false,
-            ]);
+            $options['verify'] = false;
         }
+
+        \Illuminate\Support\Facades\Http::globalOptions($options);
     }
 }
