@@ -23,7 +23,12 @@ class EcommerceGiftCardController extends Controller
         if (! $this->isAdminGiftCardRequest($request)) {
             $user = $request->user();
             if (Schema::hasColumn((new EcommerceGiftCard)->getTable(), 'user_id')) {
-                $query->where('user_id', $user?->id);
+                $query->where(function ($q) use ($user) {
+                    $q->where('user_id', $user?->id);
+                    if (Schema::hasColumn((new EcommerceGiftCard)->getTable(), 'buyer_user_id')) {
+                        $q->orWhere('buyer_user_id', $user?->id);
+                    }
+                });
             } else {
                 $query->whereRaw('1 = 0');
             }
@@ -472,12 +477,7 @@ class EcommerceGiftCardController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Gift card code is valid.',
-            'data' => [
-                'code' => $giftCard->code,
-                'current_balance' => (float)$giftCard->current_balance,
-                'expires_at' => $giftCard->expires_at ? $giftCard->expires_at->toDateString() : null,
-                'recipient_name' => $giftCard->recipient_name,
-            ]
+            'data' => $this->giftCardPayload($giftCard),
         ]);
     }
 
@@ -689,6 +689,17 @@ class EcommerceGiftCardController extends Controller
             'updated_at' => optional($giftCard->updated_at)?->toIso8601String(),
             'user' => $giftCard->relationLoaded('user') ? $giftCard->user : null,
             'order' => $giftCard->relationLoaded('order') ? $giftCard->order : null,
+            'transactions' => $giftCard->transactions()->with('order:id,order_number')->latest()->get()->map(function ($tx) {
+                return [
+                    'id' => $tx->id,
+                    'transaction_type' => $tx->transaction_type,
+                    'amount' => (float) $tx->amount,
+                    'notes' => $tx->notes,
+                    'order_id' => $tx->order_id,
+                    'order_number' => $tx->order?->order_number,
+                    'created_at' => optional($tx->created_at)?->toIso8601String(),
+                ];
+            })->toArray(),
         ];
     }
 

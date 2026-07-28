@@ -47,7 +47,7 @@ return [
         'internal_url' => env('CENTRAL_AUTH_INTERNAL_URL'),
         'url' => env(
             'CENTRAL_AUTH_URL',
-            env('APP_ENV', 'production') === 'local'
+            in_array(env('APP_ENV', 'production'), ['local', 'testing'])
                 ? 'http://127.0.0.1:8001/api'
                 : 'https://auth-api.mecarvi.com/api'
         ),

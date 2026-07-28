@@ -14,11 +14,12 @@ class AppServiceProvider extends ServiceProvider
         //
     }
 
-    /**
-     * Bootstrap any application services.
-     */
     public function boot(): void
     {
-        //
+        if (in_array(config('app.env'), ['local', 'testing'])) {
+            \Illuminate\Support\Facades\Http::globalOptions([
+                'verify' => false,
+            ]);
+        }
     }
 }

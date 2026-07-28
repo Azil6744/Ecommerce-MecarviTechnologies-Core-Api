@@ -235,6 +235,11 @@ class CentralAuthTokenMiddleware
 
     private function linkSiteUserInCentralAuth(string $token, User $user): void
     {
+        // Avoid synchronous loopback deadlock in local/testing environments with single-threaded PHP web server
+        if (in_array(config('app.env'), ['local', 'testing'])) {
+            return;
+        }
+
         $siteSlug = trim((string) config('services.mccarvy_site.slug', ''));
         if ($siteSlug === '') {
             return;
@@ -242,7 +247,7 @@ class CentralAuthTokenMiddleware
 
         foreach ($this->centralAuthBaseUrls() as $centralAuthUrl) {
             try {
-                $response = Http::withHeaders([
+                $response = Http::withoutVerifying()->withHeaders([
                     'Authorization' => 'Bearer ' . $token,
                     'X-Central-Auth-Token' => $token,
                     'Accept' => 'application/json',
@@ -300,7 +305,7 @@ class CentralAuthTokenMiddleware
             \Log::info('CentralAuthTokenMiddleware: Validating token against ' . $centralAuthUrl);
 
             try {
-                $client = Http::withHeaders([
+                $client = Http::withoutVerifying()->withHeaders([
                     'Authorization' => 'Bearer ' . $token,
                     'Accept' => 'application/json',
                 ])->timeout(10);

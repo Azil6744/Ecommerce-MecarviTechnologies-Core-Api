@@ -25,7 +25,8 @@ class EcommerceConfigController extends Controller
                     'points_to_dollar_ratio' => '0.01',
                     'minimum_redeem_points' => '100',
                     'max_redeem_percent' => '20',
-                    'expiry_days' => '365'
+                    'expiry_days' => '365',
+                    'earn_points_on_gift_cards' => false
                 ];
             }
 
@@ -73,6 +74,7 @@ class EcommerceConfigController extends Controller
                 'allow_partial_redemption' => 'nullable|boolean',
                 'allow_with_coupons' => 'nullable|boolean',
                 'allow_with_gift_cards' => 'nullable|boolean',
+                'earn_points_on_gift_cards' => 'nullable|boolean',
                 'enable_expiration' => 'nullable|boolean',
                 'expiration_method' => 'nullable|string',
                 'expiration_reminder_days' => 'nullable|string',

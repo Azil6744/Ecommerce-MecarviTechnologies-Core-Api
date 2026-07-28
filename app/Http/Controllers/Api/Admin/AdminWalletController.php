@@ -29,7 +29,7 @@ class AdminWalletController extends Controller
     public function index(Request $request)
     {
         try {
-            $response = $this->centralCall('get', '/v1/internal/admin/wallet');
+            $response = $this->centralCall('get', '/v1/internal/admin/wallet-transactions');
             if ($response->successful()) {
                 return response()->json([
                     'data' => $response->json('data'),

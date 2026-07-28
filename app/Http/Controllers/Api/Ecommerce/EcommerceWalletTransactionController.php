@@ -114,10 +114,17 @@ class EcommerceWalletTransactionController extends Controller
 
         try {
             if ($token) {
-                $response = Http::acceptJson()
+                $client = Http::acceptJson()
                     ->withToken($token)
-                    ->timeout(5)
-                    ->post($centralUrl . '/user/wallet/transaction', $request->all());
+                    ->timeout(5);
+
+                if ($request->hasHeader('X-Pin-Authorization')) {
+                    $client = $client->withHeaders([
+                        'X-Pin-Authorization' => $request->header('X-Pin-Authorization')
+                    ]);
+                }
+
+                $response = $client->post($centralUrl . '/user/wallet/transaction', $request->all());
             } else {
                 $email = $request->user()->email;
                 $secret = (string) config('services.internal_notifications.secret');
@@ -133,10 +140,13 @@ class EcommerceWalletTransactionController extends Controller
                     'data' => $response->json('data'),
                 ]);
             }
-            return response()->json([
-                'success' => false,
-                'message' => $response->json('message') ?: 'Failed to create transaction',
-            ], $response->status());
+            return response()->json(
+                $response->json() ?: [
+                    'success' => false,
+                    'message' => 'Failed to create transaction',
+                ],
+                $response->status()
+            );
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,

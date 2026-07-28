@@ -87,11 +87,13 @@ class ProfileController extends Controller
         $centralResponse = $this->proxyToCentralAuth($request, '/profile/password', 'PUT', $payload);
 
         if ($centralResponse && !$centralResponse->successful()) {
-            return response()->json([
-                'success' => false,
-                'message' => $centralResponse->json('message') ?? 'The current password is incorrect.',
-                'errors' => $centralResponse->json('errors') ?? [],
-            ], $centralResponse->status());
+            return response()->json(
+                $centralResponse->json() ?: [
+                    'success' => false,
+                    'message' => 'The current password is incorrect.',
+                ],
+                $centralResponse->status()
+            );
         }
 
         $user = $request->user();
@@ -132,11 +134,13 @@ class ProfileController extends Controller
         $centralResponse = $this->proxyToCentralAuth($request, '/profile/pin', 'PUT', $payload);
 
         if ($centralResponse && !$centralResponse->successful()) {
-            return response()->json([
-                'success' => false,
-                'message' => $centralResponse->json('message') ?? 'The current PIN is incorrect.',
-                'errors' => $centralResponse->json('errors') ?? [],
-            ], $centralResponse->status());
+            return response()->json(
+                $centralResponse->json() ?: [
+                    'success' => false,
+                    'message' => 'The current PIN is incorrect.',
+                ],
+                $centralResponse->status()
+            );
         }
 
         $user->update(['pin' => Hash::make($request->pin)]);
@@ -182,10 +186,16 @@ class ProfileController extends Controller
 
         foreach ($this->centralAuthBaseUrls() as $centralAuthUrl) {
             try {
-                $client = Http::withHeaders([
+                $headers = [
                     'Authorization' => 'Bearer ' . $token,
                     'Accept' => 'application/json',
-                ])->timeout(10);
+                ];
+
+                if ($request->hasHeader('X-Pin-Authorization')) {
+                    $headers['X-Pin-Authorization'] = $request->header('X-Pin-Authorization');
+                }
+
+                $client = Http::withHeaders($headers)->timeout(10);
 
                 $url = $centralAuthUrl . $endpoint;
                 $response = null;

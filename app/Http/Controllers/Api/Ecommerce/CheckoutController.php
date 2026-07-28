@@ -87,9 +87,20 @@ class CheckoutController extends Controller
             // 1. Fetch settings and calculate points-to-dollar discount ratio
             $settings = \App\Models\SiteSetting::first();
             $ratio = 0.01;
+            $loyaltyEnabled = false;
+            $loyalty = null;
             if ($settings && $settings->loyalty_settings) {
                 $loyalty = json_decode($settings->loyalty_settings, true);
+                $loyaltyEnabled = filter_var($loyalty['enabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
                 $ratio = (float)($loyalty['points_to_dollar_ratio'] ?? 0.01);
+            }
+
+            // Block points redemptions if loyalty is disabled
+            if (!$loyaltyEnabled && ($request->input('points_redeemed') > 0 || !empty($request->input('pay_with_points_item_ids')))) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Loyalty rewards program is currently disabled.'
+                ], 400);
             }
 
             $pointsRedeemed = 0;
@@ -139,33 +150,7 @@ class CheckoutController extends Controller
                 $pointsRedeemed += $generalPointsRedeemed;
             }
 
-            // If user is redeeming points, validate their balance from the Central Auth API
-            if ($pointsRedeemed > 0) {
-                $centralUrl = env('CENTRAL_AUTH_URL', 'http://localhost:8000/api');
-                $token = $request->header('X-Central-Auth-Token') ?? $request->bearerToken();
-                $currentPoints = (int) $user->loyalty_points;
-
-                if ($token) {
-                    try {
-                        $loyaltyRes = \Illuminate\Support\Facades\Http::acceptJson()
-                            ->withToken($token)
-                            ->timeout(3)
-                            ->get($centralUrl . '/user/loyalty');
-                        if ($loyaltyRes->successful()) {
-                            $currentPoints = (int) $loyaltyRes->json('data.points');
-                        }
-                    } catch (\Throwable $e) {
-                        \Log::warning('Checkout failed to fetch central user points: ' . $e->getMessage());
-                    }
-                }
-
-                if ($currentPoints < $pointsRedeemed) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => "Insufficient loyalty points. You need {$pointsRedeemed} points but only have {$currentPoints}."
-                    ], 400);
-                }
-            }
+            // Validation moved below where variables are resolved
 
             $shippingAmount = round((float) ($validated['shipping_amount'] ?? 0), 2);
             $couponDiscount = round((float) ($validated['discount_amount'] ?? 0), 2);
@@ -248,6 +233,88 @@ class CheckoutController extends Controller
 
             // Gift card validation
             $giftCardCodes = $validated['gift_card_codes'] ?? [];
+
+            // If user is redeeming points, validate limits and balance
+            if ($pointsRedeemed > 0) {
+                if (!$loyaltyEnabled) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Loyalty rewards program is currently disabled.'
+                    ], 400);
+                }
+
+                // Enforce minimum points required to redeem
+                $minRedeemPoints = (int)($loyalty['minimum_redeem_points'] ?? 500);
+                if ($generalPointsRedeemed > 0 && $generalPointsRedeemed < $minRedeemPoints) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Minimum points required to redeem is {$minRedeemPoints} points."
+                    ], 400);
+                }
+
+                // Enforce minimum order amount to redeem
+                $minOrderAmount = (float)($loyalty['min_order_amount'] ?? 25.00);
+                if ($generalPointsRedeemed > 0 && $itemsSubtotal < $minOrderAmount) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Minimum order subtotal to redeem points is $" . number_format($minOrderAmount, 2) . "."
+                    ], 400);
+                }
+
+                // Enforce combinability with promo code/coupons
+                $allowWithCoupons = filter_var($loyalty['allow_with_coupons'] ?? true, FILTER_VALIDATE_BOOLEAN);
+                if ($generalPointsRedeemed > 0 && !empty($couponCode) && !$allowWithCoupons) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Loyalty points cannot be combined with coupon codes.'
+                    ], 400);
+                }
+
+                // Enforce combinability with gift cards
+                $allowWithGiftCards = filter_var($loyalty['allow_with_gift_cards'] ?? true, FILTER_VALIDATE_BOOLEAN);
+                if ($generalPointsRedeemed > 0 && !empty($giftCardCodes) && !$allowWithGiftCards) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Loyalty points cannot be combined with gift cards.'
+                    ], 400);
+                }
+
+                // Validate points balance
+                $centralUrl = env('CENTRAL_AUTH_URL', 'http://localhost:8000/api');
+                $token = $request->header('X-Central-Auth-Token') ?? $request->bearerToken();
+                $currentPoints = (int) $user->loyalty_points;
+
+                if ($token) {
+                    try {
+                        $loyaltyRes = \Illuminate\Support\Facades\Http::acceptJson()
+                            ->withToken($token)
+                            ->timeout(3)
+                            ->get($centralUrl . '/user/loyalty');
+                        if ($loyaltyRes->successful()) {
+                            $currentPoints = (int) $loyaltyRes->json('data.points');
+                        }
+                    } catch (\Throwable $e) {
+                        \Log::warning('Checkout failed to fetch central user points: ' . $e->getMessage());
+                    }
+                }
+
+                if ($currentPoints < $pointsRedeemed) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Insufficient loyalty points. You need {$pointsRedeemed} points but only have {$currentPoints}."
+                    ], 400);
+                }
+
+                // Enforce maximum discount percentage
+                $maxRedeemPercent = (float)($loyalty['max_redeem_percent'] ?? 25.00);
+                $maxDiscountAmount = round($itemsSubtotal * ($maxRedeemPercent / 100), 2);
+                if ($loyaltyPointsDiscount > $maxDiscountAmount) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Loyalty points discount cannot exceed {$maxRedeemPercent}% of the subtotal (max discount of $" . number_format($maxDiscountAmount, 2) . ")."
+                    ], 400);
+                }
+            }
             $giftCardsToRedeem = [];
             $totalGiftCardApplied = 0.00;
 
@@ -321,11 +388,10 @@ class CheckoutController extends Controller
 
             // 3. Award Loyalty Points on eligible subtotal paid amount
             $pointsEarned = 0;
-            if ($user) {
+            if ($user && $loyaltyEnabled) {
                 $includeTax = false;
                 $includeShipping = false;
                 if ($settings && $settings->loyalty_settings) {
-                    $loyalty = json_decode($settings->loyalty_settings, true);
                     $includeTax = filter_var($loyalty['include_tax_in_calculation'] ?? false, FILTER_VALIDATE_BOOLEAN);
                     $includeShipping = filter_var($loyalty['include_shipping_in_calculation'] ?? false, FILTER_VALIDATE_BOOLEAN);
                 }

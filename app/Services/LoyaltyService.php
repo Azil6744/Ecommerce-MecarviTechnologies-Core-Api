@@ -85,4 +85,81 @@ class LoyaltyService
             return false;
         }
     }
+    /**
+     * Award loyalty points for a gift card purchase if enabled in settings.
+     *
+     * @param int|null $userId
+     * @param float $amount
+     * @param int $orderId
+     * @param string $orderNumber
+     * @param string $status
+     * @return bool
+     */
+    public static function awardPointsForGiftCard(?int $userId, float $amount, int $orderId, string $orderNumber, string $status = 'pending'): bool
+    {
+        try {
+            if (!$userId) {
+                return false;
+            }
+
+            $user = User::find($userId);
+            if (!$user) {
+                return false;
+            }
+
+            $settings = SiteSetting::first();
+            $enabled = false;
+            $earnOnGiftCards = false;
+            $ratio = 0.01;
+            
+            if ($settings && $settings->loyalty_settings) {
+                $loyalty = json_decode($settings->loyalty_settings, true);
+                $enabled = filter_var($loyalty['enabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                $earnOnGiftCards = filter_var($loyalty['earn_points_on_gift_cards'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                $ratio = (float)($loyalty['points_to_dollar_ratio'] ?? 0.01);
+            }
+
+            if (!$enabled || !$earnOnGiftCards) {
+                return false;
+            }
+
+            $earnPerUnitPrice = $settings && $settings->loyalty_points_earned_per_unit_price > 0 ? (float)$settings->loyalty_points_earned_per_unit_price : 50.00;
+            $earnPoints = $settings ? (int)$settings->loyalty_points_earned_points : 2;
+            
+            $pointsEarned = (int)(floor($amount / $earnPerUnitPrice) * $earnPoints);
+            
+            if ($pointsEarned > 0) {
+                if ($status === 'available') {
+                    return self::adjustPoints(
+                        $userId,
+                        $pointsEarned,
+                        'earned',
+                        "Points earned for Gift Card Order #{$orderNumber}",
+                        null,
+                        'available'
+                    );
+                } else {
+                    EcommerceLoyaltyTransaction::create([
+                        'user_id' => $userId,
+                        'order_id' => null,
+                        'transaction_type' => 'earned',
+                        'points' => $pointsEarned,
+                        'dollar_value' => $pointsEarned * $ratio,
+                        'status' => 'pending',
+                        'reason' => "Points pending for Gift Card Order #{$orderNumber}",
+                        'reference_type' => 'gift_card_order',
+                        'reference_id' => (string) $orderId,
+                        'reference_date' => now()->toDateString(),
+                    ]);
+                    return true;
+                }
+            }
+            
+            return false;
+        } catch (\Throwable $e) {
+            Log::error("LoyaltyService: Exception in awardPointsForGiftCard: " . $e->getMessage());
+            return false;
+        }
+    }
 }
+

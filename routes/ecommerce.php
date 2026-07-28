@@ -60,6 +60,8 @@ Route::prefix('ecommerce')->group(function () {
     // Gift Cards & Orders (Public / Optional Auth)
     Route::post('/gift-card-orders', [\App\Http\Controllers\Api\Ecommerce\GiftCardOrderController::class, 'store'])
         ->middleware('central.auth:optional');
+    Route::get('/gift-card-orders/{id}', [\App\Http\Controllers\Api\Ecommerce\GiftCardOrderController::class, 'show'])
+        ->middleware('central.auth:optional');
     Route::post('/payment/gift-card-order', [\App\Http\Controllers\Api\Ecommerce\GiftCardOrderController::class, 'pay'])
         ->middleware('central.auth:optional');
     Route::post('/gift-cards/validate', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'validateCode'])
@@ -151,6 +153,12 @@ Route::prefix('ecommerce')->group(function () {
         Route::delete('/payment-methods/{paymentMethod}', [\App\Http\Controllers\Api\Ecommerce\PaymentMethodController::class, 'destroy'])
             ->middleware('pin.verified:financial_withdrawal');
 
+        Route::get('/bank-accounts', [\App\Http\Controllers\Api\Ecommerce\BankAccountController::class, 'index']);
+        Route::post('/bank-accounts', [\App\Http\Controllers\Api\Ecommerce\BankAccountController::class, 'store'])
+            ->middleware('pin.verified:financial_withdrawal');
+        Route::delete('/bank-accounts/{bankAccount}', [\App\Http\Controllers\Api\Ecommerce\BankAccountController::class, 'destroy'])
+            ->middleware('pin.verified:financial_withdrawal');
+
         // Wallet & Transactions
         Route::get('/wallet', [\App\Http\Controllers\Api\Ecommerce\EcommerceWalletTransactionController::class, 'summary']);
         Route::apiResource('wallet-transactions', \App\Http\Controllers\Api\Ecommerce\EcommerceWalletTransactionController::class)
@@ -165,13 +173,11 @@ Route::prefix('ecommerce')->group(function () {
             ->middleware('pin.verified:order_change');
         Route::apiResource('quotations', \App\Http\Controllers\Api\Ecommerce\EcommerceQuotationController::class)
             ->only(['index', 'show']);
-        Route::post('memberships/{id}/{action}', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'action'])
-            ->middleware('pin.verified:membership_change');
+        Route::post('memberships/{id}/{action}', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'action']);
         Route::get('membership-transactions', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'transactions']);
         Route::get('membership-transactions/{id}/receipt', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'receipt']);
         Route::apiResource('memberships', \App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class)
-            ->except(['index', 'show'])
-            ->middleware('pin.verified:membership_change');
+            ->except(['index', 'show']);
         Route::apiResource('memberships', \App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class)
             ->only(['index', 'show']);
         Route::apiResource('disputes', \App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class)
@@ -184,21 +190,16 @@ Route::prefix('ecommerce')->group(function () {
             ->middleware('pin.verified:support_identity_verification');
         Route::apiResource('tickets', \App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class)
             ->only(['index', 'show']);
-        Route::post('tickets/{ticket}/reply', [\App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class, 'addReply'])
-            ->middleware('pin.verified:support_identity_verification');
-        Route::post('tickets/{ticket}/attachments', [\App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class, 'uploadAttachment'])
-            ->middleware('pin.verified:support_identity_verification');
+        Route::post('tickets/{ticket}/reply', [\App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class, 'addReply']);
+        Route::post('tickets/{ticket}/attachments', [\App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class, 'uploadAttachment']);
         Route::get('tickets/{ticket}/notes', [\App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class, 'notes']);
-        Route::post('tickets/{ticket}/notes', [\App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class, 'addNote'])
-            ->middleware('pin.verified:support_identity_verification');
+        Route::post('tickets/{ticket}/notes', [\App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class, 'addNote']);
         Route::get('conversations', [\App\Http\Controllers\Api\Ecommerce\EcommerceConversationController::class, 'index']);
         Route::post('conversations', [\App\Http\Controllers\Api\Ecommerce\EcommerceConversationController::class, 'store'])
             ->middleware('pin.verified:support_identity_verification');
         Route::get('conversations/{conversation}', [\App\Http\Controllers\Api\Ecommerce\EcommerceConversationController::class, 'show']);
-        Route::post('conversations/{conversation}/messages', [\App\Http\Controllers\Api\Ecommerce\EcommerceConversationController::class, 'addMessage'])
-            ->middleware('pin.verified:support_identity_verification');
-        Route::post('conversations/{conversation}/close', [\App\Http\Controllers\Api\Ecommerce\EcommerceConversationController::class, 'close'])
-            ->middleware('pin.verified:support_identity_verification');
+        Route::post('conversations/{conversation}/messages', [\App\Http\Controllers\Api\Ecommerce\EcommerceConversationController::class, 'addMessage']);
+        Route::post('conversations/{conversation}/close', [\App\Http\Controllers\Api\Ecommerce\EcommerceConversationController::class, 'close']);
         Route::get('returns/stats', [\App\Http\Controllers\Api\Ecommerce\EcommerceReturnController::class, 'stats']);
         Route::apiResource('returns', \App\Http\Controllers\Api\Ecommerce\EcommerceReturnController::class)
             ->except(['index', 'show'])

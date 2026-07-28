@@ -20,6 +20,12 @@ class EcommerceMembershipController extends Controller
             $request = Http::acceptJson()
                 ->withToken($token)
                 ->timeout(5);
+
+            if (request()->hasHeader('X-Pin-Authorization')) {
+                $request = $request->withHeaders([
+                    'X-Pin-Authorization' => request()->header('X-Pin-Authorization')
+                ]);
+            }
         } else {
             $secret = (string) config('services.internal_notifications.secret');
             $request = Http::acceptJson()
@@ -121,10 +127,13 @@ class EcommerceMembershipController extends Controller
                     'data' => $response->json('data'),
                 ]);
             }
-            return response()->json([
-                'success' => false,
-                'message' => $response->json('message') ?: 'Failed to store membership',
-            ], $response->status());
+            return response()->json(
+                $response->json() ?: [
+                    'success' => false,
+                    'message' => 'Failed to store membership',
+                ],
+                $response->status()
+            );
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Throwable $e) {

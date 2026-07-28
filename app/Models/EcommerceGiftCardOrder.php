@@ -23,6 +23,15 @@ class EcommerceGiftCardOrder extends Model
         'payment_status',
         'order_status',
         'delivery_date',
+        'delivery_method',
+        'recipient_phone',
+        'address_line1',
+        'address_line2',
+        'city',
+        'state',
+        'zip_code',
+        'country',
+        'card_purpose',
     ];
 
     protected $casts = [
