@@ -71,12 +71,13 @@ class EcommerceOrder extends Model
 
     protected static function booted()
     {
-        static::updated(function ($order) {
-            // Trigger referral commission logic when payment_status becomes 'paid'
-            if ($order->wasChanged('payment_status') && $order->payment_status === 'paid') {
+        $processCommission = function ($order) {
+            if ($order->payment_status === 'paid') {
                 try {
-                    // Check if referred user exists in referrals table (by user_id or email fallback)
                     $user = $order->user;
+                    if (!$user && $order->user_id) {
+                        $user = \App\Models\User::find($order->user_id);
+                    }
                     $referral = \App\Models\EcommerceReferral::where('referred_id', $order->user_id)
                         ->when($user, function ($query) use ($user) {
                             return $query->orWhere(function ($q) use ($user) {
@@ -88,11 +89,9 @@ class EcommerceOrder extends Model
                         ->first();
 
                     if ($referral && $referral->referrer_id) {
-                        // Associate the user_id if it was null
-                        if (is_null($referral->referred_id)) {
+                        if (is_null($referral->referred_id) && $order->user_id) {
                             $referral->update(['referred_id' => $order->user_id]);
                         }
-                        // Check if a commission has already been calculated for this order to prevent duplication
                         $exists = \App\Models\EcommerceReferralCommission::where('order_id', $order->id)->exists();
                         if (!$exists) {
                             $settings = \App\Models\SiteSetting::first();
@@ -121,6 +120,14 @@ class EcommerceOrder extends Model
                     \Log::error('Referral commission failed: ' . $e->getMessage());
                 }
             }
+        };
+
+        static::created(function ($order) use ($processCommission) {
+            $processCommission($order);
+        });
+
+        static::updated(function ($order) use ($processCommission) {
+            $processCommission($order);
         });
     }
 }

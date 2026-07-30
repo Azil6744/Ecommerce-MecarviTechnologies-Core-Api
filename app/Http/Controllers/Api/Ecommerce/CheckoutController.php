@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Ecommerce;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 
+use App\Models\User;
 use App\Models\EcommerceCart;
 use App\Models\EcommerceAddress;
 use App\Models\EcommerceOrder;
@@ -377,6 +378,10 @@ class CheckoutController extends Controller
                 $shippingAddress = $validated['guest_shipping_address'];
             }
 
+            if ($user && $shippingAddress) {
+                $this->saveAddressForUserIfMissing($user, $shippingAddress);
+            }
+
             $billingAddress = null;
             if (!empty($validated['billing_address_id'])) {
                 $billingAddress = $this->addressForUser($user?->id, $validated['billing_address_id']);
@@ -412,12 +417,16 @@ class CheckoutController extends Controller
                 }
             }
 
+            $isWalletPayment = strtolower((string)($validated['payment_method'] ?? '')) === 'wallet';
+
             $orderData = [
                 'user_id' => $user?->id,
                 'customer_name' => $user?->name ?? $validated['customer_name'] ?? 'Guest Customer',
                 'customer_email' => $user?->email ?? $validated['customer_email'] ?? 'guest@example.com',
                 'status' => 'pending',
-                'payment_status' => $request->input('payment_status') ?: (in_array(strtolower((string)($validated['payment_method'] ?? '')), ['stripe', 'saved_card', 'paypal', 'apple_pay', 'google_pay', 'cashapp', 'card']) ? 'paid' : 'unpaid'),
+                'payment_status' => $isWalletPayment
+                    ? 'unpaid'
+                    : ($request->input('payment_status') ?: (in_array(strtolower((string)($validated['payment_method'] ?? '')), ['stripe', 'saved_card', 'paypal', 'apple_pay', 'google_pay', 'cashapp', 'card']) ? 'paid' : 'unpaid')),
                 'total_amount' => $totalAmount,
                 'subtotal' => round($itemsSubtotal, 2),
                 'shipping_amount' => $shippingAmount,
@@ -701,7 +710,11 @@ class CheckoutController extends Controller
                 }
             }
 
-            app(EmailNotificationService::class)->sendOrderEvent('order_placed', $order->fresh('items.product'));
+            try {
+                app(EmailNotificationService::class)->sendOrderEvent('order_placed', $order->fresh('items.product'));
+            } catch (\Throwable $e) {
+                Log::warning('Email notification failed: ' . $e->getMessage());
+            }
 
             return response()->json([
                 'success' => true,
@@ -776,4 +789,61 @@ class CheckoutController extends Controller
             return [];
         }
     }
+
+    private function saveAddressForUserIfMissing(User $user, array|EcommerceAddress|null $addressData): void
+    {
+        try {
+            if (!$addressData) {
+                return;
+            }
+
+            $arr = is_array($addressData) ? $addressData : $addressData->toArray();
+            $street = $arr['address'] ?? $arr['address_line_1'] ?? $arr['address_line1'] ?? '';
+            $zip = $arr['zip_code'] ?? $arr['zip'] ?? $arr['postal_code'] ?? '';
+            $city = $arr['city'] ?? '';
+
+            if (empty($street) || empty($city)) {
+                return;
+            }
+
+            $exists = $user->addresses()
+                ->where(function ($q) use ($street) {
+                    $q->where('address', $street)->orWhere('address_line_1', $street);
+                })
+                ->where('city', $city)
+                ->exists();
+
+            if (!$exists) {
+                $hasDefault = $user->addresses()->where('is_default', true)->exists();
+                $firstName = $arr['first_name'] ?? '';
+                $lastName = $arr['last_name'] ?? '';
+                if (empty($firstName) && empty($lastName) && !empty($arr['name'])) {
+                    $parts = preg_split('/\s+/', trim($arr['name']), 2) ?: [];
+                    $firstName = $parts[0] ?? '';
+                    $lastName = $parts[1] ?? '';
+                }
+
+                $user->addresses()->create([
+                    'type' => 'shipping',
+                    'first_name' => $firstName ?: $user->name,
+                    'last_name' => $lastName ?: '',
+                    'company' => $arr['company'] ?? null,
+                    'email' => $arr['email'] ?? $user->email,
+                    'phone' => $arr['phone'] ?? $user->phone ?? 'N/A',
+                    'address' => $street,
+                    'address_line_1' => $street,
+                    'address_line_2' => $arr['address_line_2'] ?? null,
+                    'city' => $city,
+                    'state' => $arr['state'] ?? '',
+                    'zip_code' => $zip,
+                    'postal_code' => $zip,
+                    'country' => $arr['country'] ?? 'United States',
+                    'is_default' => !$hasDefault,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Auto-saving address during checkout failed: ' . $e->getMessage());
+        }
+    }
 }
+
