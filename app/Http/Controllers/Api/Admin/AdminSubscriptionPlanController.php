@@ -24,18 +24,46 @@ class AdminSubscriptionPlanController extends Controller
     /**
      * Display active subscription plans for customer-facing pages.
      */
-    public function publicIndex()
+    public function publicIndex(Request $request)
     {
-        $plans = EcommerceSubscriptionPlan::whereIn('status', ['Active', 'Featured'])
-            ->where(function ($query) {
-                $query->whereNull('effective_date')->orWhere('effective_date', '<=', now());
-            })
-            ->where(function ($query) {
-                $query->whereNull('retirement_date')->orWhere('retirement_date', '>', now());
-            })
-            ->orderBy('sort_order')
+        $site = trim((string) ($request->input('site') ?: $request->input('website') ?: ''));
+
+        $query = EcommerceSubscriptionPlan::query();
+
+        $query->where(function ($q) {
+            $q->whereNull('status')
+              ->orWhereRaw('LOWER(status) IN (?, ?, ?)', ['active', 'featured', 'published']);
+        })
+        ->where(function ($q) {
+            $q->whereNull('effective_date')->orWhere('effective_date', '<=', now());
+        })
+        ->where(function ($q) {
+            $q->whereNull('retirement_date')->orWhere('retirement_date', '>', now());
+        });
+
+        if ($site !== '') {
+            $siteSlug = strtolower($site);
+            $query->where(function ($q) use ($siteSlug) {
+                $q->whereNull('coverage_type')
+                  ->orWhereRaw('LOWER(coverage_type) IN (?, ?, ?)', ['universal', 'all', 'all-sites'])
+                  ->orWhere(function ($sub) use ($siteSlug) {
+                      $sub->where(function ($siteQ) use ($siteSlug) {
+                          $siteQ->whereRaw('LOWER(applicable_site) = ?', [$siteSlug])
+                                ->orWhereRaw('LOWER(applicable_site) LIKE ?', ['%' . $siteSlug . '%']);
+                      });
+                  });
+            });
+        }
+
+        $plans = $query->orderBy('sort_order')
             ->orderBy('price')
             ->get();
+
+        if ($plans->isEmpty()) {
+            $plans = EcommerceSubscriptionPlan::where(function ($q) {
+                $q->whereNull('status')->orWhereRaw('LOWER(status) IN (?, ?, ?)', ['active', 'featured', 'published']);
+            })->get();
+        }
 
         return response()->json([
             'success' => true,

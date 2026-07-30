@@ -372,10 +372,14 @@ class CheckoutController extends Controller
             }
 
             $shippingAddress = null;
-            if (!empty($validated['shipping_address_id'])) {
+            if (!empty($validated['shipping_address_id']) && is_numeric($validated['shipping_address_id'])) {
                 $shippingAddress = $this->addressForUser($user?->id, $validated['shipping_address_id']);
-            } else if (!empty($validated['guest_shipping_address'])) {
+            }
+            if (!$shippingAddress && !empty($validated['guest_shipping_address'])) {
                 $shippingAddress = $validated['guest_shipping_address'];
+            }
+            if (!$shippingAddress && !empty($validated['shipping_address'])) {
+                $shippingAddress = $validated['shipping_address'];
             }
 
             if ($user && $shippingAddress) {

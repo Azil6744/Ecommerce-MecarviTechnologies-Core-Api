@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\Ecommerce;
 use App\Http\Controllers\Controller;
 use App\Models\EcommerceSubscriptionPlan;
 use App\Services\StripeMembershipPaymentService;
+use App\Services\WalletService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -63,7 +64,14 @@ class EcommerceMembershipController extends Controller
             return response()->json(['success' => true, 'data' => []]);
         }
 
-        // Customer query
+        // Customer query: check local database first for updated active user membership
+        if ($user) {
+            $local = \App\Models\EcommerceMembership::where('user_id', $user->id)->orderBy('updated_at', 'desc')->get();
+            if ($local->count() > 0) {
+                return response()->json(['success' => true, 'data' => $local]);
+            }
+        }
+
         try {
             if ($token) {
                 $response = $this->centralCall('get', '/user/memberships', [], $token);
@@ -71,14 +79,16 @@ class EcommerceMembershipController extends Controller
                 $response = $this->centralCall('get', '/v1/internal/admin/memberships');
                 if ($response->successful()) {
                     $filtered = collect($response->json('data'))->filter(fn($m) => strtolower($m['user']['email'] ?? '') === strtolower($user->email))->values();
-                    return response()->json([
-                        'success' => true,
-                        'data' => $filtered,
-                    ]);
+                    if ($filtered->count() > 0) {
+                        return response()->json([
+                            'success' => true,
+                            'data' => $filtered,
+                        ]);
+                    }
                 }
             }
 
-            if ($response && $response->successful()) {
+            if ($response && $response->successful() && !empty($response->json('data'))) {
                 return response()->json([
                     'success' => true,
                     'data' => $response->json('data'),
@@ -87,6 +97,8 @@ class EcommerceMembershipController extends Controller
         } catch (\Throwable $e) {
             Log::error('Central memberships index failed: ' . $e->getMessage());
         }
+
+        return response()->json(['success' => true, 'data' => []]);
 
         return response()->json(['success' => true, 'data' => []]);
     }
@@ -101,7 +113,46 @@ class EcommerceMembershipController extends Controller
             if ($request->filled('plan_id')) {
                 $plan = EcommerceSubscriptionPlan::whereIn('status', ['Active', 'Featured'])
                     ->findOrFail($request->integer('plan_id'));
-                $payment = app(StripeMembershipPaymentService::class)->authorizePlanPurchase($plan, $request);
+
+                $paymentMethod = strtolower((string) $request->input('payment_method', 'stripe'));
+
+                if ($paymentMethod === 'wallet') {
+                    if (!$user) {
+                        return response()->json(['success' => false, 'message' => 'User authentication is required for wallet payment.'], 401);
+                    }
+
+                    $totalDue = (float) $plan->price + (float) ($plan->setup_fee ?? 0);
+                    $txRef = 'WAL-MEM-' . $plan->id . '-' . time();
+                    $debited = WalletService::adjustWallet(
+                        $user->id,
+                        $totalDue,
+                        'debit',
+                        'Membership Subscription: ' . $plan->name,
+                        $txRef
+                    );
+
+                    if (!$debited) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'Insufficient wallet balance to subscribe to this plan.',
+                        ], 422);
+                    }
+
+                    $payment = [
+                        'payment_status' => 'paid',
+                        'payment_method' => 'wallet',
+                        'payment_processor' => 'wallet',
+                        'transaction_reference' => $txRef,
+                        'payment_details' => [
+                            'type' => 'wallet',
+                            'amount_debited' => $totalDue,
+                            'currency' => $plan->currency ?: 'USD',
+                        ],
+                    ];
+                } else {
+                    $payment = app(StripeMembershipPaymentService::class)->authorizePlanPurchase($plan, $request);
+                }
+
                 $payload = array_merge($payload, [
                     'payment_status' => $payment['payment_status'],
                     'payment_method' => $payment['payment_method'],
@@ -110,29 +161,53 @@ class EcommerceMembershipController extends Controller
                     'payment_summary' => array_merge($payload['payment_summary'] ?? [], [
                         'payment_processor' => $payment['payment_processor'],
                         'transaction_reference' => $payment['transaction_reference'],
-                        'stripe' => $payment['payment_details'],
+                        'details' => $payment['payment_details'],
                     ]),
                 ]);
             }
 
-            if ($token) {
-                $response = $this->centralCall('post', '/user/memberships', $payload, $token);
-            } else {
-                $response = $this->centralCall('post', '/v1/internal/admin/memberships/update', array_merge($payload, ['email' => $user->email]));
+            $response = null;
+            try {
+                if ($token) {
+                    $response = $this->centralCall('post', '/user/memberships', $payload, $token);
+                } else {
+                    $response = $this->centralCall('post', '/v1/internal/admin/memberships/update', array_merge($payload, [
+                        'email' => $user?->email,
+                        'membership_id' => $request->input('membership_id')
+                    ]));
+                }
+
+                if ($response && $response->successful()) {
+                    return response()->json([
+                        'success' => true,
+                        'data' => $response->json('data'),
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Central membership sync failed: ' . $e->getMessage());
             }
 
-            if ($response->successful()) {
+            if ($user) {
+                $membership = \App\Models\EcommerceMembership::updateOrCreate(
+                    ['user_id' => $user->id],
+                    [
+                        'plan_name' => $payload['plan_name'] ?? 'Essentials Plan',
+                        'status' => $payload['status'] ?? 'Active',
+                        'price' => $payload['price'] ?? 0.00,
+                        'billing_cycle' => $payload['billing_cycle'] ?? 'Monthly',
+                        'next_billing_date' => $payload['next_billing_date'] ?? now()->addDays(30),
+                    ]
+                );
+
                 return response()->json([
                     'success' => true,
-                    'data' => $response->json('data'),
+                    'data' => $membership,
                 ]);
             }
+
             return response()->json(
-                $response->json() ?: [
-                    'success' => false,
-                    'message' => 'Failed to store membership',
-                ],
-                $response->status()
+                $response ? ($response->json() ?: ['success' => false, 'message' => 'Failed to store membership']) : ['success' => false, 'message' => 'Failed to store membership'],
+                $response ? $response->status() : 500
             );
         } catch (ValidationException $e) {
             throw $e;
@@ -151,26 +226,8 @@ class EcommerceMembershipController extends Controller
 
     public function update(Request $request, $id)
     {
-        $user = $request->user();
-        $payload = $this->membershipPayload($request);
-        try {
-            $response = $this->centralCall('post', '/v1/internal/admin/memberships/update', array_merge($payload, ['membership_id' => $id]));
-            if ($response->successful()) {
-                return response()->json([
-                    'success' => true,
-                    'data' => $response->json('data'),
-                ]);
-            }
-            return response()->json([
-                'success' => false,
-                'message' => $response->json('message') ?: 'Failed to update membership',
-            ], $response->status());
-        } catch (\Throwable $e) {
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage(),
-            ], 500);
-        }
+        $request->merge(['membership_id' => $id]);
+        return $this->store($request);
     }
 
     public function destroy(Request $request, $id)
