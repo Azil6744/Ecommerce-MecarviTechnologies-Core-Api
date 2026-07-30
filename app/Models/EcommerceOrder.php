@@ -75,9 +75,23 @@ class EcommerceOrder extends Model
             // Trigger referral commission logic when payment_status becomes 'paid'
             if ($order->wasChanged('payment_status') && $order->payment_status === 'paid') {
                 try {
-                    // Check if referred user exists in referrals table
-                    $referral = \App\Models\EcommerceReferral::where('referred_id', $order->user_id)->first();
+                    // Check if referred user exists in referrals table (by user_id or email fallback)
+                    $user = $order->user;
+                    $referral = \App\Models\EcommerceReferral::where('referred_id', $order->user_id)
+                        ->when($user, function ($query) use ($user) {
+                            return $query->orWhere(function ($q) use ($user) {
+                                $q->whereNull('referred_id')
+                                  ->whereNotNull('referred_email')
+                                  ->where('referred_email', strtolower(trim($user->email)));
+                            });
+                        })
+                        ->first();
+
                     if ($referral && $referral->referrer_id) {
+                        // Associate the user_id if it was null
+                        if (is_null($referral->referred_id)) {
+                            $referral->update(['referred_id' => $order->user_id]);
+                        }
                         // Check if a commission has already been calculated for this order to prevent duplication
                         $exists = \App\Models\EcommerceReferralCommission::where('order_id', $order->id)->exists();
                         if (!$exists) {

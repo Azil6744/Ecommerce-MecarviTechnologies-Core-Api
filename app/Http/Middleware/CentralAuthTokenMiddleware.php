@@ -440,6 +440,26 @@ class CentralAuthTokenMiddleware
                     ->whereRaw('LOWER(email) = ?', [$email])
                     ->update(['user_id' => $user->id]);
             }
+            
+            // Link guest/pending referrals
+            if (class_exists(\App\Models\EcommerceReferral::class)) {
+                $pendingReferrals = \App\Models\EcommerceReferral::whereNull('referred_id')
+                    ->whereRaw('LOWER(referred_email) = ?', [$email])
+                    ->get();
+
+                foreach ($pendingReferrals as $referral) {
+                    $referral->update(['referred_id' => $user->id]);
+
+                    if ($referral->reward_amount_referee > 0) {
+                        \App\Services\WalletService::adjustWallet(
+                            $user->id,
+                            (float)$referral->reward_amount_referee,
+                            'Affiliate Earned',
+                            'Welcome reward for joining via referral code'
+                        );
+                    }
+                }
+            }
         } catch (\Throwable $e) {
             \Log::error('CentralAuthTokenMiddleware: Error linking guest data: ' . $e->getMessage());
         }

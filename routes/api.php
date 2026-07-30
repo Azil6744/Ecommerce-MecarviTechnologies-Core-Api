@@ -148,6 +148,9 @@ Route::prefix('v1')->group(function () {
     Route::post('/internal/notifications/user-registered', [\App\Http\Controllers\Api\InternalNotificationController::class, 'userRegistered'])
         ->name('api.v1.internal.notifications.user-registered');
 
+    Route::post('/internal/notifications/referral-registered', [\App\Http\Controllers\Api\InternalNotificationController::class, 'referralRegistered'])
+        ->name('api.v1.internal.notifications.referral-registered');
+
     Route::get('/internal/check-email', [\App\Http\Controllers\Api\InternalNotificationController::class, 'checkEmail'])
         ->name('api.v1.internal.check-email');
 

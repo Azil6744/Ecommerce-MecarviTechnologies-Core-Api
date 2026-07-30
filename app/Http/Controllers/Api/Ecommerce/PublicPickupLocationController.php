@@ -157,6 +157,29 @@ class PublicPickupLocationController extends Controller
             }
         }
 
+        // Fallback: Free OpenStreetMap Nominatim geocoding API
+        try {
+            $response = Http::withHeaders([
+                'User-Agent' => 'MecarviEcommerce/1.0 (contact@mecarviembroidery.com)'
+            ])->timeout(3)->get('https://nominatim.openstreetmap.org/search', [
+                'q' => $address,
+                'format' => 'json',
+                'limit' => 1
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                if (!empty($data) && isset($data[0]['lat']) && isset($data[0]['lon'])) {
+                    return [
+                        'latitude' => floatval($data[0]['lat']),
+                        'longitude' => floatval($data[0]['lon'])
+                    ];
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::warning('Nominatim Geocoding fallback failed: ' . $e->getMessage());
+        }
+
         $addr = strtolower($address);
 
         // Atlanta Downtown (123 Main St, Atlanta, GA)

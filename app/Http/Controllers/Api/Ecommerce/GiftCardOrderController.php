@@ -226,7 +226,7 @@ class GiftCardOrderController extends Controller
 
             if ($autoIssue) {
                 // Auto-issue the gift card
-                \Illuminate\Support\Facades\DB::transaction(function () use ($order, $request) {
+                $issuedDetails = \Illuminate\Support\Facades\DB::transaction(function () use ($order, $request) {
                     do {
                         $code = '';
                         for ($i = 0; $i < 15; $i++) {
@@ -270,7 +270,42 @@ class GiftCardOrderController extends Controller
                         'old_value' => null,
                         'new_value' => json_encode($giftCard->only(['id', 'code', 'initial_balance', 'recipient_email'])),
                     ]);
+
+                    return [
+                        'code' => $code,
+                        'expires_at' => $expiresAt,
+                        'gift_card' => $giftCard,
+                    ];
                 });
+
+                // Send email to recipient (receiver)
+                $emailSent = GiftCardMailer::sendIssued($order->recipient_email, [
+                    'code' => $issuedDetails['code'],
+                    'balance' => $order->giftcard_amount,
+                    'message' => $order->personal_message,
+                    'recipient_name' => $order->recipient_name,
+                    'sender_name' => $order->buyer_name,
+                    'expires_at' => $issuedDetails['expires_at']->toDateString(),
+                ]);
+
+                if ($emailSent) {
+                    $order->update(['order_status' => 'Gift Card Delivered']);
+                    $issuedDetails['gift_card']->update(['status' => 'delivered']);
+                } else {
+                    $order->update(['order_status' => 'Delivery Failed']);
+                    $issuedDetails['gift_card']->update(['status' => 'Issued — Delivery Failed']);
+                }
+
+                // Send email to sender (buyer)
+                GiftCardMailer::sendPurchasedToBuyer($order->buyer_email, [
+                    'code' => $issuedDetails['code'],
+                    'balance' => $order->giftcard_amount,
+                    'message' => $order->personal_message,
+                    'recipient_name' => $order->recipient_name,
+                    'new_owner_email' => $order->recipient_email,
+                    'sender_name' => $order->buyer_name,
+                    'expires_at' => $issuedDetails['expires_at']->toDateString(),
+                ]);
             }
 
             return response()->json([
@@ -410,6 +445,17 @@ class GiftCardOrderController extends Controller
                 $order->update(['order_status' => 'Delivery Failed']);
                 $giftCard->update(['status' => 'Issued — Delivery Failed']);
             }
+
+            // Send email to sender (buyer)
+            GiftCardMailer::sendPurchasedToBuyer($order->buyer_email, [
+                'code' => $code,
+                'balance' => $order->giftcard_amount,
+                'message' => $order->personal_message,
+                'recipient_name' => $order->recipient_name,
+                'new_owner_email' => $order->recipient_email,
+                'sender_name' => $order->buyer_name,
+                'expires_at' => $expiresAt->toDateString(),
+            ]);
 
             // Transition points for gift card orders from pending to available
             if ($order->customer_id) {

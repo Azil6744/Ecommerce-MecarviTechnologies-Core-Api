@@ -94,10 +94,42 @@ class EcommerceAffiliateController extends Controller
 
     public function store(Request $request)
     {
-        $data = $request->all();
-        if(Schema::hasColumn((new EcommerceAffiliate)->getTable(), 'user_id')) {
-            $data['user_id'] = $request->user()->id;
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
         }
+
+        // Check if already an affiliate
+        $existing = EcommerceAffiliate::where('user_id', $user->id)->first();
+        if ($existing) {
+            return response()->json([
+                'success' => true,
+                'data' => $existing,
+                'message' => 'You are already registered as an affiliate.'
+            ]);
+        }
+
+        $data = $request->all();
+        $data['user_id'] = $user->id;
+        $data['status'] = 'Active';
+        $data['total_earnings'] = 0.00;
+        $data['total_referrals'] = 0;
+
+        // Auto-generate affiliate code if not provided
+        if (empty($data['affiliate_code'])) {
+            $code = strtoupper(substr($user->name ?? 'PARTNER', 0, 3) . rand(1000, 9999));
+            while (EcommerceAffiliate::where('affiliate_code', $code)->exists()) {
+                $code = strtoupper(substr($user->name ?? 'PARTNER', 0, 3) . rand(1000, 9999));
+            }
+            $data['affiliate_code'] = $code;
+        } else {
+            // Normalize provided code
+            $data['affiliate_code'] = strtoupper(preg_replace('/[^A-Za-z0-9-_]/', '', $data['affiliate_code']));
+            if (EcommerceAffiliate::where('affiliate_code', $data['affiliate_code'])->exists()) {
+                return response()->json(['success' => false, 'message' => 'This affiliate code is already taken.'], 422);
+            }
+        }
+
         $item = EcommerceAffiliate::create($data);
         return response()->json(['success' => true, 'data' => $item]);
     }
@@ -110,6 +142,11 @@ class EcommerceAffiliateController extends Controller
 
     public function update(Request $request, $id)
     {
+        $user = $request->user();
+        if (!$user || !$user->isSuperAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Forbidden.'], 403);
+        }
+
         $item = EcommerceAffiliate::findOrFail($id);
         $item->update($request->all());
         return response()->json(['success' => true, 'data' => $item]);
@@ -117,6 +154,11 @@ class EcommerceAffiliateController extends Controller
 
     public function destroy(Request $request, $id)
     {
+        $user = $request->user();
+        if (!$user || !$user->isSuperAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Forbidden.'], 403);
+        }
+
         $item = EcommerceAffiliate::findOrFail($id);
         $item->delete();
         return response()->json(['success' => true, 'message' => 'Deleted successfully']);
@@ -148,6 +190,12 @@ class EcommerceAffiliateController extends Controller
                 'Referral commission payout for order #' . ($commission->order ? $commission->order->order_number : 'N/A'),
                 $commission->order_id
             );
+
+            // Increment affiliate earnings
+            $affiliate = $referrer->affiliate;
+            if ($affiliate) {
+                $affiliate->increment('total_earnings', $commission->commission_amount);
+            }
         }
 
         return response()->json([
@@ -266,6 +314,24 @@ class EcommerceAffiliateController extends Controller
             'success' => true,
             'data' => $app,
             'message' => 'Affiliate application submitted successfully.',
+        ]);
+    }
+
+    public function myCommissions(Request $request)
+    {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
+        }
+
+        $commissions = \App\Models\EcommerceReferralCommission::where('referrer_id', $user->id)
+            ->with(['referred', 'order'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $commissions
         ]);
     }
 }

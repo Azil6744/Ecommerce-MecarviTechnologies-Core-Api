@@ -206,6 +206,7 @@ Route::prefix('ecommerce')->group(function () {
             ->middleware('pin.verified:order_change');
         Route::apiResource('returns', \App\Http\Controllers\Api\Ecommerce\EcommerceReturnController::class)
             ->only(['index', 'show']);
+        Route::post('/gift-cards/redeem-to-wallet', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'redeemToWallet']);
         Route::post('/gift-cards/{id}/transfer', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'transfer'])
             ->middleware('pin.verified:gift_card_change');
         Route::apiResource('gift-cards', \App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class)
@@ -215,11 +216,14 @@ Route::prefix('ecommerce')->group(function () {
             ->only(['index', 'show']);
         Route::apiResource('reviews', \App\Http\Controllers\Api\Ecommerce\EcommerceReviewController::class);
         Route::get('affiliates/my/referrals', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'myReferrals']);
-        Route::apiResource('affiliates', \App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class)
-            ->except(['index', 'show'])
-            ->middleware('pin.verified:financial_withdrawal');
+        Route::get('affiliates/my/commissions', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'myCommissions']);
+        Route::post('affiliates', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'store']);
+        Route::post('affiliate-applications', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'apply']);
         Route::apiResource('affiliates', \App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class)
             ->only(['index', 'show']);
+        Route::apiResource('affiliates', \App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class)
+            ->only(['update', 'destroy'])
+            ->middleware('pin.verified:financial_withdrawal');
         Route::apiResource('product-questions', \App\Http\Controllers\Api\Ecommerce\EcommerceProductQuestionController::class);
         Route::post('product-questions/{question}/replies', [\App\Http\Controllers\Api\Ecommerce\EcommerceProductQuestionController::class, 'addReply']);
 
@@ -254,7 +258,7 @@ Route::prefix('ecommerce')->group(function () {
     });
 
     // Admin E-Commerce Routes (Auth + Admin Role Required)
-    Route::middleware(['central.auth', 'admin.only', 'admin.mfa', 'pin.verified:admin_operation'])->group(function () {
+    Route::middleware(['central.auth', 'admin.only', 'admin.mfa'])->group(function () {
         // Orders Management
         Route::get('/admin/orders', [\App\Http\Controllers\Api\Admin\AdminOrderController::class, 'index']);
         Route::get('/admin/orders/stats', [\App\Http\Controllers\Api\Admin\AdminOrderController::class, 'stats']);
@@ -349,7 +353,6 @@ Route::prefix('ecommerce')->group(function () {
         Route::get('/admin/affiliate-applications', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'applicationsList']);
         Route::post('/admin/affiliate-applications/{id}/approve', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'approveApplication']);
         Route::post('/admin/affiliate-applications/{id}/reject', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'rejectApplication']);
-        Route::post('/affiliate-applications', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'apply']);
 
         // Tax Rates Configuration
         Route::get('/admin/tax-rates', [\App\Http\Controllers\Api\Admin\TaxRateController::class, 'index']);

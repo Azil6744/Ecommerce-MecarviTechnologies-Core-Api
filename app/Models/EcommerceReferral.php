@@ -14,6 +14,7 @@ class EcommerceReferral extends Model
     protected $fillable = [
         'referrer_id',
         'referred_id',
+        'referred_email',
         'reward_amount_referrer',
         'reward_amount_referee',
     ];

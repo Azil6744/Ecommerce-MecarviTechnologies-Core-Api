@@ -94,6 +94,12 @@ class EcommerceReturn extends Model
                                             'Commission deduction for order #' . ($order ? $order->order_number : $return->order_number) . ' return',
                                             $return->order_id
                                         );
+
+                                        // Decrement affiliate earnings
+                                        $affiliate = $referrer->affiliate;
+                                        if ($affiliate) {
+                                            $affiliate->decrement('total_earnings', $deduction);
+                                        }
                                     }
 
                                     if ($isFullRefund || $deduction >= (float)$commission->commission_amount) {

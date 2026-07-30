@@ -417,7 +417,7 @@ class CheckoutController extends Controller
                 'customer_name' => $user?->name ?? $validated['customer_name'] ?? 'Guest Customer',
                 'customer_email' => $user?->email ?? $validated['customer_email'] ?? 'guest@example.com',
                 'status' => 'pending',
-                'payment_status' => 'unpaid',
+                'payment_status' => $request->input('payment_status') ?: (in_array(strtolower((string)($validated['payment_method'] ?? '')), ['stripe', 'saved_card', 'paypal', 'apple_pay', 'google_pay', 'cashapp', 'card']) ? 'paid' : 'unpaid'),
                 'total_amount' => $totalAmount,
                 'subtotal' => round($itemsSubtotal, 2),
                 'shipping_amount' => $shippingAmount,
@@ -651,7 +651,7 @@ class CheckoutController extends Controller
                 if ($order->total_amount > 0 && $order->payment_status !== 'paid') {
                     $centralUrl = env('CENTRAL_AUTH_URL', 'http://localhost:8000/api');
                     $token = $request->header('X-Central-Auth-Token') ?? $request->bearerToken();
-                    $walletBalance = 0.00;
+                    $walletBalance = (float) ($user->wallet_balance ?? 0.00);
 
                     if ($token) {
                         try {

@@ -38,6 +38,8 @@ class SiteSetting extends Model
         'charity_settings',
         'tips_settings',
         'referral_commission_percentage',
+        'referral_reward_referrer',
+        'referral_reward_referee',
     ];
 
     protected $casts = [
@@ -47,6 +49,9 @@ class SiteSetting extends Model
         'loyalty_points_earned_points' => 'integer',
         'charity_donation_enabled' => 'boolean',
         'charity_default_amount' => 'decimal:2',
+        'referral_reward_referrer' => 'decimal:2',
+        'referral_reward_referee' => 'decimal:2',
+        'referral_commission_percentage' => 'decimal:2',
     ];
 
     /**

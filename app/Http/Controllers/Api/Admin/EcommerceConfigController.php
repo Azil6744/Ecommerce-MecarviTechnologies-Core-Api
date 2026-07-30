@@ -234,7 +234,7 @@ class EcommerceConfigController extends Controller
 
             if (!$charity) {
                 $charity = [
-                    'enabled' => false,
+                    'enabled' => true,
                     'charity_name' => 'Red Cross',
                     'charity_description' => 'Global humanitarian network providing relief and support.',
                     'suggested_amounts' => '1,5,10',

@@ -32,6 +32,16 @@ class GiftCardMailer
         );
     }
 
+    public static function sendPurchasedToBuyer(string $email, array $data): bool
+    {
+        return self::sendEmail(
+            $email,
+            'gift-card-purchased-sender',
+            'Your Gift Card Purchase Confirmation',
+            $data
+        );
+    }
+
     public static function sendTransferredToOldOwner(string $email, array $data): bool
     {
         return self::sendEmail(
@@ -202,6 +212,36 @@ class GiftCardMailer
 
                         <div class='info-section'>
                             <p>To use this gift card, simply enter the 15-digit code during checkout on our store.</p>
+                            " . ($expiresAt ? "<p><strong>Expires On:</strong> {$expiresAt}</p>" : "") . "
+                        </div>
+                        <div class='footer'>
+                            <p>&copy; " . date('Y') . " Mecarvi Embroidery. All rights reserved.</p>
+                        </div>
+                    </div>
+                </body>
+                </html>";
+
+            case 'gift-card-purchased-sender':
+                return "
+                <html>
+                <head><style>{$style}</style></head>
+                <body>
+                    <div class='container'>
+                        <div class='header'><div class='logo'>Mecarvi Embroidery</div></div>
+                        <h2>Hello {$senderName},</h2>
+                        <p>Thank you for your purchase! You have successfully purchased and sent a gift card.</p>
+                        <p><strong>Sent To:</strong> {$recipientName} ({$newOwnerEmail})</p>
+                        
+                        <div class='card'>
+                            <div class='card-title'>Gift Card Purchased</div>
+                            <div class='card-balance'><span>$</span>{$balance}</div>
+                            <div class='card-code' style='font-size: 20px; color: " . ($textColor === '#ffffff' ? '#38bdf8' : '#4f46e5') . ";'>CODE: " . ($code ?: '••••-••••-••••') . "</div>
+                        </div>
+
+                        " . ($message ? "<div class='personal-msg'>\"{$message}\"</div>" : "") . "
+
+                        <div class='info-section'>
+                            <p>An email has been sent to <strong>{$newOwnerEmail}</strong> with their gift card code and instructions on how to redeem it.</p>
                             " . ($expiresAt ? "<p><strong>Expires On:</strong> {$expiresAt}</p>" : "") . "
                         </div>
                         <div class='footer'>

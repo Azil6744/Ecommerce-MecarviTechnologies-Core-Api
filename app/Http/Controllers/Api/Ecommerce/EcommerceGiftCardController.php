@@ -22,11 +22,23 @@ class EcommerceGiftCardController extends Controller
 
         if (! $this->isAdminGiftCardRequest($request)) {
             $user = $request->user();
-            if (Schema::hasColumn((new EcommerceGiftCard)->getTable(), 'user_id')) {
+            if ($user && Schema::hasColumn((new EcommerceGiftCard)->getTable(), 'user_id')) {
                 $query->where(function ($q) use ($user) {
-                    $q->where('user_id', $user?->id);
+                    $q->where('user_id', $user->id);
                     if (Schema::hasColumn((new EcommerceGiftCard)->getTable(), 'buyer_user_id')) {
-                        $q->orWhere('buyer_user_id', $user?->id);
+                        $q->orWhere('buyer_user_id', $user->id);
+                    }
+                    if ($user->email) {
+                        $email = strtolower(trim($user->email));
+                        if (Schema::hasColumn((new EcommerceGiftCard)->getTable(), 'buyer_email')) {
+                            $q->orWhereRaw('LOWER(buyer_email) = ?', [$email]);
+                        }
+                        if (Schema::hasColumn((new EcommerceGiftCard)->getTable(), 'owner_email')) {
+                            $q->orWhereRaw('LOWER(owner_email) = ?', [$email]);
+                        }
+                        if (Schema::hasColumn((new EcommerceGiftCard)->getTable(), 'recipient_email')) {
+                            $q->orWhereRaw('LOWER(recipient_email) = ?', [$email]);
+                        }
                     }
                 });
             } else {
@@ -481,6 +493,103 @@ class EcommerceGiftCardController extends Controller
         ]);
     }
 
+    /**
+     * Redeem a gift card directly into user's wallet balance.
+     */
+    public function redeemToWallet(Request $request)
+    {
+        $request->validate([
+            'code' => 'required|string',
+        ]);
+
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'Unauthenticated.'], 401);
+        }
+
+        $code = trim($request->code);
+        $giftCard = EcommerceGiftCard::where('code', $code)->first();
+
+        if (!$giftCard) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid gift card code.'
+            ], 404);
+        }
+
+        if (in_array(strtolower($giftCard->status), ['disabled', 'expired', 'fully used', 'redeemed', 'cancelled'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This gift card is not active or has already been redeemed.'
+            ], 400);
+        }
+
+        if ($giftCard->expires_at && $giftCard->expires_at->isPast()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This gift card has expired.'
+            ], 400);
+        }
+
+        $balance = (float) $giftCard->current_balance;
+        if ($balance <= 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This gift card has no remaining balance.'
+            ], 400);
+        }
+
+        return DB::transaction(function () use ($giftCard, $user, $balance, $request) {
+            // Credit user wallet
+            $credited = \App\Services\WalletService::adjustWallet(
+                $user->id,
+                $balance,
+                'deposit',
+                "Gift Card Redemption (#{$giftCard->code})",
+                (string) $giftCard->id
+            );
+
+            if (!$credited) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to adjust wallet balance. Please try again.'
+                ], 500);
+            }
+
+            // Zero out gift card and mark as redeemed
+            $giftCard->update([
+                'current_balance' => 0,
+                'status' => 'redeemed',
+                'redeemed_at' => now(),
+                'user_id' => $user->id,
+                'owner_email' => $user->email,
+            ]);
+
+            // Ledger entry
+            $giftCard->transactions()->create([
+                'transaction_type' => 'Redemption',
+                'amount' => -$balance,
+                'notes' => "Redeemed to wallet balance by {$user->name} ({$user->email})",
+                'created_by' => $user->id,
+            ]);
+
+            // Activity Log
+            $giftCard->activityLogs()->create([
+                'action' => 'Redeemed to Wallet',
+                'user_id' => $user->id,
+                'old_value' => (string) $balance,
+                'new_value' => '0.00',
+                'ip_address' => $request->ip(),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Successfully redeemed $' . number_format($balance, 2) . ' into your wallet!',
+                'data' => $this->giftCardPayload($giftCard->fresh()),
+            ]);
+        });
+    }
+
     public function settings()
     {
         $settings = EcommerceGiftCardSetting::query()->first();
@@ -597,7 +706,12 @@ class EcommerceGiftCardController extends Controller
         if (! $this->isAdminGiftCardRequest($request)) {
             $user = $request->user();
             if (Schema::hasColumn((new EcommerceGiftCard)->getTable(), 'user_id')) {
-                $query->where('user_id', $user?->id);
+                $query->where(function ($q) use ($user) {
+                    $q->where('user_id', $user?->id);
+                    if (Schema::hasColumn((new EcommerceGiftCard)->getTable(), 'buyer_user_id')) {
+                        $q->orWhere('buyer_user_id', $user?->id);
+                    }
+                });
             }
         }
 
@@ -606,7 +720,7 @@ class EcommerceGiftCardController extends Controller
 
     private function isAdminGiftCardRequest(Request $request): bool
     {
-        return $request->is('api/v1/admin/gift-cards*') || $request->is('api/v1/admin/gift-card-*');
+        return $request->is('*admin/gift-cards*') || $request->is('*admin/gift-card-*');
     }
 
     private function defaultSettings(): array
@@ -659,12 +773,31 @@ class EcommerceGiftCardController extends Controller
         $current = (float) $giftCard->current_balance;
         $redeemed = max($initial - $current, 0);
 
+        $request = request();
+        $user = $request->user();
+        
+        $isOwner = false;
+        if ($user) {
+            $isOwner = ($giftCard->user_id && $giftCard->user_id === $user->id) ||
+                       ($giftCard->recipient_email && strtolower($giftCard->recipient_email) === strtolower($user->email));
+        }
+
+        if ($request->filled('code') && $request->code === $giftCard->code) {
+            $isOwner = true;
+        }
+        
+        if ($this->isAdminGiftCardRequest($request)) {
+            $isOwner = true;
+        }
+
+        $code = $isOwner ? $giftCard->code : '••••-••••-••••';
+
         return [
             'id' => $giftCard->id,
             'user_id' => $giftCard->user_id,
             'order_id' => $giftCard->order_id,
             'order_number' => $giftCard->order?->order_number,
-            'code' => $giftCard->code,
+            'code' => $code,
             'recipient_name' => $giftCard->recipient_name,
             'recipient_email' => $giftCard->recipient_email,
             'recipient_phone' => $giftCard->recipient_phone,

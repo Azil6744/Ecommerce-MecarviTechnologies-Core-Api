@@ -10,6 +10,11 @@ class EnsurePinAuthorization
 {
     public function handle(Request $request, Closure $next, string $category = 'sensitive_action')
     {
+        // Bypass PIN verification for safe requests (read-only)
+        if ($request->isMethod('GET') || $request->isMethod('HEAD') || $request->isMethod('OPTIONS')) {
+            return $next($request);
+        }
+
         // Bypass PIN verification for wallet deposits (credits)
         if (($request->is('*/wallet-transactions') || $request->is('*/user/wallet/transaction')) && in_array(strtolower($request->input('type', '')), ['credit', 'deposit', 'refund', 'affiliate earned', 'affiliate_earned'])) {
             return $next($request);
