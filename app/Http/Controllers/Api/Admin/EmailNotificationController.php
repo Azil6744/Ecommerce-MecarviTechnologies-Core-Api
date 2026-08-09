@@ -30,7 +30,7 @@ class EmailNotificationController extends Controller
                     'category' => $definition['category'],
                     'variables' => $definition['variables'],
                 ])->values(),
-                'templates' => EmailTemplate::whereNotNull('event_key')->orderBy('category')->orderBy('name')->get(),
+                'templates' => EmailTemplate::orderBy('category')->orderBy('name')->get(),
                 'recent_logs' => EmailNotificationLog::latest()->limit(20)->get(),
             ],
         ]);
@@ -86,7 +86,7 @@ class EmailNotificationController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => ['templates' => EmailTemplate::whereNotNull('event_key')->orderBy('category')->orderBy('name')->get()],
+            'data' => ['templates' => EmailTemplate::orderBy('category')->orderBy('name')->get()],
         ]);
     }
 
@@ -95,6 +95,7 @@ class EmailNotificationController extends Controller
         try {
             $validated = $request->validate([
                 'name' => ['sometimes', 'string', 'max:255'],
+                'event_key' => ['nullable', 'string', 'max:255'],
                 'subject' => ['nullable', 'string', 'max:255'],
                 'heading' => ['nullable', 'string', 'max:255'],
                 'body_text' => ['nullable', 'string'],
@@ -106,6 +107,9 @@ class EmailNotificationController extends Controller
                 'send_to_admin' => ['boolean'],
                 'admin_recipients' => ['nullable', 'array'],
                 'admin_recipients.*' => ['nullable', 'email', 'max:255'],
+                'image_url' => ['nullable', 'string', 'max:1000'],
+                'logo_url' => ['nullable', 'string', 'max:1000'],
+                'logo_position' => ['sometimes', 'string', Rule::in(['left', 'center', 'right', 'hidden'])],
             ]);
 
             if (array_key_exists('admin_recipients', $validated)) {
@@ -169,6 +173,29 @@ class EmailNotificationController extends Controller
         ], $log->status === 'sent' ? 200 : 422);
     }
 
+    public function triggerEvent(Request $request)
+    {
+        $validated = $request->validate([
+            'event_key' => ['required', 'string', 'max:255'],
+            'recipient_email' => ['required', 'email', 'max:255'],
+            'data' => ['nullable', 'array'],
+        ]);
+
+        $data = array_merge([
+            'customer_name' => 'Customer',
+            'customer_email' => $validated['recipient_email'],
+            'site_name' => config('app.name', 'Mecarvi Embroidery'),
+        ], $validated['data'] ?? []);
+
+        $logs = $this->emails->sendEvent($validated['event_key'], $data, $validated['recipient_email']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Event email notification triggered.',
+            'data' => ['logs' => $logs],
+        ]);
+    }
+
     public function logs(Request $request)
     {
         $query = EmailNotificationLog::query()->with('template:id,name,event_key');
@@ -206,5 +233,44 @@ class EmailNotificationController extends Controller
             'message' => 'Retry queued.',
             'data' => ['logs' => $newLog],
         ]);
+    }
+
+    public function uploadImage(Request $request)
+    {
+        try {
+            $currentUser = $request->user();
+            if (! $currentUser->hasAdminAccess()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized. Only admins can upload template images.',
+                ], 403);
+            }
+
+            $request->validate([
+                'image' => ['required', 'file', 'image', 'mimes:jpeg,jpg,png,gif,svg,webp', 'max:5120'], // Max 5MB
+            ]);
+
+            $file = $request->file('image');
+            $path = $file->store('email-templates', 'public');
+
+            if (! $path) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to store the uploaded file.',
+                ], 500);
+            }
+
+            $url = asset('storage/' . $path);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Image uploaded successfully.',
+                'data' => ['url' => $url],
+            ], 200);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json(['success' => false, 'message' => 'Validation failed.', 'errors' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => 'Failed to upload image.', 'error' => config('app.debug') ? $e->getMessage() : null], 500);
+        }
     }
 }

@@ -40,6 +40,9 @@ class EmailTemplateController extends Controller
                 'send_to_customer' => 'boolean',
                 'send_to_admin' => 'boolean',
                 'admin_recipients' => 'nullable|array',
+                'image_url' => 'nullable|string|max:1000',
+                'logo_url' => 'nullable|string|max:1000',
+                'logo_position' => 'sometimes|string|in:left,center,right,hidden',
             ]);
             $validated['slug'] = Str::slug($validated['name']) . '-' . Str::random(4);
             $template = EmailTemplate::create($validated);
@@ -82,6 +85,9 @@ class EmailTemplateController extends Controller
                 'send_to_customer' => 'boolean',
                 'send_to_admin' => 'boolean',
                 'admin_recipients' => 'nullable|array',
+                'image_url' => 'nullable|string|max:1000',
+                'logo_url' => 'nullable|string|max:1000',
+                'logo_position' => 'sometimes|string|in:left,center,right,hidden',
             ]);
             $template->update($validated);
             return response()->json(['success' => true, 'message' => 'Template updated.', 'data' => ['template' => $template]]);

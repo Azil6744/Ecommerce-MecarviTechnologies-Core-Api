@@ -20,6 +20,7 @@ class PolicySection extends Model
         'hero_subtitle',
         'hero_background_image',
         'sections',
+        'styling',
         'is_published',
     ];
 
@@ -30,6 +31,7 @@ class PolicySection extends Model
      */
     protected $casts = [
         'sections' => 'array',
+        'styling' => 'array',
         'is_published' => 'boolean',
     ];
 

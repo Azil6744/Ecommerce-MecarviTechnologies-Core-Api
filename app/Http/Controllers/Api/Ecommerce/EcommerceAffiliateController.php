@@ -196,6 +196,28 @@ class EcommerceAffiliateController extends Controller
             if ($affiliate) {
                 $affiliate->increment('total_earnings', $commission->commission_amount);
             }
+
+            try {
+                if ($referrer->email) {
+                    $emailService = app(\App\Services\EmailNotificationService::class);
+                    $payload = [
+                        'customer_name' => $referrer->name,
+                        'customer_email' => $referrer->email,
+                        'payout_id' => 'PAY-' . $commission->id,
+                        'amount' => '$' . number_format((float) $commission->commission_amount, 2),
+                        'commission_amount' => '$' . number_format((float) $commission->commission_amount, 2),
+                        'referral_code' => $affiliate?->affiliate_code ?: 'N/A',
+                        'product_name' => 'Referral Order #' . ($commission->order ? $commission->order->order_number : 'N/A'),
+                        'site_name' => config('app.name', 'Mecarvi Embroidery'),
+                    ];
+
+                    $emailService->sendEvent('customer_pay_out', $payload, $referrer->email);
+                    $emailService->sendEvent('customer_referral_commission', $payload, $referrer->email);
+                    $emailService->sendEvent('referral_product_commission', $payload, $referrer->email);
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Affiliate payout email notification failed: ' . $e->getMessage());
+            }
         }
 
         return response()->json([

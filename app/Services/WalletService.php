@@ -94,6 +94,28 @@ class WalletService
                 'reference_id' => $referenceId,
             ]);
 
+            try {
+                if ($user->email) {
+                    $emailService = app(\App\Services\EmailNotificationService::class);
+                    $payload = [
+                        'customer_name' => $user->name,
+                        'customer_email' => $user->email,
+                        'amount' => '$' . number_format(abs($amount), 2),
+                        'new_balance' => '$' . number_format($newBalance, 2),
+                        'site_name' => config('app.name', 'Mecarvi Embroidery'),
+                    ];
+
+                    if ($isCredit) {
+                        $emailService->sendEvent('customer_add_balance', $payload, $user->email);
+                        $emailService->sendEvent('wallet_deposit', $payload, $user->email);
+                    } else {
+                        $emailService->sendEvent('customer_sub_balance', $payload, $user->email);
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::warning('WalletService email notification failed: ' . $e->getMessage());
+            }
+
             return true;
         } catch (\Throwable $e) {
             Log::error("WalletService: Exception in adjustWallet: " . $e->getMessage());

@@ -15,8 +15,13 @@ class WishlistController extends Controller
 {
     private function wishlistFor(Request $request): EcommerceWishlist
     {
+        $user = $request->user();
+        if (!$user) {
+            abort(401, 'Unauthenticated');
+        }
+
         return EcommerceWishlist::firstOrCreate(
-            ['user_id' => $request->user()->id],
+            ['user_id' => $user->id],
             ['name' => 'My Wishlist', 'is_default' => true]
         );
     }
@@ -91,10 +96,19 @@ class WishlistController extends Controller
 
         if ($request->filled('collection_id')) {
             $collectionId = $request->input('collection_id');
-            if ($collectionId === 'none') {
+            if ($collectionId === 'none' || $collectionId === '0') {
                 $query->whereNull('ecommerce_wishlist_collection_id');
             } else {
                 $query->where('ecommerce_wishlist_collection_id', $collectionId);
+            }
+        }
+
+        if ($request->filled('category')) {
+            $category = $request->string('category')->toString();
+            if ($category !== 'All Categories') {
+                $query->whereHas('product.category', function ($catQuery) use ($category) {
+                    $catQuery->where('name', $category);
+                });
             }
         }
 
@@ -109,7 +123,12 @@ class WishlistController extends Controller
         };
 
         $items = $query->get();
-        $allItems = $wishlist->items()->get();
+        $allItems = $wishlist->items()->with('product')->get();
+
+        $estimatedTotal = round($allItems->sum(function (EcommerceWishlistItem $item) {
+            $price = (float) ($item->product->sale_price ?? $item->product->price ?? $item->saved_price ?? 0);
+            return $price * (int) ($item->quantity ?? 1);
+        }), 2);
 
         $collections = $wishlist->collections()
             ->withCount('items')
@@ -132,7 +151,7 @@ class WishlistController extends Controller
             'collections' => $collections,
             'summary' => [
                 'saved_count' => $allItems->count(),
-                'estimated_total' => round($allItems->sum(fn (EcommerceWishlistItem $item) => (float) $item->saved_price * (int) $item->quantity), 2),
+                'estimated_total' => $estimatedTotal,
             ],
         ];
     }
@@ -206,6 +225,22 @@ class WishlistController extends Controller
         return response()->json(['message' => 'Wishlist item removed']);
     }
 
+    public function bulkRemoveItems(Request $request)
+    {
+        $wishlist = $this->wishlistFor($request);
+        $data = $request->validate([
+            'item_ids' => 'required|array',
+            'item_ids.*' => 'integer',
+        ]);
+
+        $deletedCount = $wishlist->items()->whereIn('id', $data['item_ids'])->delete();
+
+        return response()->json([
+            'message' => "Removed {$deletedCount} items from wishlist",
+            'count' => $deletedCount,
+        ]);
+    }
+
     public function createCollection(Request $request)
     {
         $data = $request->validate([
@@ -234,6 +269,52 @@ class WishlistController extends Controller
             'slug' => $collection->slug,
             'count' => 0,
         ], 201);
+    }
+
+    public function updateCollection(Request $request, int $collectionId)
+    {
+        $wishlist = $this->wishlistFor($request);
+        $collection = $wishlist->collections()->findOrFail($collectionId);
+        $data = $request->validate([
+            'name' => 'nullable|string|max:100',
+            'sort_order' => 'nullable|integer',
+        ]);
+
+        if (!empty($data['name']) && $data['name'] !== $collection->name) {
+            $baseSlug = Str::slug($data['name']) ?: 'collection';
+            $slug = $baseSlug;
+            $suffix = 2;
+            while ($wishlist->collections()->where('slug', $slug)->where('id', '!=', $collection->id)->exists()) {
+                $slug = "{$baseSlug}-{$suffix}";
+                $suffix++;
+            }
+            $collection->name = $data['name'];
+            $collection->slug = $slug;
+        }
+
+        if (array_key_exists('sort_order', $data)) {
+            $collection->sort_order = (int) $data['sort_order'];
+        }
+
+        $collection->save();
+
+        return response()->json([
+            'id' => $collection->id,
+            'name' => $collection->name,
+            'slug' => $collection->slug,
+            'count' => $collection->items()->count(),
+        ]);
+    }
+
+    public function deleteCollection(Request $request, int $collectionId)
+    {
+        $wishlist = $this->wishlistFor($request);
+        $collection = $wishlist->collections()->findOrFail($collectionId);
+
+        $collection->items()->update(['ecommerce_wishlist_collection_id' => null]);
+        $collection->delete();
+
+        return response()->json(['message' => 'Collection deleted successfully']);
     }
 
     public function addSelectedToCart(Request $request)

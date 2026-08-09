@@ -69,7 +69,8 @@ class NotificationSettingsController extends Controller
         ]);
 
         $smsService = new \App\Services\SmsService();
-        $success = $smsService->sendSms($validated['recipient_number'], $validated['message']);
+        $error = null;
+        $success = $smsService->sendSms($validated['recipient_number'], $validated['message'], $error);
 
         if ($success) {
             return response()->json([
@@ -80,7 +81,7 @@ class NotificationSettingsController extends Controller
 
         return response()->json([
             'success' => false,
-            'message' => 'Failed to send test SMS. Please check logs for detailed error.',
+            'message' => 'Failed to send test SMS: ' . ($error ?: 'Please check credentials and logs for detailed error.'),
         ], 422);
     }
 

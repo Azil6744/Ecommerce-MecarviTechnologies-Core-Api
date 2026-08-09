@@ -76,6 +76,15 @@ class MembershipBenefitService
 
     private function extractBenefits(mixed $snapshot): array
     {
+        if (is_string($snapshot)) {
+            $decoded = json_decode($snapshot, true);
+            if (is_array($decoded)) {
+                return $this->extractBenefits($decoded);
+            }
+            $parsed = $this->parseStringBenefit($snapshot);
+            return $parsed ? [$parsed] : [];
+        }
+
         if (! is_array($snapshot)) {
             return [];
         }
@@ -93,10 +102,102 @@ class MembershipBenefitService
         }
 
         if (array_is_list($snapshot)) {
-            return array_values(array_filter($snapshot, fn ($item) => is_array($item)));
+            $extracted = [];
+            foreach ($snapshot as $item) {
+                if (is_array($item)) {
+                    $extracted = array_merge($extracted, $this->extractBenefits($item));
+                } elseif (is_string($item)) {
+                    $parsed = $this->parseStringBenefit($item);
+                    if ($parsed) {
+                        $extracted[] = $parsed;
+                    }
+                }
+            }
+            return $extracted;
         }
 
-        return [];
+        // If snapshot is an associative object dictionary (e.g. benefit_config)
+        $extracted = [];
+        if (!empty($snapshot['percentage_discount']) && (float)$snapshot['percentage_discount'] > 0) {
+            $extracted[] = [
+                'title' => ((float)$snapshot['percentage_discount']) . '% Member Discount',
+                'benefit_type' => 'percentage_discount',
+                'benefit_value' => (float)$snapshot['percentage_discount'],
+                'restrictions' => $snapshot,
+            ];
+        }
+
+        if (!empty($snapshot['fixed_discount']) && (float)$snapshot['fixed_discount'] > 0) {
+            $extracted[] = [
+                'title' => '$' . ((float)$snapshot['fixed_discount']) . ' Member Discount',
+                'benefit_type' => 'fixed_discount',
+                'benefit_value' => (float)$snapshot['fixed_discount'],
+                'restrictions' => $snapshot,
+            ];
+        }
+
+        if (!empty($snapshot['free_delivery']) || !empty($snapshot['free_shipping'])) {
+            $extracted[] = [
+                'title' => 'Free Member Delivery',
+                'benefit_type' => 'free_delivery',
+                'benefit_value' => 100,
+                'restrictions' => $snapshot,
+            ];
+        }
+
+        return $extracted;
+    }
+
+    private function parseStringBenefit(string $text): ?array
+    {
+        $trim = trim($text);
+        if ($trim === '') {
+            return null;
+        }
+
+        // Match percentage discount e.g. "10% Site-wide Discount" or "20% off" or "10% discount on digitizing"
+        if (preg_match('/(\d+(?:\.\d+)?)%\s*(?:site-wide|off|discount|on|all)?/i', $trim, $matches)) {
+            $val = (float) $matches[1];
+            if ($val > 0) {
+                return [
+                    'title' => $trim,
+                    'benefit_type' => 'percentage_discount',
+                    'benefit_value' => $val,
+                    'restrictions' => [
+                        'can_combine_with_coupons' => true,
+                    ],
+                ];
+            }
+        }
+
+        // Match fixed dollar discount e.g. "$50 Store Credit" or "$10 Off"
+        if (preg_match('/\$\s*(\d+(?:\.\d+)?)/i', $trim, $matches)) {
+            $val = (float) $matches[1];
+            if ($val > 0) {
+                return [
+                    'title' => $trim,
+                    'benefit_type' => 'fixed_discount',
+                    'benefit_value' => $val,
+                    'restrictions' => [
+                        'can_combine_with_coupons' => true,
+                    ],
+                ];
+            }
+        }
+
+        // Match free/priority shipping e.g. "Free Shipping", "Priority Shipping", "Faster delivery on all orders"
+        if (preg_match('/free\s+(?:priority\s+)?(?:shipping|delivery)/i', $trim) || preg_match('/priority\s+shipping/i', $trim) || preg_match('/faster\s+(?:processing|delivery)/i', $trim)) {
+            return [
+                'title' => $trim,
+                'benefit_type' => 'free_shipping',
+                'benefit_value' => 100,
+                'restrictions' => [
+                    'can_combine_with_coupons' => true,
+                ],
+            ];
+        }
+
+        return null;
     }
 
     private function isActiveMembership(array $membership): bool

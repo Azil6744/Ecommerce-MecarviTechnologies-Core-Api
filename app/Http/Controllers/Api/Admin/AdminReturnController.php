@@ -117,6 +117,28 @@ class AdminReturnController extends Controller
             }
         }
 
+        // Trigger refund email notifications
+        try {
+            $email = optional($return->user)->email;
+            if (!$email && $return->order) {
+                $email = $return->order->customer_email;
+            }
+            if ($email) {
+                $service = app(\App\Services\EmailNotificationService::class);
+                $payload = [
+                    'customer_name' => $return->customer_name ?: optional($return->user)->name ?: 'Customer',
+                    'customer_email' => $email,
+                    'order_number' => $return->order_number,
+                    'amount' => '$' . number_format((float) $return->refund_amount, 2),
+                    'site_name' => config('app.name', 'Mecarvi Embroidery'),
+                ];
+                $service->sendEvent('customer_refund', $payload, $email);
+                $service->sendEvent('order_refunded', $payload, $email);
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Failed sending return refund emails: ' . $e->getMessage());
+        }
+
         return response()->json($return);
     }
 }

@@ -58,7 +58,20 @@ class ProfileController extends Controller
             }
         }
 
+        $oldEmail = $user->email;
         $user->update($allowed);
+
+        if ($user->email && strtolower($user->email) !== strtolower($oldEmail)) {
+            try {
+                app(\App\Services\EmailNotificationService::class)->sendEvent('change_email_confirmation', [
+                    'customer_name' => $user->name,
+                    'new_email' => $user->email,
+                    'site_name' => config('app.name', 'Mecarvi Embroidery'),
+                ], $user->email);
+            } catch (\Throwable $e) {
+                Log::warning('Failed to send change_email_confirmation email: ' . $e->getMessage());
+            }
+        }
 
         return response()->json([
             'success' => true,
@@ -98,6 +111,15 @@ class ProfileController extends Controller
 
         $user = $request->user();
         $user->update(['password' => Hash::make($request->password)]);
+
+        try {
+            app(\App\Services\EmailNotificationService::class)->sendEvent('change_password_confirmation', [
+                'customer_name' => $user->name,
+                'site_name' => config('app.name', 'Mecarvi Embroidery'),
+            ], $user->email);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to send change_password_confirmation email: ' . $e->getMessage());
+        }
 
         return response()->json([
             'success' => true,
@@ -144,6 +166,26 @@ class ProfileController extends Controller
         }
 
         $user->update(['pin' => Hash::make($request->pin)]);
+
+        try {
+            $service = app(\App\Services\EmailNotificationService::class);
+            $service->sendEvent('pin_verification', [
+                'customer_name' => $user->name,
+                'customer_email' => $user->email,
+                'pin_code' => $request->pin,
+                'expiry_minutes' => 30,
+                'site_name' => config('app.name', 'Mecarvi Embroidery'),
+            ], $user->email);
+
+            $service->sendEvent('customer_credit_verification', [
+                'customer_name' => $user->name,
+                'customer_email' => $user->email,
+                'verification_code' => $request->pin,
+                'site_name' => config('app.name', 'Mecarvi Embroidery'),
+            ], $user->email);
+        } catch (\Throwable $e) {
+            Log::warning('Failed to send pin verification email: ' . $e->getMessage());
+        }
 
         return response()->json([
             'success' => true,

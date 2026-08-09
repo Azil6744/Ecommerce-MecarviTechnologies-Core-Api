@@ -99,13 +99,17 @@ class PublicOrderSubmissionController extends Controller
             'valid_until' => now()->addDays(14)->toDateString(),
         ]);
 
-            app(EmailNotificationService::class)->sendEvent('quote_submitted', [
+            $emailService = app(EmailNotificationService::class);
+            $quotePayload = [
                 'customer_name' => $quote->customer_name,
                 'customer_email' => $quote->customer_email ?: $quote->contact_email,
                 'quote_number' => $quote->quote_number,
                 'quote_total' => '$' . number_format((float) $quote->total_estimated, 2),
+                'total_amount' => '$' . number_format((float) $quote->total_estimated, 2),
                 'site_name' => config('app.name', 'Mecarvi Embroidery'),
-            ], $quote->customer_email ?: $quote->contact_email);
+            ];
+            $emailService->sendEvent('quote_submitted', $quotePayload, $quote->customer_email ?: $quote->contact_email);
+            $emailService->sendEvent('customer_qoute_request', $quotePayload, $quote->customer_email ?: $quote->contact_email);
 
             return response()->json([
                 'success' => true,
@@ -168,7 +172,9 @@ class PublicOrderSubmissionController extends Controller
             $appliedCoupon->increment('used_count');
         }
 
-        app(EmailNotificationService::class)->sendOrderEvent('order_placed', $order->fresh('items'));
+        $emailService = app(EmailNotificationService::class);
+        $emailService->sendOrderEvent('order_placed', $order->fresh('items'));
+        $emailService->sendOrderEvent('new_order', $order->fresh('items'));
 
         return response()->json([
             'success' => true,

@@ -130,6 +130,7 @@ class PolicySectionController extends Controller
                 'hero_subtitle' => ['nullable', 'string', 'max:500'],
                 'hero_background_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
                 'sections' => ['nullable', 'string'], // JSON string
+                'styling' => ['nullable', 'string'], // JSON string
                 'is_published' => ['nullable', 'boolean'],
             ]);
 
@@ -143,6 +144,14 @@ class PolicySectionController extends Controller
                         'success' => false,
                         'message' => 'Invalid JSON format for sections.',
                     ], 422);
+                }
+            }
+
+            // Handle JSON styling
+            if (isset($validated['styling']) && is_string($validated['styling'])) {
+                $decodedStyling = json_decode($validated['styling'], true);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $validated['styling'] = $decodedStyling;
                 }
             }
 
@@ -225,6 +234,7 @@ class PolicySectionController extends Controller
                 'hero_subtitle' => ['nullable', 'string', 'max:500'],
                 'hero_background_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:51200'],
                 'sections' => ['nullable', 'string'], // JSON string
+                'styling' => ['nullable', 'string'], // JSON string
                 'is_published' => ['nullable', 'boolean'],
             ]);
 
@@ -238,6 +248,14 @@ class PolicySectionController extends Controller
                         'success' => false,
                         'message' => 'Invalid JSON format for sections.',
                     ], 422);
+                }
+            }
+
+            // Handle JSON styling
+            if (isset($validated['styling']) && is_string($validated['styling'])) {
+                $decodedStyling = json_decode($validated['styling'], true);
+                if (json_last_error() === JSON_ERROR_NONE) {
+                    $validated['styling'] = $decodedStyling;
                 }
             }
 
@@ -349,6 +367,7 @@ class PolicySectionController extends Controller
             'hero_subtitle' => $section->hero_subtitle,
             'hero_background_image' => $section->hero_background_image_url,
             'sections' => $section->sections ?? [],
+            'styling' => $section->styling ?? null,
             'is_published' => $section->is_published,
             'created_at' => $section->created_at,
             'updated_at' => $section->updated_at,

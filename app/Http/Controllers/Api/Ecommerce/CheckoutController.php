@@ -47,7 +47,7 @@ class CheckoutController extends Controller
             'pay_with_points_item_ids' => 'nullable|array',
             'pay_with_points_item_ids.*' => 'integer',
             'points_redeemed' => 'nullable|integer|min:0',
-            'selected_charity' => 'nullable|string|max:255|exists:charities,name',
+            'selected_charity' => 'nullable|string|max:255',
             'packaging_amount' => 'nullable|numeric|min:0',
             'item_packaging_configs' => 'nullable|array',
             'add_thank_you_card' => 'nullable|boolean',
@@ -715,7 +715,19 @@ class CheckoutController extends Controller
             }
 
             try {
-                app(EmailNotificationService::class)->sendOrderEvent('order_placed', $order->fresh('items.product'));
+                $emailService = app(EmailNotificationService::class);
+                $emailService->sendOrderEvent('order_placed', $order->fresh('items.product'));
+                $emailService->sendOrderEvent('new_order', $order->fresh('items.product'));
+
+                if ($pointsRedeemed > 0 && $order->customer_email) {
+                    $emailService->sendEvent('loyalty_point_redemption', [
+                        'customer_name' => $order->customer_name ?: 'Customer',
+                        'customer_email' => $order->customer_email,
+                        'points_redeemed' => $pointsRedeemed,
+                        'reward_description' => "Redeemed {$pointsRedeemed} points on Order #{$order->order_number}",
+                        'site_name' => config('app.name', 'Mecarvi Embroidery'),
+                    ], $order->customer_email);
+                }
             } catch (\Throwable $e) {
                 Log::warning('Email notification failed: ' . $e->getMessage());
             }
@@ -770,28 +782,47 @@ class CheckoutController extends Controller
 
     private function activeCentralMemberships(Request $request): array
     {
+        $memberships = [];
         $token = $request->header('X-Central-Auth-Token') ?? $request->bearerToken();
-        if (! $token) {
-            return [];
-        }
+        if ($token) {
+            try {
+                $centralUrl = rtrim(config('services.central_auth.url'), '/');
+                $response = Http::acceptJson()
+                    ->withToken($token)
+                    ->timeout(5)
+                    ->get($centralUrl . '/user/memberships');
 
-        try {
-            $centralUrl = rtrim(config('services.central_auth.url'), '/');
-            $response = Http::acceptJson()
-                ->withToken($token)
-                ->timeout(5)
-                ->get($centralUrl . '/user/memberships');
-
-            if (! $response->successful()) {
-                return [];
+                if ($response->successful() && is_array($response->json('data'))) {
+                    $memberships = $response->json('data');
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Checkout failed to fetch central memberships: ' . $e->getMessage());
             }
-
-            $memberships = $response->json('data') ?? [];
-            return is_array($memberships) ? $memberships : [];
-        } catch (\Throwable $e) {
-            Log::warning('Checkout failed to fetch central memberships: ' . $e->getMessage());
-            return [];
         }
+
+        if ($request->user()) {
+            $local = \App\Models\EcommerceMembership::where('user_id', $request->user()->id)
+                ->whereIn('status', ['Active', 'active', 'trialing', 'pending_cancellation'])
+                ->get();
+            if ($local->count() > 0) {
+                $localMapped = $local->map(function ($m) {
+                    $arr = $m->toArray();
+                    if (empty($arr['benefits_snapshot']) && empty($arr['benefits'])) {
+                        $plan = \App\Models\EcommerceSubscriptionPlan::where('name', $m->plan_name)
+                            ->orWhere('internal_code', $m->plan_name)
+                            ->first();
+                        if ($plan) {
+                            $arr['benefits_snapshot'] = $plan->benefit_config ?: $plan->features;
+                        }
+                    }
+                    return $arr;
+                })->toArray();
+
+                $memberships = array_merge($memberships, $localMapped);
+            }
+        }
+
+        return $memberships;
     }
 
     private function saveAddressForUserIfMissing(User $user, array|EcommerceAddress|null $addressData): void

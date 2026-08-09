@@ -23,6 +23,7 @@ class AdditionalAdminSeeder extends Seeder
         ]);
 
         // Assign super_admin role
+        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'super_admin']);
         $admin->assignRole('super_admin');
 
         $this->command->info('New admin user created successfully!');

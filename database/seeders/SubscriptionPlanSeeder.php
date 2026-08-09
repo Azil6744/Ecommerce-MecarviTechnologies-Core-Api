@@ -13,6 +13,7 @@ class SubscriptionPlanSeeder extends Seeder
             ['internal_code' => 'FREE-PLAN'],
             [
                 'name' => 'Free Plan',
+                'account_type' => 'personal',
                 'price' => 0.00,
                 'billing_cycle' => 'Monthly',
                 'coverage_type' => 'universal',
@@ -29,6 +30,7 @@ class SubscriptionPlanSeeder extends Seeder
             ['internal_code' => 'BASIC-PLAN'],
             [
                 'name' => 'basic',
+                'account_type' => 'personal',
                 'price' => 19.98,
                 'billing_cycle' => 'Monthly',
                 'coverage_type' => 'universal',
@@ -36,7 +38,16 @@ class SubscriptionPlanSeeder extends Seeder
                 'status' => 'Active',
                 'badge' => 'perfect for basic plan',
                 'description' => 'Great for regular embroidery orders and digitizing.',
-                'features' => json_encode(['10% discount on digitizing', 'Standard turnaround', 'Email support']),
+                'features' => json_encode(['10% Site-wide Discount', 'Free Delivery on all orders', 'Email support']),
+                'benefit_config' => [
+                    'percentage_discount' => 10,
+                    'fixed_discount' => 0,
+                    'free_delivery' => true,
+                    'free_delivery_categories' => 'all',
+                    'min_order_amount' => 0,
+                    'allow_coupon_stacking' => true,
+                    'loyalty_multiplier' => 1.5,
+                ],
                 'sort_order' => 2,
             ]
         );
@@ -45,6 +56,7 @@ class SubscriptionPlanSeeder extends Seeder
             ['internal_code' => 'BUS-PRO'],
             [
                 'name' => 'Business Pro Plan',
+                'account_type' => 'business',
                 'price' => 49.99,
                 'billing_cycle' => 'Monthly',
                 'coverage_type' => 'universal',
@@ -52,7 +64,16 @@ class SubscriptionPlanSeeder extends Seeder
                 'status' => 'Active',
                 'badge' => 'popular choice',
                 'description' => 'Maximum discounts, priority production, and dedicated manager.',
-                'features' => json_encode(['25% discount on all orders', '24/7 Priority support', 'Free revision credits', 'Dedicated account manager']),
+                'features' => json_encode(['25% Site-wide Discount', 'Free Express Delivery', '24/7 Priority support', 'Dedicated account manager']),
+                'benefit_config' => [
+                    'percentage_discount' => 25,
+                    'fixed_discount' => 0,
+                    'free_delivery' => true,
+                    'free_delivery_categories' => 'all',
+                    'min_order_amount' => 0,
+                    'allow_coupon_stacking' => true,
+                    'loyalty_multiplier' => 2.0,
+                ],
                 'sort_order' => 3,
             ]
         );

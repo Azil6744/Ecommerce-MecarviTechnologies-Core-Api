@@ -118,6 +118,27 @@ class RegisterController extends Controller
 
             $token = $user->createToken('auth-token')->plainTextToken;
 
+            // Trigger Welcome / Registration Email Notification
+            try {
+                $emailService = app(\App\Services\EmailNotificationService::class);
+                $emailService->sendEvent('user_registered', [
+                    'customer_name' => $user->name,
+                    'customer_email' => $user->email,
+                    'site_name' => config('app.name', 'Mecarvi Embroidery'),
+                ], $user->email);
+
+                if (!empty($rewardReferee) && $rewardReferee > 0) {
+                    $emailService->sendEvent('customer_registration_bonus', [
+                        'customer_name' => $user->name,
+                        'customer_email' => $user->email,
+                        'bonus_amount' => '$' . number_format($rewardReferee, 2),
+                        'site_name' => config('app.name', 'Mecarvi Embroidery'),
+                    ], $user->email);
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Registration email notification error: ' . $e->getMessage());
+            }
+
             // Return success response with user data and token
             return response()->json([
                 'success' => true,

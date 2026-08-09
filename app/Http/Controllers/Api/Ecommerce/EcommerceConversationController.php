@@ -115,6 +115,18 @@ class EcommerceConversationController extends Controller
             'message' => $validated['message'],
         ]);
 
+        try {
+            $user = $request->user();
+            app(\App\Services\EmailNotificationService::class)->sendEvent('message_from_customer', [
+                'customer_name' => $user->name,
+                'customer_email' => $user->email,
+                'message_preview' => \Illuminate\Support\Str::limit($validated['message'], 150),
+                'site_name' => config('app.name', 'Mecarvi Embroidery'),
+            ], $user->email);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Failed sending message_from_customer email: ' . $e->getMessage());
+        }
+
         $conversation->load($this->conversationRelations());
 
         return response()->json(['data' => $this->conversationPayload($conversation)], 201);
@@ -148,6 +160,18 @@ class EcommerceConversationController extends Controller
             'last_message_at' => $now,
             'closed_at' => null,
         ]);
+
+        try {
+            $user = $request->user();
+            app(\App\Services\EmailNotificationService::class)->sendEvent('message_from_customer', [
+                'customer_name' => $user->name,
+                'customer_email' => $user->email,
+                'message_preview' => \Illuminate\Support\Str::limit($validated['message'], 150),
+                'site_name' => config('app.name', 'Mecarvi Embroidery'),
+            ], $user->email);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Failed sending message_from_customer email: ' . $e->getMessage());
+        }
 
         $conversation->load($this->conversationRelations());
 

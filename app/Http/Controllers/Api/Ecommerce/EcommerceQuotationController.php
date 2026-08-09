@@ -52,6 +52,20 @@ class EcommerceQuotationController extends Controller
 
         $item = EcommerceQuotation::create($data)->load(['product', 'user:id,name,email']);
 
+        try {
+            $email = $item->contact_email ?: $item->customer_email ?: optional($item->user)->email;
+            if ($email) {
+                app(\App\Services\EmailNotificationService::class)->sendEvent('customer_qoute_request', [
+                    'customer_name' => $item->customer_name ?: 'Customer',
+                    'customer_email' => $email,
+                    'quote_number' => $item->quote_number,
+                    'site_name' => config('app.name', 'Mecarvi Embroidery'),
+                ], $email);
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Failed sending customer_qoute_request email: ' . $e->getMessage());
+        }
+
         return response()->json(['success' => true, 'data' => $item], 201);
     }
 
@@ -65,6 +79,7 @@ class EcommerceQuotationController extends Controller
     public function update(Request $request, $id)
     {
         $item = $this->resolveQuotation($request, $id);
+        $previousStatus = strtolower((string) $item->status);
         $user = $request->user();
         $isAdmin = $user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin();
 
@@ -90,6 +105,24 @@ class EcommerceQuotationController extends Controller
         $validated = $request->validate($rules);
         $item->update($validated);
         $item->load(['product', 'user:id,name,email']);
+
+        $newStatus = strtolower((string) ($validated['status'] ?? $item->status));
+        if ($previousStatus !== $newStatus && in_array($newStatus, ['approved', 'accepted'], true)) {
+            try {
+                $email = $item->contact_email ?: $item->customer_email ?: optional($item->user)->email;
+                if ($email) {
+                    app(\App\Services\EmailNotificationService::class)->sendEvent('approved_qoute', [
+                        'customer_name' => $item->customer_name ?: 'Customer',
+                        'customer_email' => $email,
+                        'quote_number' => $item->quote_number,
+                        'total_amount' => '$' . number_format((float) $item->total_estimated, 2),
+                        'site_name' => config('app.name', 'Mecarvi Embroidery'),
+                    ], $email);
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Failed sending approved_qoute email: ' . $e->getMessage());
+            }
+        }
 
         return response()->json(['success' => true, 'data' => $item]);
     }

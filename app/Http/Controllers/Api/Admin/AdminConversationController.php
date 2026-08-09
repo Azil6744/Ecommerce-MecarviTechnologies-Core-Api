@@ -99,6 +99,20 @@ class AdminConversationController extends Controller
                 ->whereNull('read_at'),
         ]);
 
+        try {
+            $customer = $conversation->user;
+            if ($customer && $customer->email) {
+                app(\App\Services\EmailNotificationService::class)->sendEvent('message_sent', [
+                    'recipient_name' => $customer->name,
+                    'sender_name' => optional($request->user())->name ?: 'Mecarvi Support',
+                    'message_preview' => \Illuminate\Support\Str::limit($validated['message'], 150),
+                    'site_name' => config('app.name', 'Mecarvi Embroidery'),
+                ], $customer->email);
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Failed sending message_sent email: ' . $e->getMessage());
+        }
+
         return response()->json(['data' => $this->conversationPayload($conversation)]);
     }
 

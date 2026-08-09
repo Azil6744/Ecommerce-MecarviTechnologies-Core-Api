@@ -136,6 +136,9 @@ Route::prefix('v1')->group(function () {
     Route::post('/login', [LoginController::class, 'login'])
         ->name('api.v1.login');
 
+    Route::post('/forgot-password', [LoginController::class, 'forgotPassword'])
+        ->name('api.v1.forgot-password');
+
     // Get Last Content Update Time (Public)
     // GET /api/v1/content-last-updated
     // Returns: Last content update timestamp for polling
@@ -582,6 +585,25 @@ Route::prefix('v1')->group(function () {
     Route::post('/schedule-form', [ScheduleFormSubmissionController::class, 'store'])
         ->name('api.v1.schedule-form.store');
 
+    // Submit Product Report (Public)
+    Route::post('/product-reports/submit', [ProductReportController::class, 'submit'])
+        ->name('api.v1.product-reports.submit');
+    Route::post('/product-reports', [ProductReportController::class, 'submit'])
+        ->name('api.v1.product-reports.store');
+
+    // Customer Reported Products APIs
+    Route::get('/customer/reported-products', [\App\Http\Controllers\Api\Customer\ReportedProductController::class, 'index']);
+    Route::get('/customer/reported-products/{id}', [\App\Http\Controllers\Api\Customer\ReportedProductController::class, 'show']);
+    Route::post('/customer/reported-products/{id}/reply', [\App\Http\Controllers\Api\Customer\ReportedProductController::class, 'reply']);
+
+    // Admin Reported Products APIs
+    Route::get('/admin/product-reports', [ProductReportController::class, 'index']);
+    Route::get('/admin/product-reports/{id}', [ProductReportController::class, 'show']);
+    Route::put('/admin/product-reports/{id}', [ProductReportController::class, 'update']);
+    Route::post('/admin/product-reports/{id}/reply', [ProductReportController::class, 'reply']);
+    Route::delete('/admin/product-reports/{id}', [ProductReportController::class, 'destroy']);
+
+
     // Get Contact Page Hero Sections (Public)
     Route::get('/contact-page-hero-sections', [ContactPageHeroSectionController::class, 'index'])
         ->name('api.v1.contact-page-hero-sections.index');
@@ -689,6 +711,10 @@ Route::prefix('v1')->group(function () {
     // Get Gift Card Page Content (Public)
     Route::get('/gift-card-page', [GiftCardPageController::class, 'index'])
         ->name('api.v1.gift-card-page.index');
+
+    // Get Page Popups (Public)
+    Route::get('/popups/page/{pageKey}', [\App\Http\Controllers\Api\PopupController::class, 'byPage'])
+        ->name('api.v1.popups.byPage');
 
     // Get Active Popup Template (Public)
     Route::get('/popups/{eventKey}', [\App\Http\Controllers\Api\PopupController::class, 'show'])
@@ -934,11 +960,14 @@ Route::prefix('v1')->group(function () {
         Route::delete('/admin/email-templates/{id}', [\App\Http\Controllers\Api\Admin\EmailTemplateController::class, 'destroy']);
 
         // Popup Templates
+        Route::get('/admin/popup-templates/overview', [\App\Http\Controllers\Api\Admin\PopupTemplateController::class, 'overview']);
         Route::get('/admin/popup-templates', [\App\Http\Controllers\Api\Admin\PopupTemplateController::class, 'index']);
+        Route::post('/admin/popup-templates/upload-image', [\App\Http\Controllers\Api\Admin\PopupTemplateController::class, 'uploadImage']);
         Route::post('/admin/popup-templates', [\App\Http\Controllers\Api\Admin\PopupTemplateController::class, 'store']);
         Route::get('/admin/popup-templates/{id}', [\App\Http\Controllers\Api\Admin\PopupTemplateController::class, 'show']);
         Route::put('/admin/popup-templates/{id}', [\App\Http\Controllers\Api\Admin\PopupTemplateController::class, 'update']);
         Route::delete('/admin/popup-templates/{id}', [\App\Http\Controllers\Api\Admin\PopupTemplateController::class, 'destroy']);
+        Route::post('/admin/popup-templates/{id}/restore', [\App\Http\Controllers\Api\Admin\PopupTemplateController::class, 'restore']);
 
         Route::get('/admin/email/overview', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'overview']);
         Route::get('/admin/email/settings', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'settings']);
@@ -947,6 +976,8 @@ Route::prefix('v1')->group(function () {
         Route::put('/admin/email/templates/{template}', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'updateTemplate']);
         Route::post('/admin/email/templates/{template}/restore', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'restoreTemplate']);
         Route::post('/admin/email/test', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'test']);
+        Route::post('/admin/email/trigger', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'triggerEvent']);
+        Route::post('/admin/email/templates/upload-image', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'uploadImage']);
         Route::get('/admin/email/logs', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'logs']);
         Route::post('/admin/email/logs/{log}/retry', [\App\Http\Controllers\Api\Admin\EmailNotificationController::class, 'retry']);
 

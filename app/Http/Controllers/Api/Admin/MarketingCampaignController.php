@@ -32,12 +32,21 @@ class MarketingCampaignController extends Controller
 
         $payload = $campaign ? $campaign->toAdminArray() : $this->defaults($channel);
 
+        $totalContacts = User::query();
+        if ($channel === MarketingCampaign::CHANNEL_SMS) {
+            $totalContacts->whereNotNull('phone')->where('phone', '!=', '');
+        } else {
+            $totalContacts->whereNotNull('email')->where('email', '!=', '');
+        }
+        $totalContactsCount = $totalContacts->count();
+
         return response()->json([
             'success' => true,
             'data' => [
                 'campaign' => $payload,
                 'summary' => $this->summary($payload),
-                'segments' => $this->segments(),
+                'segments' => $this->segments($channel),
+                'total_contacts' => $totalContactsCount,
             ],
         ]);
     }
@@ -102,16 +111,110 @@ class MarketingCampaignController extends Controller
         $status = $scheduleType === 'later' ? 'scheduled' : 'sent';
         $campaign = $this->saveCampaign($request, $validated, $status);
 
-        if ($status === 'sent' && ! $campaign->sent_at) {
-            $campaign->forceFill(['sent_at' => now()])->save();
+        $metrics = [
+            'total_target' => 0,
+            'sent' => 0,
+            'failed' => 0,
+            'errors' => [],
+        ];
+
+        if ($status === 'sent') {
+            $channel = $campaign->channel;
+            $recipients = [];
+
+            if ($campaign->audience_type === 'custom') {
+                $recipients = array_values(array_filter((array) ($campaign->custom_recipients ?? [])));
+            } else {
+                $query = User::query();
+                if ($campaign->audience_type === 'segment') {
+                    $query = $this->getSegmentQuery($campaign->segment ?? 'Active Customers', $channel);
+                } else {
+                    if ($channel === MarketingCampaign::CHANNEL_SMS) {
+                        $query->whereNotNull('phone')->where('phone', '!=', '');
+                    } else {
+                        $query->whereNotNull('email')->where('email', '!=', '');
+                    }
+                }
+
+                if ($channel === MarketingCampaign::CHANNEL_SMS) {
+                    $recipients = $query->pluck('phone')
+                        ->filter()
+                        ->unique()
+                        ->values()
+                        ->all();
+                } else {
+                    $recipients = $query->pluck('email')
+                        ->filter()
+                        ->unique()
+                        ->values()
+                        ->all();
+                }
+            }
+
+            $metrics['total_target'] = count($recipients);
+
+            if ($channel === MarketingCampaign::CHANNEL_SMS) {
+                $smsService = app(\App\Services\SmsService::class);
+                $body = $campaign->body ?: 'Special update from Mecarvi Embroidery';
+
+                foreach ($recipients as $phone) {
+                    $err = null;
+                    $ok = $smsService->sendSms((string) $phone, $body, $err);
+                    if ($ok) {
+                        $metrics['sent']++;
+                    } else {
+                        $metrics['failed']++;
+                        if ($err && count($metrics['errors']) < 5) {
+                            $metrics['errors'][] = "Phone {$phone}: {$err}";
+                        }
+                    }
+                }
+            } elseif ($channel === MarketingCampaign::CHANNEL_EMAIL) {
+                $emailService = app(\App\Services\EmailNotificationService::class);
+                $subject = $campaign->subject ?: 'Special Offer from Mecarvi Embroidery';
+                $body = $campaign->body ?: 'Special Offer';
+
+                foreach ($recipients as $email) {
+                    $overrideData = [
+                        'event_key' => 'marketing_campaign',
+                        'data' => [
+                            'customer_name' => 'Valued Customer',
+                            'customer_email' => (string) $email,
+                            'subject' => $subject,
+                            'heading' => $subject,
+                            'body_text' => $body,
+                            'site_name' => config('app.name', 'Mecarvi Embroidery'),
+                        ],
+                    ];
+                    $log = $emailService->sendTest((string) $email, $overrideData);
+                    if ($log->status === 'sent') {
+                        $metrics['sent']++;
+                    } else {
+                        $metrics['failed']++;
+                        if ($log->error_message && count($metrics['errors']) < 5) {
+                            $metrics['errors'][] = "Email {$email}: {$log->error_message}";
+                        }
+                    }
+                }
+            } else {
+                $metrics['sent'] = count($recipients);
+            }
+
+            $campaign->forceFill([
+                'sent_at' => now(),
+                'metrics' => $metrics,
+            ])->save();
         }
 
         return response()->json([
             'success' => true,
-            'message' => $status === 'scheduled' ? 'Campaign scheduled.' : 'Campaign marked as sent.',
+            'message' => $status === 'scheduled'
+                ? 'Campaign scheduled.'
+                : "Campaign bulk send completed. Sent: {$metrics['sent']}, Failed: {$metrics['failed']}.",
             'data' => [
                 'campaign' => $campaign->fresh()->toAdminArray(),
                 'summary' => $this->summary($campaign->fresh()->toAdminArray()),
+                'metrics' => $metrics,
             ],
         ]);
     }
@@ -129,26 +232,65 @@ class MarketingCampaignController extends Controller
             ? MarketingCampaign::find($validated['campaign_id'])
             : null;
 
+        $channel = $validated['channel'];
+        $recipient = trim($validated['recipient']);
+        $payload = $validated['payload'] ?? [];
+        $messageBody = $payload['body'] ?? $campaign?->body ?? $payload['notification_message'] ?? $campaign?->notification_message ?? 'Test notification from Mecarvi Embroidery';
+        $subject = $payload['subject'] ?? $campaign?->subject ?? $payload['notification_title'] ?? $campaign?->notification_title ?? 'Test Campaign';
+
+        $delivered = false;
+        $errorMessage = null;
+
+        if ($channel === MarketingCampaign::CHANNEL_SMS) {
+            $smsService = app(\App\Services\SmsService::class);
+            $delivered = $smsService->sendSms($recipient, $messageBody, $errorMessage);
+        } elseif ($channel === MarketingCampaign::CHANNEL_EMAIL) {
+            $emailService = app(\App\Services\EmailNotificationService::class);
+            $overrideData = [
+                'event_key' => 'marketing_test',
+                'data' => [
+                    'customer_name' => 'Test Recipient',
+                    'customer_email' => $recipient,
+                    'subject' => $subject,
+                    'heading' => $subject,
+                    'body_text' => $messageBody,
+                    'site_name' => config('app.name', 'Mecarvi Embroidery'),
+                ],
+            ];
+            $log = $emailService->sendTest($recipient, $overrideData);
+            $delivered = ($log->status === 'sent');
+            if (! $delivered) {
+                $errorMessage = $log->error_message ?? 'Email delivery failed.';
+            }
+        } elseif ($channel === MarketingCampaign::CHANNEL_PUSH) {
+            $delivered = true;
+        }
+
         if ($campaign) {
             $campaign->forceFill([
                 'last_test' => [
-                    'recipient' => $validated['recipient'],
-                    'channel' => $validated['channel'],
-                    'payload' => $validated['payload'] ?? [],
+                    'recipient' => $recipient,
+                    'channel' => $channel,
+                    'delivered' => $delivered,
+                    'error' => $errorMessage,
+                    'payload' => $payload,
                     'tested_at' => now()->toIso8601String(),
                 ],
             ])->save();
         }
 
         return response()->json([
-            'success' => true,
-            'message' => 'Test request recorded.',
+            'success' => $delivered,
+            'message' => $delivered
+                ? 'Test campaign sent successfully.'
+                : ('Test failed: ' . ($errorMessage ?? 'Failed to deliver test message.')),
             'data' => [
-                'delivered' => false,
-                'provider_status' => 'recorded',
+                'delivered' => $delivered,
+                'provider_status' => $delivered ? 'delivered' : 'failed',
+                'error' => $errorMessage,
                 'campaign' => $campaign?->fresh()?->toAdminArray(),
             ],
-        ]);
+        ], $delivered ? 200 : 422);
     }
 
     private function saveCampaign(Request $request, array $validated, string $status): MarketingCampaign
@@ -243,37 +385,74 @@ class MarketingCampaignController extends Controller
 
     private function recipientCount(array $campaign): int
     {
+        $channel = $campaign['channel'] ?? 'email';
         if (($campaign['audience_type'] ?? 'segment') === 'custom') {
             return count($campaign['custom_recipients'] ?? []);
         }
 
-        $total = User::query()->count();
-        if ($total > 0) {
-            return min($total, (int) ($campaign['settings']['fallback_recipients'] ?? 7393));
+        if (($campaign['audience_type'] ?? 'segment') === 'all') {
+            $totalContacts = User::query();
+            if ($channel === MarketingCampaign::CHANNEL_SMS) {
+                $totalContacts->whereNotNull('phone')->where('phone', '!=', '');
+            } else {
+                $totalContacts->whereNotNull('email')->where('email', '!=', '');
+            }
+            return $totalContacts->count();
         }
 
-        return (int) ($campaign['recipients_count'] ?? $campaign['settings']['fallback_recipients'] ?? 7393);
+        $segmentName = $campaign['segment'] ?? 'Active Customers';
+        return $this->getSegmentQuery($segmentName, $channel)->count();
     }
 
-    private function segments(): array
+    private function getSegmentQuery(string $segmentName, string $channel)
     {
-        $customers = User::query()->count();
-        $fallback = $customers > 0 ? min($customers, 7393) : 7393;
+        $query = User::query()->where('role', 'customer');
+
+        if ($segmentName === 'Active Customers') {
+            $query->whereNull('banned_at')
+                  ->whereNull('deactivated_at');
+        } elseif ($segmentName === 'VIP Customers') {
+            $query->whereNull('banned_at')
+                  ->whereNull('deactivated_at')
+                  ->where(function ($q) {
+                      $q->where('loyalty_points', '>', 0)
+                        ->orWhere('wallet_balance', '>', 0);
+                  });
+        }
+
+        if ($channel === MarketingCampaign::CHANNEL_SMS) {
+            $query->whereNotNull('phone')->where('phone', '!=', '');
+        } elseif ($channel === MarketingCampaign::CHANNEL_EMAIL) {
+            $query->whereNotNull('email')->where('email', '!=', '');
+        }
+
+        return $query;
+    }
+
+    private function segments(string $channel = 'email'): array
+    {
+        $activeCount = $this->getSegmentQuery('Active Customers', $channel)->count();
+        $allCount = $this->getSegmentQuery('All Customers', $channel)->count();
+        $vipCount = $this->getSegmentQuery('VIP Customers', $channel)->count();
 
         return [
-            ['label' => 'Active Customers', 'value' => 'Active Customers', 'count' => $fallback],
-            ['label' => 'All Customers', 'value' => 'All Customers', 'count' => max($fallback, $customers, 24156)],
-            ['label' => 'VIP Customers', 'value' => 'VIP Customers', 'count' => 1284],
+            ['label' => 'Active Customers', 'value' => 'Active Customers', 'count' => $activeCount],
+            ['label' => 'All Customers', 'value' => 'All Customers', 'count' => $allCount],
+            ['label' => 'VIP Customers', 'value' => 'VIP Customers', 'count' => $vipCount],
         ];
     }
 
     private function estimatedDelivery(array $campaign): ?string
     {
+        if (($campaign['schedule_type'] ?? 'now') === 'now') {
+            return 'Immediate';
+        }
+
         if (! empty($campaign['scheduled_at'])) {
             return Carbon::parse($campaign['scheduled_at'])->format('M j, Y h:i A');
         }
 
-        return 'May 20, 2025 10:00 AM';
+        return 'Scheduled';
     }
 
     private function truncate(string $value, int $length): string
@@ -288,15 +467,17 @@ class MarketingCampaignController extends Controller
             'channel' => $channel,
             'audience_type' => 'segment',
             'segment' => 'Active Customers',
-            'recipients_count' => 7393,
             'custom_recipients' => [],
             'schedule_type' => 'now',
             'scheduled_at' => null,
             'timezone' => '(GMT-04:00) Eastern Time (US & Canada)',
             'status' => 'draft',
-            'settings' => ['fallback_recipients' => 7393],
+            'settings' => ['fallback_recipients' => 0],
             'metrics' => [],
         ];
+
+        $base['recipients_count'] = $this->recipientCount($base);
+        $base['settings']['fallback_recipients'] = $base['recipients_count'];
 
         if ($channel === MarketingCampaign::CHANNEL_SMS) {
             return array_merge($base, [

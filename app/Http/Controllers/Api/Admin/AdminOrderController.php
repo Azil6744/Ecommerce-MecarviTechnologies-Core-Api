@@ -197,11 +197,22 @@ class AdminOrderController extends Controller
                 $eventKey = match ($newStatus) {
                     'shipped' => 'order_shipped',
                     'delivered', 'completed' => 'order_delivered',
-                    'cancelled' => 'order_cancelled',
+                    'cancelled' => 'customer_order_cancellation',
+                    'confirmed' => 'order_confirmed',
+                    'processing', 'in_production' => 'order_processing',
+                    'pending_verification', 'verification', 'proof_ready' => 'order_verification',
+                    'out_for_delivery' => 'order_out_for_delivery',
+                    'refunded' => 'order_refunded',
+                    'declined' => 'order_declined',
+                    'delayed' => 'order_delayed',
                     default => 'order_status_changed',
                 };
 
                 app(EmailNotificationService::class)->sendOrderEvent($eventKey, $order->fresh(['items']));
+
+                if ($eventKey === 'customer_order_cancellation') {
+                    app(EmailNotificationService::class)->sendOrderEvent('customer_cancellation', $order->fresh(['items']));
+                }
             }
 
             return response()->json([

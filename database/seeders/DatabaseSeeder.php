@@ -40,6 +40,7 @@ class DatabaseSeeder extends Seeder
         // 5. Admin Settings, Gateways, Email Templates, Shipping, and Sample Orders
         $this->call([
             AdminPagesSeeder::class,
+            EmailTemplateSeeder::class,
             DeliveryTimesSeeder::class,
             GlobalAttributeSeeder::class,
             StorePickupLocationsSeeder::class,

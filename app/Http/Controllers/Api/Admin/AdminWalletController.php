@@ -82,9 +82,26 @@ class AdminWalletController extends Controller
 
             if ($response->successful()) {
                 $tx = $response->json('data');
+                $newBal = (float)($tx['balance_after'] ?? 0);
+
+                try {
+                    $emailService = app(\App\Services\EmailNotificationService::class);
+                    $payload = [
+                        'customer_name' => $user->name,
+                        'customer_email' => $user->email,
+                        'amount' => '$' . number_format((float)$request->amount, 2),
+                        'new_balance' => '$' . number_format($newBal, 2),
+                        'site_name' => config('app.name', 'Mecarvi Embroidery'),
+                    ];
+                    $emailService->sendEvent('customer_add_balance', $payload, $user->email);
+                    $emailService->sendEvent('wallet_deposit', $payload, $user->email);
+                } catch (\Throwable $e) {
+                    Log::warning('AdminWalletController credit email failed: ' . $e->getMessage());
+                }
+
                 return response()->json([
                     'message' => 'Wallet credited successfully',
-                    'balance' => (float)($tx['balance_after'] ?? 0),
+                    'balance' => $newBal,
                 ]);
             }
 
@@ -115,9 +132,25 @@ class AdminWalletController extends Controller
 
             if ($response->successful()) {
                 $tx = $response->json('data');
+                $newBal = (float)($tx['balance_after'] ?? 0);
+
+                try {
+                    $emailService = app(\App\Services\EmailNotificationService::class);
+                    $payload = [
+                        'customer_name' => $user->name,
+                        'customer_email' => $user->email,
+                        'amount' => '$' . number_format((float)$request->amount, 2),
+                        'new_balance' => '$' . number_format($newBal, 2),
+                        'site_name' => config('app.name', 'Mecarvi Embroidery'),
+                    ];
+                    $emailService->sendEvent('customer_sub_balance', $payload, $user->email);
+                } catch (\Throwable $e) {
+                    Log::warning('AdminWalletController debit email failed: ' . $e->getMessage());
+                }
+
                 return response()->json([
                     'message' => 'Amount deducted from wallet',
-                    'balance' => (float)($tx['balance_after'] ?? 0),
+                    'balance' => $newBal,
                 ]);
             }
 

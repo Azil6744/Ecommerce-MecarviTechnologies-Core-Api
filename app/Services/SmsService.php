@@ -8,33 +8,39 @@ use Illuminate\Support\Facades\Log;
 
 class SmsService
 {
-    public function sendSms(string $to, string $message): bool
+    public function sendSms(string $to, string $message, ?string &$errorMessage = null): bool
     {
         $settings = SmsSetting::first();
 
-        if (!$settings || !$settings->is_enabled) {
-            Log::info("SMS sending skipped: SMS system is disabled.");
+        $sid = $settings?->twilio_sid ?: config('services.twilio.sid', env('TWILIO_SID'));
+        $token = $settings?->twilio_auth_token ?: config('services.twilio.token', env('TWILIO_AUTH_TOKEN'));
+        $from = $settings?->twilio_from_number ?: config('services.twilio.from', env('TWILIO_FROM'));
+        $provider = $settings?->provider ?: 'twilio';
+
+        $isEnabled = $settings ? (bool) $settings->is_enabled : (! empty($sid) && ! empty($token));
+
+        if (! $isEnabled) {
+            $errorMessage = "SMS sending skipped: SMS system is disabled.";
+            Log::info($errorMessage);
             return false;
         }
 
-        if ($settings->provider === 'twilio') {
-            return $this->sendTwilio($settings, $to, $message);
-        } elseif ($settings->provider === 'infobip') {
-            return $this->sendInfobip($settings, $to, $message);
+        if ($provider === 'twilio') {
+            return $this->sendTwilioWithCreds($sid, $token, $from, $to, $message, $errorMessage);
+        } elseif ($provider === 'infobip') {
+            return $this->sendInfobipWithCreds($settings?->infobip_api_key, $settings?->infobip_base_url, $to, $message, $errorMessage);
         }
 
-        Log::error("SMS sending failed: Unsupported provider {$settings->provider}");
+        $errorMessage = "SMS sending failed: Unsupported provider {$provider}";
+        Log::error($errorMessage);
         return false;
     }
 
-    private function sendTwilio(SmsSetting $settings, string $to, string $message): bool
+    private function sendTwilioWithCreds(?string $sid, ?string $token, ?string $from, string $to, string $message, ?string &$errorMessage = null): bool
     {
-        $sid = $settings->twilio_sid;
-        $token = $settings->twilio_auth_token;
-        $from = $settings->twilio_from_number;
-
-        if (!$sid || !$token || !$from) {
-            Log::error("SMS sending failed: Twilio credentials are not fully configured.");
+        if (! $sid || ! $token || ! $from) {
+            $errorMessage = "SMS sending failed: Twilio SID, Auth Token, or From Number missing.";
+            Log::error($errorMessage);
             return false;
         }
 
@@ -53,21 +59,24 @@ class SmsService
                 return true;
             }
 
-            Log::error("Twilio SMS send error: " . $response->body());
+            $body = $response->json();
+            $errorMessage = $body['message'] ?? $response->body();
+            Log::error("Twilio SMS send error: " . $errorMessage);
             return false;
         } catch (\Throwable $e) {
-            Log::error("Twilio SMS sending exception: " . $e->getMessage());
+            $errorMessage = $e->getMessage();
+            Log::error("Twilio SMS sending exception: " . $errorMessage);
             return false;
         }
     }
 
-    private function sendInfobip(SmsSetting $settings, string $to, string $message): bool
+    private function sendInfobipWithCreds(?string $apiKey, ?string $baseUrl, string $to, string $message, ?string &$errorMessage = null): bool
     {
-        $apiKey = $settings->infobip_api_key;
-        $baseUrl = rtrim($settings->infobip_base_url, '/');
+        $baseUrl = rtrim($baseUrl ?? '', '/');
 
-        if (!$apiKey || !$baseUrl) {
-            Log::error("SMS sending failed: Infobip credentials are not fully configured.");
+        if (! $apiKey || ! $baseUrl) {
+            $errorMessage = "SMS sending failed: Infobip credentials missing.";
+            Log::error($errorMessage);
             return false;
         }
 
@@ -81,11 +90,11 @@ class SmsService
                 'messages' => [
                     [
                         'destinations' => [
-                            ['to' => $to]
+                            ['to' => $to],
                         ],
-                        'text' => $message
-                    ]
-                ]
+                        'text' => $message,
+                    ],
+                ],
             ]);
 
             if ($response->successful()) {
@@ -93,10 +102,12 @@ class SmsService
                 return true;
             }
 
-            Log::error("Infobip SMS send error: " . $response->body());
+            $errorMessage = $response->body();
+            Log::error("Infobip SMS send error: " . $errorMessage);
             return false;
         } catch (\Throwable $e) {
-            Log::error("Infobip SMS sending exception: " . $e->getMessage());
+            $errorMessage = $e->getMessage();
+            Log::error("Infobip SMS sending exception: " . $errorMessage);
             return false;
         }
     }

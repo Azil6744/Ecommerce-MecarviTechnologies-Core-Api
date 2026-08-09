@@ -228,12 +228,19 @@ class EcommerceCoupon extends Model
             'discount_value' => (float) $this->discount_value,
             'min_order_amount' => (float) $this->min_order_amount,
             'usage_limit' => $this->usage_limit,
+            'used_count' => (int) $this->used_count,
+            'usage_remaining' => $this->usage_remaining,
             'starts_at' => $this->starts_at?->toIso8601String(),
             'expires_at' => $this->expires_at?->toIso8601String(),
             'is_active' => (bool) $this->is_active,
             'status' => $this->status,
             'is_expired' => $this->is_expired,
             'is_scheduled' => $this->is_scheduled,
+            'max_discount_amount' => !empty($metadata['max_discount_amount']) ? (float) $metadata['max_discount_amount'] : null,
+            'buy_quantity' => !empty($metadata['buy_quantity']) ? (int) $metadata['buy_quantity'] : null,
+            'get_quantity' => !empty($metadata['get_quantity']) ? (int) $metadata['get_quantity'] : null,
+            'apply_scope' => $metadata['apply_scope'] ?? 'all_products',
+            'per_customer_limit' => !empty($metadata['per_customer_limit']) ? (int) $metadata['per_customer_limit'] : null,
             'metadata' => $metadata,
             'display' => [
                 'note' => $metadata['note'] ?? ($this->expires_at ? 'Valid till: ' . $this->expires_at->toFormattedDateString() : 'Valid offer'),
@@ -257,6 +264,15 @@ class EcommerceCoupon extends Model
             return 'FREE SHIPPING';
         }
 
-        return 'BUY X GET Y';
+        if ($this->discount_type === 'buy_x_get_y') {
+            $buy = (int) ($this->metadata['buy_quantity'] ?? 0);
+            $get = (int) ($this->metadata['get_quantity'] ?? 0);
+            if ($buy > 0 && $get > 0) {
+                return "BUY {$buy} GET {$get} FREE";
+            }
+            return 'BUY X GET Y';
+        }
+
+        return 'SPECIAL PROMO';
     }
 }

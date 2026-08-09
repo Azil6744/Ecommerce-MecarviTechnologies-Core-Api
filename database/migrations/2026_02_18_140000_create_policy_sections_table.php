@@ -18,6 +18,7 @@ return new class extends Migration
             $table->string('hero_subtitle')->nullable();
             $table->string('hero_background_image')->nullable();
             $table->json('sections')->nullable(); // [{ "title": "...", "content": "..." }, ...]
+            $table->json('styling')->nullable(); // typography & styling config
             $table->boolean('is_published')->default(true);
             $table->timestamps();
         });

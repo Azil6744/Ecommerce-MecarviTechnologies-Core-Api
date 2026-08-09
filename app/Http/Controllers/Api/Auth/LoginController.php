@@ -73,4 +73,45 @@ class LoginController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Handle forgot password request.
+     */
+    public function forgotPassword(Request $request)
+    {
+        $request->validate([
+            'email' => ['required', 'email'],
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+        if ($user) {
+            try {
+                $token = \Illuminate\Support\Str::random(60);
+                \Illuminate\Support\Facades\DB::table('password_reset_tokens')->updateOrInsert(
+                    ['email' => $user->email],
+                    [
+                        'token' => \Illuminate\Support\Facades\Hash::make($token),
+                        'created_at' => now(),
+                    ]
+                );
+
+                $resetUrl = url('/reset-password?token=' . $token . '&email=' . urlencode($user->email));
+
+                app(\App\Services\EmailNotificationService::class)->sendEvent('forgot_password', [
+                    'customer_name' => $user->name,
+                    'customer_email' => $user->email,
+                    'reset_link' => $resetUrl,
+                    'expiry_minutes' => 60,
+                    'site_name' => config('app.name', 'Mecarvi Embroidery'),
+                ], $user->email);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Forgot password email failed: ' . $e->getMessage());
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'If an account exists with that email, a password reset link has been sent.',
+        ]);
+    }
 }

@@ -279,6 +279,20 @@ class ProductController extends Controller
             ->where('sort_order', '>=', count($images))
             ->delete();
 
+        if (! empty($attributes['customization_step_details']) && is_array($attributes['customization_step_details'])) {
+            foreach ($attributes['customization_step_details'] as $stepIndex => $stepItem) {
+                if (! empty($stepItem['fields']) && is_array($stepItem['fields'])) {
+                    foreach ($stepItem['fields'] as $fieldIndex => $field) {
+                        if (! empty($field['options']) && is_array($field['options'])) {
+                            foreach ($field['options'] as $optIndex => $optLabel) {
+                                $this->upsertCustomizationOption($product, $field['key'] ?? 'custom_field', (string) $optLabel, $optIndex);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         $this->upsertCustomizationOption($product, 'embroidery_type', $attributes['embroidery_type'] ?? 'Embroidery', 0);
         $this->upsertCustomizationOption($product, 'placement', $attributes['placement'] ?? 'Left Chest', 0);
         $this->upsertCustomizationOption($product, 'size', $attributes['size_label'] ?? 'Standard (4" Wide)', 0);
@@ -290,6 +304,13 @@ class ProductController extends Controller
 
         foreach (Arr::wrap($attributes['product_labels'] ?? []) as $index => $label) {
             $this->upsertCustomizationOption($product, 'product_style', (string) $label, $index);
+        }
+
+        $colorImages = Arr::wrap($attributes['color_images'] ?? []);
+        foreach ($colorImages as $index => $colorItem) {
+            if (is_array($colorItem) && !empty($colorItem['color_name'])) {
+                $this->upsertCustomizationOption($product, 'color', (string) $colorItem['color_name'], $index);
+            }
         }
 
         if (! empty($attributes['product_label'])) {

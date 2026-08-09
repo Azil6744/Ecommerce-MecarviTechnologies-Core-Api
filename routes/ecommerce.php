@@ -46,7 +46,18 @@ Route::prefix('ecommerce')->group(function () {
     Route::post('/order-submissions', [\App\Http\Controllers\Api\Ecommerce\PublicOrderSubmissionController::class, 'store'])
         ->middleware('central.auth:optional');
     Route::post('/support-tickets', [\App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class, 'publicStore']);
-    Route::post('/product-reviews', [\App\Http\Controllers\Api\Ecommerce\EcommerceReviewController::class, 'publicStore']);
+    Route::post('/product-reviews', [\App\Http\Controllers\Api\Ecommerce\EcommerceReviewController::class, 'publicStore'])
+        ->middleware('central.auth:optional');
+    Route::get('/products/{product}/can-review', [\App\Http\Controllers\Api\Ecommerce\EcommerceReviewController::class, 'canReview'])
+        ->middleware('central.auth:optional');
+    Route::get('/product-questions', [\App\Http\Controllers\Api\Ecommerce\EcommerceProductQuestionController::class, 'index'])
+        ->middleware('central.auth:optional');
+    Route::get('/product-questions/{question}', [\App\Http\Controllers\Api\Ecommerce\EcommerceProductQuestionController::class, 'show'])
+        ->middleware('central.auth:optional');
+    Route::post('/product-questions', [\App\Http\Controllers\Api\Ecommerce\EcommerceProductQuestionController::class, 'store'])
+        ->middleware('central.auth:optional');
+    Route::post('/product-questions/{question}/replies', [\App\Http\Controllers\Api\Ecommerce\EcommerceProductQuestionController::class, 'addReply'])
+        ->middleware('central.auth:optional');
     Route::get('/wishlist/shared/{token}', [\App\Http\Controllers\Api\Ecommerce\WishlistController::class, 'shared']);
     Route::get('/payment/orders/{order}', [\App\Http\Controllers\Api\Ecommerce\PaymentController::class, 'showOrder']);
     Route::post('/webhooks/stripe', [\App\Http\Controllers\Api\Ecommerce\StripeWebhookController::class, 'handle']);
@@ -97,7 +108,10 @@ Route::prefix('ecommerce')->group(function () {
         Route::post('/wishlist/items', [\App\Http\Controllers\Api\Ecommerce\WishlistController::class, 'addItem']);
         Route::put('/wishlist/items/{item}', [\App\Http\Controllers\Api\Ecommerce\WishlistController::class, 'updateItem']);
         Route::delete('/wishlist/items/{item}', [\App\Http\Controllers\Api\Ecommerce\WishlistController::class, 'removeItem']);
+        Route::delete('/wishlist/items', [\App\Http\Controllers\Api\Ecommerce\WishlistController::class, 'bulkRemoveItems']);
         Route::post('/wishlist/collections', [\App\Http\Controllers\Api\Ecommerce\WishlistController::class, 'createCollection']);
+        Route::put('/wishlist/collections/{collection}', [\App\Http\Controllers\Api\Ecommerce\WishlistController::class, 'updateCollection']);
+        Route::delete('/wishlist/collections/{collection}', [\App\Http\Controllers\Api\Ecommerce\WishlistController::class, 'deleteCollection']);
         Route::post('/wishlist/add-to-cart', [\App\Http\Controllers\Api\Ecommerce\WishlistController::class, 'addSelectedToCart']);
         Route::post('/wishlist/share', [\App\Http\Controllers\Api\Ecommerce\WishlistController::class, 'share']);
 
@@ -224,8 +238,6 @@ Route::prefix('ecommerce')->group(function () {
         Route::apiResource('affiliates', \App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class)
             ->only(['update', 'destroy'])
             ->middleware('pin.verified:financial_withdrawal');
-        Route::apiResource('product-questions', \App\Http\Controllers\Api\Ecommerce\EcommerceProductQuestionController::class);
-        Route::post('product-questions/{question}/replies', [\App\Http\Controllers\Api\Ecommerce\EcommerceProductQuestionController::class, 'addReply']);
 
         // Order Proofs
         Route::get('/proofs', [\App\Http\Controllers\Api\Ecommerce\OrderProofController::class, 'index']);

@@ -31,6 +31,7 @@ class AdminUserSeeder extends Seeder
             'role' => 'super_admin',
         ]);
 
+        \Spatie\Permission\Models\Role::firstOrCreate(['name' => 'super_admin']);
         $adminUser->assignRole('super_admin');
 
         $this->command->info('Admin user created successfully!');

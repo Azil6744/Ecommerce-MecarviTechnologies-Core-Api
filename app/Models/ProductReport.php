@@ -12,6 +12,30 @@ class ProductReport extends Model
         'issue',
         'description',
         'status',
+        'report_code',
+        'order_number',
+        'quantity',
+        'purchase_date',
+        'issue_type',
+        'category',
+        'product_name',
+        'product_image',
+        'customer_name',
+        'customer_email',
+        'customer_phone',
+        'purchase_location',
+        'attachments_count',
+        'product_images',
+        'admin_feedback',
+        'customer_replies',
+        'status_history',
+    ];
+
+    protected $casts = [
+        'product_images' => 'array',
+        'admin_feedback' => 'array',
+        'customer_replies' => 'array',
+        'status_history' => 'array',
     ];
 
     public function product()
