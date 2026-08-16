@@ -366,11 +366,14 @@ class ProductCustomizationController extends Controller
             if ($value === null || $value === '') {
                 continue;
             }
+            if (is_array($value) && ! array_is_list($value)) {
+                continue;
+            }
             $values = is_array($value) ? $value : [$value];
             $typeKey = $this->optionKey($type);
 
             foreach ($values as $selectedValue) {
-                if ($selectedValue === null || $selectedValue === '') {
+                if ($selectedValue === null || $selectedValue === '' || is_array($selectedValue) || is_object($selectedValue)) {
                     continue;
                 }
                 $valKey = $this->optionKey($selectedValue);
@@ -474,13 +477,22 @@ class ProductCustomizationController extends Controller
             return true;
         }
 
-        $values = is_array($selectedOptions[$type]) ? $selectedOptions[$type] : [$selectedOptions[$type]];
+        $raw = $selectedOptions[$type];
+        $values = is_array($raw) ? (array_is_list($raw) ? $raw : array_keys($raw)) : [$raw];
 
-        return collect($values)->contains(fn ($value) => $this->optionKey($value) === $key || $value === $key);
+        return collect($values)->contains(function ($value) use ($key) {
+            if (is_array($value) || is_object($value)) {
+                return false;
+            }
+            return $this->optionKey($value) === $key || (string) $value === $key;
+        });
     }
 
     private function optionKey(mixed $value): string
     {
+        if (is_array($value) || is_object($value)) {
+            return Str::of(json_encode($value))->lower()->slug('_')->toString();
+        }
         return Str::of((string) $value)->lower()->slug('_')->toString();
     }
 
