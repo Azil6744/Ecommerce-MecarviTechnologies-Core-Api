@@ -16,12 +16,15 @@ class ProductController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Product::with([
-                'category.parent',
-                'previewAssets' => fn ($assetQuery) => $assetQuery->where('is_active', true),
-                'reviews' => fn ($reviewQuery) => $reviewQuery->whereRaw('LOWER(status) = ?', ['approved']),
-            ])
-            ->where('is_active', true);
+        $withRelations = ['category.parent'];
+        if (\Illuminate\Support\Facades\Schema::hasTable('product_preview_assets')) {
+            $withRelations['previewAssets'] = fn ($assetQuery) => $assetQuery->where('is_active', true);
+        }
+        if (\Illuminate\Support\Facades\Schema::hasTable('ecommerce_reviews')) {
+            $withRelations['reviews'] = fn ($reviewQuery) => $reviewQuery->whereRaw('LOWER(status) = ?', ['approved']);
+        }
+
+        $query = Product::with($withRelations)->where('is_active', true);
 
         if ($request->filled('category_id')) {
             $category = Category::with('children')->find($request->category_id);
@@ -171,6 +174,17 @@ class ProductController extends Controller
     private function attachReviewStats($products): void
     {
         if ($products->isEmpty()) {
+            return;
+        }
+
+        if (! \Illuminate\Support\Facades\Schema::hasTable('ecommerce_reviews')) {
+            $products->each(function (Product $product) {
+                $product->setAttribute('review_stats', [
+                    'average_rating' => null,
+                    'review_count' => 0,
+                    'rating_distribution' => [5 => 0, 4 => 0, 3 => 0, 2 => 0, 1 => 0],
+                ]);
+            });
             return;
         }
 
