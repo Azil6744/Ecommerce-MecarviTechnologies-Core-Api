@@ -132,80 +132,118 @@ class ProductController extends Controller
      */
     public function show(Product $product)
     {
-        if (!$product->is_active) {
-            return response()->json(['message' => 'Product not found'], 404);
+        try {
+            if (!$product->is_active) {
+                return response()->json(['message' => 'Product not found'], 404);
+            }
+
+            $loads = [];
+            if (\Illuminate\Support\Facades\Schema::hasTable('categories')) {
+                $loads[] = 'category.parent';
+            }
+            if (\Illuminate\Support\Facades\Schema::hasTable('product_preview_assets')) {
+                $loads['previewAssets'] = fn ($query) => $query->where('is_active', true);
+            }
+            if (\Illuminate\Support\Facades\Schema::hasTable('ecommerce_coupons') && \Illuminate\Support\Facades\Schema::hasTable('ecommerce_coupon_product')) {
+                $loads['coupons'] = fn ($query) => $query
+                    ->where('is_active', true)
+                    ->where(function ($inner) {
+                        $inner->whereNull('starts_at')->orWhere('starts_at', '<=', now());
+                    })
+                    ->where(function ($inner) {
+                        $inner->whereNull('expires_at')->orWhere('expires_at', '>=', now());
+                    })
+                    ->where(function ($inner) {
+                        $inner->whereNull('usage_limit')->orWhereColumn('used_count', '<', 'usage_limit');
+                    });
+            }
+            if (\Illuminate\Support\Facades\Schema::hasTable('product_customization_options')) {
+                $loads['customizationOptions'] = fn ($query) => $query->where('is_active', true);
+            }
+            if (\Illuminate\Support\Facades\Schema::hasTable('product_pricing_rules')) {
+                $loads['pricingRules'] = fn ($query) => $query->where('is_active', true);
+            }
+            if (\Illuminate\Support\Facades\Schema::hasTable('ecommerce_reviews')) {
+                $loads['reviews'] = fn ($query) => $query->whereRaw('LOWER(status) = ?', ['approved'])->latest();
+            }
+
+            if (!empty($loads)) {
+                try {
+                    $product->load($loads);
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('ProductController@show load relations warning: ' . $e->getMessage());
+                }
+            }
+
+            $relatedProducts = $this->relationProducts($product, 'related', 8, true);
+            $recentWorkProducts = $this->relationProducts($product, 'recent_work', 5, true);
+            $featuredProducts = $this->relationProducts($product, 'featured', 8, true);
+            $this->attachReviewStats($relatedProducts);
+            $this->attachReviewStats($recentWorkProducts);
+            $this->attachReviewStats($featuredProducts);
+
+            $this->attachReviewStats(collect([$product]));
+            $this->attachFrontendAliases(collect([$product]));
+            $this->attachQuestionStats(collect([$product]));
+            $this->attachPublicCoupons(collect([$product]));
+
+            $custOptions = $product->customizationOptions ?? collect();
+            $product->setAttribute('customization_options_grouped', $custOptions ? $custOptions->groupBy('option_type')->values() : []);
+            $product->setAttribute('related_products', $relatedProducts);
+            $product->setAttribute('recent_work_products', $recentWorkProducts);
+            $product->setAttribute('featured_products', $featuredProducts);
+
+            return response()->json($product);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('ProductController@show error: ' . $e->getMessage());
+            return response()->json($product);
         }
-
-        $product->load([
-            'category.parent',
-            'previewAssets' => fn ($query) => $query->where('is_active', true),
-            'coupons' => fn ($query) => $query
-                ->where('is_active', true)
-                ->where(function ($inner) {
-                    $inner->whereNull('starts_at')->orWhere('starts_at', '<=', now());
-                })
-                ->where(function ($inner) {
-                    $inner->whereNull('expires_at')->orWhere('expires_at', '>=', now());
-                })
-                ->where(function ($inner) {
-                    $inner->whereNull('usage_limit')->orWhereColumn('used_count', '<', 'usage_limit');
-                }),
-            'customizationOptions' => fn ($query) => $query->where('is_active', true),
-            'pricingRules' => fn ($query) => $query->where('is_active', true),
-            'reviews' => fn ($query) => $query->whereRaw('LOWER(status) = ?', ['approved'])->latest(),
-        ]);
-
-        $relatedProducts = $this->relationProducts($product, 'related', 8, true);
-        $recentWorkProducts = $this->relationProducts($product, 'recent_work', 5, true);
-        $featuredProducts = $this->relationProducts($product, 'featured', 8, true);
-        $this->attachReviewStats($relatedProducts);
-        $this->attachReviewStats($recentWorkProducts);
-        $this->attachReviewStats($featuredProducts);
-
-        $this->attachReviewStats(collect([$product]));
-        $this->attachFrontendAliases(collect([$product]));
-        $this->attachQuestionStats(collect([$product]));
-        $this->attachPublicCoupons(collect([$product]));
-        $product->setAttribute('customization_options_grouped', $product->customizationOptions->groupBy('option_type')->values());
-        $product->setAttribute('related_products', $relatedProducts);
-        $product->setAttribute('recent_work_products', $recentWorkProducts);
-        $product->setAttribute('featured_products', $featuredProducts);
-
-        return response()->json($product);
     }
 
     private function relationProducts(Product $product, string $type, int $limit, bool $fallback = false)
     {
-        $eagerLoads = [
-            'category.parent',
-            'previewAssets' => fn ($assetQuery) => $assetQuery->where('is_active', true),
-            'reviews' => fn ($reviewQuery) => $reviewQuery->whereRaw('LOWER(status) = ?', ['approved']),
-        ];
+        try {
+            $eagerLoads = [];
+            if (\Illuminate\Support\Facades\Schema::hasTable('categories')) {
+                $eagerLoads[] = 'category.parent';
+            }
+            if (\Illuminate\Support\Facades\Schema::hasTable('product_preview_assets')) {
+                $eagerLoads['previewAssets'] = fn ($assetQuery) => $assetQuery->where('is_active', true);
+            }
+            if (\Illuminate\Support\Facades\Schema::hasTable('ecommerce_reviews')) {
+                $eagerLoads['reviews'] = fn ($reviewQuery) => $reviewQuery->whereRaw('LOWER(status) = ?', ['approved']);
+            }
 
-        $products = $product->relatedProducts()
-            ->with($eagerLoads)
-            ->where('is_active', true)
-            ->wherePivot('relation_type', $type)
-            ->orderBy('product_related_products.sort_order')
-            ->limit($limit)
-            ->get();
+            if (\Illuminate\Support\Facades\Schema::hasTable('product_related_products')) {
+                $products = $product->relatedProducts()
+                    ->with($eagerLoads)
+                    ->where('is_active', true)
+                    ->wherePivot('relation_type', $type)
+                    ->orderBy('product_related_products.sort_order')
+                    ->limit($limit)
+                    ->get();
 
-        if ($products->isNotEmpty() || ! $fallback) {
-            $this->attachFrontendAliases($products);
-            return $products;
+                if ($products->isNotEmpty() || ! $fallback) {
+                    $this->attachFrontendAliases($products);
+                    return $products;
+                }
+            }
+
+            $fallbackProducts = Product::query()
+                ->with($eagerLoads)
+                ->where('is_active', true)
+                ->where('id', '!=', $product->id)
+                ->when($product->category_id, fn ($q) => $q->where('category_id', $product->category_id))
+                ->latest()
+                ->limit($limit)
+                ->get();
+
+            $this->attachFrontendAliases($fallbackProducts);
+            return $fallbackProducts;
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('ProductController@relationProducts warning: ' . $e->getMessage());
+            return collect();
         }
-
-        $fallbackProducts = Product::query()
-            ->with($eagerLoads)
-            ->where('is_active', true)
-            ->where('id', '!=', $product->id)
-            ->where('category_id', $product->category_id)
-            ->latest()
-            ->limit($limit)
-            ->get();
-
-        $this->attachFrontendAliases($fallbackProducts);
-        return $fallbackProducts;
     }
 
     private function attachReviewStats($products): void
