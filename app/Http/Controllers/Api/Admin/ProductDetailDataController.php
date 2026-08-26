@@ -22,7 +22,8 @@ class ProductDetailDataController extends Controller
                 'customizationOptions',
                 'pricingRules',
                 'coupons',
-                'relatedProducts',
+                'relatedProducts.previewAssets',
+                'relatedProducts.category',
             ]),
         ]);
     }

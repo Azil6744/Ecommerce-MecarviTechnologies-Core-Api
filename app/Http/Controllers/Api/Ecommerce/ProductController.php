@@ -19,6 +19,7 @@ class ProductController extends Controller
         $query = Product::with([
                 'category.parent',
                 'previewAssets' => fn ($assetQuery) => $assetQuery->where('is_active', true),
+                'reviews' => fn ($reviewQuery) => $reviewQuery->whereRaw('LOWER(status) = ?', ['approved']),
             ])
             ->where('is_active', true);
 
@@ -110,12 +111,8 @@ class ProductController extends Controller
                 }),
             'customizationOptions' => fn ($query) => $query->where('is_active', true),
             'pricingRules' => fn ($query) => $query->where('is_active', true),
+            'reviews' => fn ($query) => $query->whereRaw('LOWER(status) = ?', ['approved'])->latest(),
         ]);
-        $product->setRelation('reviews', EcommerceReview::query()
-            ->where('product_id', (string) $product->id)
-            ->whereRaw('LOWER(status) = ?', ['approved'])
-            ->latest()
-            ->get());
 
         $relatedProducts = $this->relationProducts($product, 'related', 8, true);
         $recentWorkProducts = $this->relationProducts($product, 'recent_work', 5, true);
@@ -138,7 +135,14 @@ class ProductController extends Controller
 
     private function relationProducts(Product $product, string $type, int $limit, bool $fallback = false)
     {
+        $eagerLoads = [
+            'category.parent',
+            'previewAssets' => fn ($assetQuery) => $assetQuery->where('is_active', true),
+            'reviews' => fn ($reviewQuery) => $reviewQuery->whereRaw('LOWER(status) = ?', ['approved']),
+        ];
+
         $products = $product->relatedProducts()
+            ->with($eagerLoads)
             ->where('is_active', true)
             ->wherePivot('relation_type', $type)
             ->orderBy('product_related_products.sort_order')
@@ -146,27 +150,38 @@ class ProductController extends Controller
             ->get();
 
         if ($products->isNotEmpty() || ! $fallback) {
+            $this->attachFrontendAliases($products);
             return $products;
         }
 
-        return Product::query()
+        $fallbackProducts = Product::query()
+            ->with($eagerLoads)
             ->where('is_active', true)
             ->where('id', '!=', $product->id)
             ->where('category_id', $product->category_id)
             ->latest()
             ->limit($limit)
             ->get();
+
+        $this->attachFrontendAliases($fallbackProducts);
+        return $fallbackProducts;
     }
 
     private function attachReviewStats($products): void
     {
+        if ($products->isEmpty()) {
+            return;
+        }
+
+        $missing = $products->filter(fn (Product $p) => ! $p->relationLoaded('reviews'));
+        if ($missing->isNotEmpty()) {
+            $missing->load([
+                'reviews' => fn ($reviewQuery) => $reviewQuery->whereRaw('LOWER(status) = ?', ['approved']),
+            ]);
+        }
+
         $products->each(function (Product $product) {
-            $reviews = $product->relationLoaded('reviews')
-                ? $product->reviews
-                : EcommerceReview::query()
-                    ->where('product_id', (string) $product->id)
-                    ->whereRaw('LOWER(status) = ?', ['approved'])
-                    ->get();
+            $reviews = $product->reviews ?? collect();
 
             $reviewValues = $reviews->pluck('rating')->map(fn ($rating) => (int) $rating)->filter();
             $averageRating = $reviewValues->isNotEmpty() ? round($reviewValues->avg(), 1) : null;

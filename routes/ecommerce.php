@@ -186,7 +186,7 @@ Route::prefix('ecommerce')->group(function () {
 
         // Other E-Commerce Features
         Route::apiResource('quotations', \App\Http\Controllers\Api\Ecommerce\EcommerceQuotationController::class)
-            ->except(['index', 'show'])
+            ->only(['update', 'destroy'])
             ->middleware('pin.verified:order_change');
         Route::apiResource('quotations', \App\Http\Controllers\Api\Ecommerce\EcommerceQuotationController::class)
             ->only(['index', 'show']);
@@ -198,7 +198,7 @@ Route::prefix('ecommerce')->group(function () {
         Route::apiResource('memberships', \App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class)
             ->only(['index', 'show']);
         Route::apiResource('disputes', \App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class)
-            ->except(['index', 'show'])
+            ->only(['update', 'destroy'])
             ->middleware('pin.verified:support_identity_verification');
         Route::apiResource('disputes', \App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class)
             ->only(['index', 'show']);

@@ -59,8 +59,9 @@ class EcommerceQuotationController extends Controller
 
         $user = $request->user();
         $userId = $user?->id;
-        if (! $userId && ! empty($data['customer_email'])) {
-            $existingUser = \App\Models\User::where('email', $data['customer_email'])->first();
+        $customerEmail = strtolower(trim((string) ($data['customer_email'] ?? $data['contact_email'] ?? '')));
+        if (! $userId && $customerEmail !== '') {
+            $existingUser = \App\Models\User::whereRaw('LOWER(email) = ?', [$customerEmail])->first();
             if ($existingUser) {
                 $userId = $existingUser->id;
             }
@@ -176,14 +177,20 @@ class EcommerceQuotationController extends Controller
         $user = $request->user();
 
         if ($user && (! method_exists($user, 'isSuperAdmin') || ! $user->isSuperAdmin())) {
-            $query->where(function ($q) use ($user) {
-                $q->where('user_id', $user->id)
-                  ->orWhere('customer_email', $user->email)
-                  ->orWhere('contact_email', $user->email);
+            $userEmail = strtolower(trim((string) $user->email));
+            $query->where(function ($q) use ($user, $userEmail) {
+                $q->where('user_id', $user->id);
+                if ($userEmail !== '') {
+                    $q->orWhereRaw('LOWER(customer_email) = ?', [$userEmail])
+                      ->orWhereRaw('LOWER(contact_email) = ?', [$userEmail]);
+                }
             });
         } elseif (! $user && $request->filled('email')) {
-            $query->where('customer_email', $request->input('email'))
-                  ->orWhere('contact_email', $request->input('email'));
+            $reqEmail = strtolower(trim((string) $request->input('email')));
+            $query->where(function ($q) use ($reqEmail) {
+                $q->whereRaw('LOWER(customer_email) = ?', [$reqEmail])
+                  ->orWhereRaw('LOWER(contact_email) = ?', [$reqEmail]);
+            });
         }
 
         return $query;

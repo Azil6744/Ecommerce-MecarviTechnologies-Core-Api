@@ -25,6 +25,7 @@ class CompareProductController extends Controller
             ->with([
                 'product.category.parent',
                 'product.previewAssets' => fn ($query) => $query->where('is_active', true),
+                'product.reviews' => fn ($query) => $query->whereRaw('LOWER(status) = ?', ['approved']),
             ])
             ->latest()
             ->get();
@@ -118,12 +119,19 @@ class CompareProductController extends Controller
 
     private function attachReviewStats($products): void
     {
-        $products->each(function (Product $product) {
-            $reviews = EcommerceReview::query()
-                ->where('product_id', (string) $product->id)
-                ->whereRaw('LOWER(status) = ?', ['approved'])
-                ->get();
+        if ($products->isEmpty()) {
+            return;
+        }
 
+        $missing = $products->filter(fn (Product $p) => ! $p->relationLoaded('reviews'));
+        if ($missing->isNotEmpty()) {
+            $missing->load([
+                'reviews' => fn ($query) => $query->whereRaw('LOWER(status) = ?', ['approved']),
+            ]);
+        }
+
+        $products->each(function (Product $product) {
+            $reviews = $product->reviews ?? collect();
             $reviewValues = $reviews->pluck('rating')->map(fn ($rating) => (int) $rating)->filter();
             $product->setAttribute('review_stats', [
                 'average_rating' => $reviewValues->isNotEmpty() ? round($reviewValues->avg(), 1) : 0,
