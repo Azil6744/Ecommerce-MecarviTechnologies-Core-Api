@@ -23,7 +23,7 @@ class ProductController extends Controller
             ])
             ->where('is_active', true);
 
-        if ($request->has('category_id')) {
+        if ($request->filled('category_id')) {
             $category = Category::with('children')->find($request->category_id);
 
             if ($category) {
@@ -34,7 +34,7 @@ class ProductController extends Controller
             }
         }
 
-        if ($request->has('search')) {
+        if ($request->filled('search')) {
             $query->where(function($q) use ($request) {
                 $q->where('name', 'like', '%' . $request->search . '%')
                   ->orWhere('sku', 'like', '%' . $request->search . '%')
@@ -43,21 +43,21 @@ class ProductController extends Controller
             });
         }
 
-        if ($request->has('min_price')) {
-            $query->whereRaw('CAST(COALESCE(sale_price, price) AS REAL) >= ?', [(float) $request->min_price]);
+        if ($request->filled('min_price')) {
+            $query->whereRaw('CAST(COALESCE(sale_price, price) AS DECIMAL(10,2)) >= ?', [(float) $request->min_price]);
         }
 
-        if ($request->has('max_price')) {
-            $query->whereRaw('CAST(COALESCE(sale_price, price) AS REAL) <= ?', [(float) $request->max_price]);
+        if ($request->filled('max_price')) {
+            $query->whereRaw('CAST(COALESCE(sale_price, price) AS DECIMAL(10,2)) <= ?', [(float) $request->max_price]);
         }
 
-        if ($request->has('sort')) {
+        if ($request->filled('sort')) {
             switch ($request->sort) {
                 case 'price_asc':
-                    $query->orderByRaw('CAST(COALESCE(sale_price, price) AS REAL) asc');
+                    $query->orderByRaw('CAST(COALESCE(sale_price, price) AS DECIMAL(10,2)) asc');
                     break;
                 case 'price_desc':
-                    $query->orderByRaw('CAST(COALESCE(sale_price, price) AS REAL) desc');
+                    $query->orderByRaw('CAST(COALESCE(sale_price, price) AS DECIMAL(10,2)) desc');
                     break;
                 case 'name_asc':
                     $query->orderBy('name', 'asc');
@@ -66,6 +66,7 @@ class ProductController extends Controller
                     $query->orderBy('name', 'desc');
                     break;
                 case 'newest':
+                case 'relevance':
                     $query->orderBy('created_at', 'desc');
                     break;
                 case 'oldest':
