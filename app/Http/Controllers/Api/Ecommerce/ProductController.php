@@ -16,78 +16,115 @@ class ProductController extends Controller
      */
     public function index(Request $request)
     {
-        $withRelations = ['category.parent'];
-        if (\Illuminate\Support\Facades\Schema::hasTable('product_preview_assets')) {
-            $withRelations['previewAssets'] = fn ($assetQuery) => $assetQuery->where('is_active', true);
-        }
-        if (\Illuminate\Support\Facades\Schema::hasTable('ecommerce_reviews')) {
-            $withRelations['reviews'] = fn ($reviewQuery) => $reviewQuery->whereRaw('LOWER(status) = ?', ['approved']);
-        }
+        try {
+            $withRelations = [];
+            if (\Illuminate\Support\Facades\Schema::hasTable('categories')) {
+                $withRelations[] = 'category';
+            }
+            if (\Illuminate\Support\Facades\Schema::hasTable('product_preview_assets')) {
+                $withRelations['previewAssets'] = fn ($assetQuery) => $assetQuery->where('is_active', true);
+            }
+            if (\Illuminate\Support\Facades\Schema::hasTable('ecommerce_reviews')) {
+                $withRelations['reviews'] = fn ($reviewQuery) => $reviewQuery->whereRaw('LOWER(status) = ?', ['approved']);
+            }
 
-        $query = Product::with($withRelations)->where('is_active', true);
+            $query = Product::with($withRelations)->where('is_active', true);
 
-        if ($request->filled('category_id')) {
-            $category = Category::with('children')->find($request->category_id);
+            if ($request->filled('category_id')) {
+                $categoryId = $request->category_id;
+                try {
+                    $category = Category::with('children')->find($categoryId);
+                    if ($category && $category->children && $category->children->isNotEmpty()) {
+                        $categoryIds = $category->children->pluck('id')->prepend($category->id);
+                        $query->whereIn('category_id', $categoryIds);
+                    } else {
+                        $query->where('category_id', $categoryId);
+                    }
+                } catch (\Throwable) {
+                    $query->where('category_id', $categoryId);
+                }
+            }
 
-            if ($category) {
-                $categoryIds = $category->children->pluck('id')->prepend($category->id);
-                $query->whereIn('category_id', $categoryIds);
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $query->where(function($q) use ($search) {
+                    $q->where('name', 'like', '%' . $search . '%')
+                      ->orWhere('sku', 'like', '%' . $search . '%')
+                      ->orWhere('description', 'like', '%' . $search . '%');
+                });
+            }
+
+            if ($request->filled('min_price')) {
+                $minPrice = (float) $request->min_price;
+                $query->where(function ($q) use ($minPrice) {
+                    $q->where('sale_price', '>=', $minPrice)
+                      ->orWhere(function ($sub) use ($minPrice) {
+                          $sub->whereNull('sale_price')->where('price', '>=', $minPrice);
+                      });
+                });
+            }
+
+            if ($request->filled('max_price')) {
+                $maxPrice = (float) $request->max_price;
+                $query->where(function ($q) use ($maxPrice) {
+                    $q->where(function ($sub) use ($maxPrice) {
+                        $sub->whereNotNull('sale_price')->where('sale_price', '<=', $maxPrice);
+                    })->orWhere(function ($sub) use ($maxPrice) {
+                        $sub->whereNull('sale_price')->where('price', '<=', $maxPrice);
+                    });
+                });
+            }
+
+            if ($request->filled('sort')) {
+                switch ($request->sort) {
+                    case 'price_asc':
+                        $query->orderByRaw('COALESCE(sale_price, price) asc');
+                        break;
+                    case 'price_desc':
+                        $query->orderByRaw('COALESCE(sale_price, price) desc');
+                        break;
+                    case 'name_asc':
+                        $query->orderBy('name', 'asc');
+                        break;
+                    case 'name_desc':
+                        $query->orderBy('name', 'desc');
+                        break;
+                    case 'newest':
+                    case 'relevance':
+                        $query->orderBy('created_at', 'desc');
+                        break;
+                    case 'oldest':
+                        $query->orderBy('created_at', 'asc');
+                        break;
+                    default:
+                        $query->orderBy('created_at', 'desc');
+                }
             } else {
-                $query->where('category_id', $request->category_id);
+                $query->orderBy('created_at', 'desc');
+            }
+
+            $products = $query->paginate((int) $request->get('per_page', 12));
+            $this->attachReviewStats($products->getCollection());
+            $this->attachFrontendAliases($products->getCollection());
+            $this->attachQuestionStats($products->getCollection());
+
+            return response()->json($products);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('ProductController@index error: ' . $e->getMessage());
+
+            try {
+                $fallback = Product::where('is_active', true)->paginate((int) $request->get('per_page', 12));
+                return response()->json($fallback);
+            } catch (\Throwable $e2) {
+                return response()->json([
+                    'current_page' => 1,
+                    'data' => [],
+                    'total' => 0,
+                    'per_page' => 12,
+                    'last_page' => 1,
+                ]);
             }
         }
-
-        if ($request->filled('search')) {
-            $query->where(function($q) use ($request) {
-                $q->where('name', 'like', '%' . $request->search . '%')
-                  ->orWhere('sku', 'like', '%' . $request->search . '%')
-                  ->orWhere('description', 'like', '%' . $request->search . '%')
-                  ->orWhere('tags', 'like', '%' . $request->search . '%');
-            });
-        }
-
-        if ($request->filled('min_price')) {
-            $query->whereRaw('CAST(COALESCE(sale_price, price) AS DECIMAL(10,2)) >= ?', [(float) $request->min_price]);
-        }
-
-        if ($request->filled('max_price')) {
-            $query->whereRaw('CAST(COALESCE(sale_price, price) AS DECIMAL(10,2)) <= ?', [(float) $request->max_price]);
-        }
-
-        if ($request->filled('sort')) {
-            switch ($request->sort) {
-                case 'price_asc':
-                    $query->orderByRaw('CAST(COALESCE(sale_price, price) AS DECIMAL(10,2)) asc');
-                    break;
-                case 'price_desc':
-                    $query->orderByRaw('CAST(COALESCE(sale_price, price) AS DECIMAL(10,2)) desc');
-                    break;
-                case 'name_asc':
-                    $query->orderBy('name', 'asc');
-                    break;
-                case 'name_desc':
-                    $query->orderBy('name', 'desc');
-                    break;
-                case 'newest':
-                case 'relevance':
-                    $query->orderBy('created_at', 'desc');
-                    break;
-                case 'oldest':
-                    $query->orderBy('created_at', 'asc');
-                    break;
-                default:
-                    $query->orderBy('created_at', 'desc');
-            }
-        } else {
-            $query->orderBy('created_at', 'desc');
-        }
-
-        $products = $query->paginate((int) $request->get('per_page', 12));
-        $this->attachReviewStats($products->getCollection());
-        $this->attachFrontendAliases($products->getCollection());
-        $this->attachQuestionStats($products->getCollection());
-
-        return response()->json($products);
     }
 
     /**
