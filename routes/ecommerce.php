@@ -23,6 +23,8 @@ Route::prefix('ecommerce')->group(function () {
     Route::post('/pickup-locations/eligible', [\App\Http\Controllers\Api\Ecommerce\PublicPickupLocationController::class, 'getEligibleLocations']);
     Route::get('/products', [\App\Http\Controllers\Api\Ecommerce\ProductController::class, 'index']);
     Route::get('/coupons/validate', [\App\Http\Controllers\Api\Admin\EcommerceCouponController::class, 'validateCoupon']);
+    Route::get('/coupons', [\App\Http\Controllers\Api\Admin\EcommerceCouponController::class, 'publicIndex'])
+        ->middleware('central.auth:optional');
     Route::get('/charity-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getCharity']);
     Route::get('/charities', [\App\Http\Controllers\Api\Admin\CharityController::class, 'publicIndex']);
     Route::get('/tips-config', [\App\Http\Controllers\Api\Admin\EcommerceConfigController::class, 'getTips']);
@@ -44,6 +46,8 @@ Route::prefix('ecommerce')->group(function () {
     Route::post('/customization-drafts/{draft}/submit-quote', [\App\Http\Controllers\Api\Ecommerce\ProductCustomizationController::class, 'submitQuote'])
         ->middleware('central.auth:optional');
     Route::post('/order-submissions', [\App\Http\Controllers\Api\Ecommerce\PublicOrderSubmissionController::class, 'store'])
+        ->middleware('central.auth:optional');
+    Route::post('/quotations', [\App\Http\Controllers\Api\Ecommerce\EcommerceQuotationController::class, 'store'])
         ->middleware('central.auth:optional');
     Route::post('/support-tickets', [\App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class, 'publicStore']);
     Route::post('/product-reviews', [\App\Http\Controllers\Api\Ecommerce\EcommerceReviewController::class, 'publicStore'])
@@ -100,8 +104,7 @@ Route::prefix('ecommerce')->group(function () {
         Route::delete('/cart/items/{id}', [\App\Http\Controllers\Api\Ecommerce\CartController::class, 'removeItem']);
         Route::delete('/cart', [\App\Http\Controllers\Api\Ecommerce\CartController::class, 'clear']);
 
-        // Coupons
-        Route::get('/coupons', [\App\Http\Controllers\Api\Admin\EcommerceCouponController::class, 'publicIndex']);
+        // Coupons (Public route defined above with central.auth:optional)
 
         // Wishlist
         Route::get('/wishlist', [\App\Http\Controllers\Api\Ecommerce\WishlistController::class, 'index']);

@@ -193,4 +193,57 @@ class WalletService
             return null;
         }
     }
+
+    /**
+     * Get user's live wallet balance from Central Auth DB / API or local fallback.
+     */
+    public static function getWalletBalance(User $user, ?string $token = null): float
+    {
+        try {
+            if (config('database.connections.central_auth')) {
+                $cUser = \Illuminate\Support\Facades\DB::connection('central_auth')
+                    ->table('users')
+                    ->whereRaw('LOWER(email) = ?', [strtolower(trim($user->email))])
+                    ->first();
+                if ($cUser) {
+                    $cWallet = \Illuminate\Support\Facades\DB::connection('central_auth')
+                        ->table('central_wallets')
+                        ->where('user_id', $cUser->id)
+                        ->first();
+                    if ($cWallet) {
+                        $bal = (float) $cWallet->balance;
+                        if ((float)$user->wallet_balance !== $bal) {
+                            $user->wallet_balance = $bal;
+                            $user->save();
+                        }
+                        return $bal;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning("WalletService::getWalletBalance central DB lookup failed: " . $e->getMessage());
+        }
+
+        $centralUrl = rtrim(config('services.central_auth.url', env('CENTRAL_AUTH_URL', 'http://localhost:8001/api')), '/');
+        if ($token) {
+            try {
+                $response = Http::acceptJson()
+                    ->withToken($token)
+                    ->timeout(3)
+                    ->get($centralUrl . '/user/wallet');
+                if ($response->successful()) {
+                    $bal = (float) $response->json('data.balance');
+                    if ((float)$user->wallet_balance !== $bal) {
+                        $user->wallet_balance = $bal;
+                        $user->save();
+                    }
+                    return $bal;
+                }
+            } catch (\Throwable $e) {
+                Log::warning("WalletService::getWalletBalance HTTP API lookup failed: " . $e->getMessage());
+            }
+        }
+
+        return (float) ($user->wallet_balance ?? 0.00);
+    }
 }

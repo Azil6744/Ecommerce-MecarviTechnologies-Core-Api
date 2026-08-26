@@ -38,10 +38,18 @@ class AdminQuotationController extends Controller
     public function updateStatus(Request $request, EcommerceQuotation $quotation)
     {
         $request->validate([
-            'status' => 'required|in:pending,quoted,accepted,rejected,expired',
+            'status' => 'required|string|in:pending,quoted,accepted,approved,rejected,declined,revision_requested,expired',
         ]);
 
-        $quotation->update(['status' => $request->status]);
+        $status = strtolower($request->status);
+        if ($status === 'approved') {
+            $status = 'accepted';
+        }
+        if ($status === 'rejected') {
+            $status = 'declined';
+        }
+
+        $quotation->update(['status' => $status]);
 
         return response()->json($quotation);
     }

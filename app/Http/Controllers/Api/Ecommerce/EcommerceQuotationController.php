@@ -38,16 +38,36 @@ class EcommerceQuotationController extends Controller
             'valid_until' => ['nullable', 'date'],
         ]);
 
+        if (empty($data['contact_email']) && ! empty($data['customer_email'])) {
+            $data['contact_email'] = $data['customer_email'];
+        }
+        if (empty($data['customer_email']) && ! empty($data['contact_email'])) {
+            $data['customer_email'] = $data['contact_email'];
+        }
+
+        if (empty($data['valid_until'])) {
+            $data['valid_until'] = now()->addDays(14)->toDateString();
+        }
+
         if (empty($data['quote_number'])) {
             $data['quote_number'] = $this->generateQuoteNumber();
         }
 
         if (! array_key_exists('status', $data) || blank($data['status'])) {
-            $data['status'] = 'Pending Approval';
+            $data['status'] = 'pending';
+        }
+
+        $user = $request->user();
+        $userId = $user?->id;
+        if (! $userId && ! empty($data['customer_email'])) {
+            $existingUser = \App\Models\User::where('email', $data['customer_email'])->first();
+            if ($existingUser) {
+                $userId = $existingUser->id;
+            }
         }
 
         if (Schema::hasColumn((new EcommerceQuotation)->getTable(), 'user_id')) {
-            $data['user_id'] = $request->user()->id;
+            $data['user_id'] = $userId;
         }
 
         $item = EcommerceQuotation::create($data)->load(['product', 'user:id,name,email']);
@@ -95,6 +115,8 @@ class EcommerceQuotationController extends Controller
             'status' => ['sometimes', 'required', 'string', 'max:80'],
             'total_estimated' => ['sometimes', 'nullable', 'numeric', 'min:0'],
             'valid_until' => ['sometimes', 'nullable', 'date'],
+            'decline_reason' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'decline_info' => ['sometimes', 'nullable', 'string', 'max:1000'],
         ];
 
         if ($isAdmin) {
@@ -103,6 +125,19 @@ class EcommerceQuotationController extends Controller
         }
 
         $validated = $request->validate($rules);
+
+        // Store decline reasons into metadata if provided
+        if (!empty($validated['decline_reason'])) {
+            $meta = $item->metadata ?? [];
+            $meta['decline_reason'] = [
+                'reason' => $validated['decline_reason'],
+                'additional_info' => $validated['decline_info'] ?? null,
+                'declined_at' => now()->toIso8601String(),
+            ];
+            $validated['metadata'] = array_merge($item->metadata ?? [], $meta);
+            unset($validated['decline_reason'], $validated['decline_info']);
+        }
+
         $item->update($validated);
         $item->load(['product', 'user:id,name,email']);
 
@@ -115,7 +150,7 @@ class EcommerceQuotationController extends Controller
                         'customer_name' => $item->customer_name ?: 'Customer',
                         'customer_email' => $email,
                         'quote_number' => $item->quote_number,
-                        'total_amount' => '$' . number_format((float) $item->total_estimated, 2),
+                        'total_amount' => '$' . number_format((float) ($item->quote_price ?? $item->total_estimated), 2),
                         'site_name' => config('app.name', 'Mecarvi Embroidery'),
                     ], $email);
                 }
@@ -140,11 +175,15 @@ class EcommerceQuotationController extends Controller
         $query = EcommerceQuotation::query()->with(['product', 'user:id,name,email']);
         $user = $request->user();
 
-        if (
-            Schema::hasColumn((new EcommerceQuotation)->getTable(), 'user_id') &&
-            ! ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())
-        ) {
-            $query->where('user_id', $user->id);
+        if ($user && (! method_exists($user, 'isSuperAdmin') || ! $user->isSuperAdmin())) {
+            $query->where(function ($q) use ($user) {
+                $q->where('user_id', $user->id)
+                  ->orWhere('customer_email', $user->email)
+                  ->orWhere('contact_email', $user->email);
+            });
+        } elseif (! $user && $request->filled('email')) {
+            $query->where('customer_email', $request->input('email'))
+                  ->orWhere('contact_email', $request->input('email'));
         }
 
         return $query;

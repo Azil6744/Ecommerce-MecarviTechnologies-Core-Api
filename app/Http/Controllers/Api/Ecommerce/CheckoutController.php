@@ -662,23 +662,8 @@ class CheckoutController extends Controller
 
                 // If there's an outstanding balance and it wasn't fully paid by gift cards
                 if ($order->total_amount > 0 && $order->payment_status !== 'paid') {
-                    $centralUrl = env('CENTRAL_AUTH_URL', 'http://localhost:8000/api');
                     $token = $request->header('X-Central-Auth-Token') ?? $request->bearerToken();
-                    $walletBalance = (float) ($user->wallet_balance ?? 0.00);
-
-                    if ($token) {
-                        try {
-                            $walletRes = \Illuminate\Support\Facades\Http::acceptJson()
-                                ->withToken($token)
-                                ->timeout(3)
-                                ->get($centralUrl . '/user/wallet');
-                            if ($walletRes->successful()) {
-                                $walletBalance = (float) $walletRes->json('data.balance');
-                            }
-                        } catch (\Throwable $e) {
-                            \Log::warning('Checkout failed to fetch central user wallet: ' . $e->getMessage());
-                        }
-                    }
+                    $walletBalance = \App\Services\WalletService::getWalletBalance($user, $token);
 
                     if ($walletBalance < $order->total_amount) {
                         throw new \Exception("Insufficient wallet balance. You need $" . number_format($order->total_amount, 2) . " but only have $" . number_format($walletBalance, 2) . ".");

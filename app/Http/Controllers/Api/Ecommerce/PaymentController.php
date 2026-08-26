@@ -408,23 +408,8 @@ class PaymentController extends Controller
             ], 401);
         }
 
-        $centralUrl = env('CENTRAL_AUTH_URL', 'http://localhost:8000/api');
         $token = $request->header('X-Central-Auth-Token') ?? $request->bearerToken();
-        $walletBalance = 0.00;
-
-        if ($token) {
-            try {
-                $walletRes = \Illuminate\Support\Facades\Http::acceptJson()
-                    ->withToken($token)
-                    ->timeout(3)
-                    ->get($centralUrl . '/user/wallet');
-                if ($walletRes->successful()) {
-                    $walletBalance = (float) $walletRes->json('data.balance');
-                }
-            } catch (\Throwable $e) {
-                \Log::warning('PaymentController failed to fetch central user wallet: ' . $e->getMessage());
-            }
-        }
+        $walletBalance = \App\Services\WalletService::getWalletBalance($user, $token);
 
         $amount = $isGiftCard ? $order->giftcard_amount : $order->total_amount;
 
