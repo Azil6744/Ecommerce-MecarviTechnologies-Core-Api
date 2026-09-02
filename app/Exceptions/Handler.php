@@ -3,6 +3,8 @@
 namespace App\Exceptions;
 
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -43,6 +45,32 @@ class Handler extends ExceptionHandler
     {
         $this->reportable(function (Throwable $e) {
             //
+        });
+
+        $this->renderable(function (ModelNotFoundException $e, $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                $model = class_basename($e->getModel());
+                return response()->json([
+                    'success' => false,
+                    'message' => "The requested {$model} could not be found.",
+                ], 404);
+            }
+        });
+
+        $this->renderable(function (NotFoundHttpException $e, $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                if ($e->getPrevious() instanceof ModelNotFoundException) {
+                    $model = class_basename($e->getPrevious()->getModel());
+                    return response()->json([
+                        'success' => false,
+                        'message' => "The requested {$model} could not be found.",
+                    ], 404);
+                }
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The requested resource was not found.',
+                ], 404);
+            }
         });
     }
 }

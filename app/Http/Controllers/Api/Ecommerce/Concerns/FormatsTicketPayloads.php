@@ -11,15 +11,20 @@ trait FormatsTicketPayloads
 {
     protected function detailRelations(): array
     {
-        return [
+        $relations = [
             'user:id,name,email',
             'product:id,name,sku',
             'replies.user:id,name,email',
             'replies.replyAttachments',
             'attachments.user:id,name,email',
             'activities.user:id,name,email',
-            'notes.user:id,name,email',
         ];
+
+        if ($this->includeInternalTicketNotes()) {
+            $relations[] = 'notes.user:id,name,email';
+        }
+
+        return $relations;
     }
 
     protected function ticketPayload(EcommerceTicket $ticket, bool $detailed = false): array
@@ -72,7 +77,13 @@ trait FormatsTicketPayloads
                 'attachments' => $reply->replyAttachments->map(fn ($attachment) => $this->attachmentPayload($attachment)),
             ])->values();
             $payload['attachments'] = $ticket->attachments->map(fn ($attachment) => $this->attachmentPayload($attachment))->values();
-            $payload['activities'] = $ticket->activities->sortByDesc('created_at')->map(fn ($activity) => [
+            
+            $activities = $ticket->activities;
+            if (! $this->includeInternalTicketNotes()) {
+                $activities = $activities->filter(fn ($activity) => ! in_array($activity->type, ['note_added', 'internal_note'], true));
+            }
+
+            $payload['activities'] = $activities->sortByDesc('created_at')->map(fn ($activity) => [
                 'id' => $activity->id,
                 'type' => $activity->type,
                 'title' => $activity->title,
@@ -83,12 +94,15 @@ trait FormatsTicketPayloads
                     'email' => $activity->user->email,
                 ] : null,
             ])->values();
-            $notes = $ticket->notes;
 
-            $payload['notes'] = $notes
-                ->sortByDesc('created_at')
-                ->map(fn ($note) => $this->notePayload($note))
-                ->values();
+            if ($this->includeInternalTicketNotes()) {
+                $notes = $ticket->notes;
+
+                $payload['notes'] = $notes
+                    ->sortByDesc('created_at')
+                    ->map(fn ($note) => $this->notePayload($note))
+                    ->values();
+            }
         }
 
         return $payload;

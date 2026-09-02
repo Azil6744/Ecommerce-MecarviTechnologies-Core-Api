@@ -203,7 +203,12 @@ class EcommerceCoupon extends Model
 
     public function toManagementArray(): array
     {
+        $metadata = $this->metadata ?? [];
+        $isDeal = !empty($metadata['is_deal']) || !empty($metadata['is_bundle']);
+
         return array_merge($this->toPublicArray(), [
+            'is_deal' => $isDeal,
+            'deal_category' => $metadata['deal_category'] ?? ($isDeal ? 'bundles' : null),
             'used_count' => (int) $this->used_count,
             'usage_remaining' => $this->usage_remaining,
             'products' => $this->relationLoaded('products')
@@ -218,6 +223,7 @@ class EcommerceCoupon extends Model
     public function toPublicArray(): array
     {
         $metadata = $this->metadata ?? [];
+        $isDeal = !empty($metadata['is_deal']) || !empty($metadata['is_bundle']);
 
         return [
             'id' => $this->id,
@@ -236,6 +242,12 @@ class EcommerceCoupon extends Model
             'status' => $this->status,
             'is_expired' => $this->is_expired,
             'is_scheduled' => $this->is_scheduled,
+            'is_deal' => $isDeal,
+            'deal_category' => $metadata['deal_category'] ?? ($isDeal ? 'bundles' : null),
+            'bundle_price' => !empty($metadata['bundle_price']) ? (float) $metadata['bundle_price'] : null,
+            'original_price' => !empty($metadata['original_price']) ? (float) $metadata['original_price'] : null,
+            'savings_amount' => !empty($metadata['savings_amount']) ? (float) $metadata['savings_amount'] : null,
+            'image_url' => $metadata['image_url'] ?? null,
             'max_discount_amount' => !empty($metadata['max_discount_amount']) ? (float) $metadata['max_discount_amount'] : null,
             'buy_quantity' => !empty($metadata['buy_quantity']) ? (int) $metadata['buy_quantity'] : null,
             'get_quantity' => !empty($metadata['get_quantity']) ? (int) $metadata['get_quantity'] : null,
@@ -252,6 +264,11 @@ class EcommerceCoupon extends Model
 
     public function displayBadge(): string
     {
+        $metadata = $this->metadata ?? [];
+        if (!empty($metadata['badge'])) {
+            return (string) $metadata['badge'];
+        }
+
         if ($this->discount_type === 'percentage') {
             return rtrim(rtrim(number_format((float) $this->discount_value, 2), '0'), '.') . '% OFF';
         }

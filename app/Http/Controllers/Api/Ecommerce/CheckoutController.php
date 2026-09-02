@@ -88,11 +88,13 @@ class CheckoutController extends Controller
             // 1. Fetch settings and calculate points-to-dollar discount ratio
             $settings = \App\Models\SiteSetting::first();
             $ratio = 0.01;
-            $loyaltyEnabled = false;
+            $loyaltyEnabled = true;
             $loyalty = null;
             if ($settings && $settings->loyalty_settings) {
                 $loyalty = json_decode($settings->loyalty_settings, true);
-                $loyaltyEnabled = filter_var($loyalty['enabled'] ?? false, FILTER_VALIDATE_BOOLEAN);
+                if (isset($loyalty['enabled'])) {
+                    $loyaltyEnabled = filter_var($loyalty['enabled'], FILTER_VALIDATE_BOOLEAN);
+                }
                 $ratio = (float)($loyalty['points_to_dollar_ratio'] ?? 0.01);
             }
 
@@ -415,9 +417,11 @@ class CheckoutController extends Controller
                 $eligibleAmount = max(0.00, $eligibleAmount);
 
                 if ($eligibleAmount > 0) {
-                    $earnPerUnitPrice = $settings && $settings->loyalty_points_earned_per_unit_price > 0 ? (float)$settings->loyalty_points_earned_per_unit_price : 50.00;
-                    $earnPoints = $settings ? (int)$settings->loyalty_points_earned_points : 2;
-                    $pointsEarned = (int)(floor($eligibleAmount / $earnPerUnitPrice) * $earnPoints);
+                    $pointsPerDollar = (float)($loyalty['points_per_dollar'] ?? 1.0);
+                    if ($pointsPerDollar <= 0) {
+                        $pointsPerDollar = 1.0;
+                    }
+                    $pointsEarned = (int) round($eligibleAmount * $pointsPerDollar);
                 }
             }
 
@@ -548,17 +552,29 @@ class CheckoutController extends Controller
                     );
                 }
 
-                // Points earned (pending status locally)
+                // Points earned
                 if ($pointsEarned > 0) {
-                    \App\Models\EcommerceLoyaltyTransaction::create([
-                        'user_id' => $user->id,
-                        'order_id' => $order->id,
-                        'transaction_type' => 'earned',
-                        'points' => $pointsEarned,
-                        'dollar_value' => $pointsEarned * $ratio,
-                        'status' => 'pending',
-                        'reason' => "Points pending for order {$order->order_number}",
-                    ]);
+                    $isPaid = in_array(strtolower((string)($orderData['payment_status'] ?? '')), ['paid', 'completed']);
+                    if ($isPaid) {
+                        \App\Services\LoyaltyService::adjustPoints(
+                            $user->id,
+                            $pointsEarned,
+                            'order_completed',
+                            "Order Completed #{$order->order_number}",
+                            $order->id,
+                            'available'
+                        );
+                    } else {
+                        \App\Models\EcommerceLoyaltyTransaction::create([
+                            'user_id' => $user->id,
+                            'order_id' => $order->id,
+                            'transaction_type' => 'earned',
+                            'points' => $pointsEarned,
+                            'dollar_value' => $pointsEarned * $ratio,
+                            'status' => 'pending',
+                            'reason' => "Points pending for order {$order->order_number}",
+                        ]);
+                    }
                 }
             }
 

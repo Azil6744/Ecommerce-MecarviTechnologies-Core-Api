@@ -257,39 +257,6 @@ class EcommerceTicketController extends Controller
         ], 201);
     }
 
-    public function notes(Request $request, EcommerceTicket $ticket)
-    {
-        $this->authorizeTicket($request, $ticket);
-
-        return response()->json([
-            'success' => true,
-            'data' => $ticket->notes()->with('user:id,name,email')->latest()->get()
-                ->map(fn (EcommerceTicketNote $note) => $this->notePayload($note)),
-        ]);
-    }
-
-    public function addNote(Request $request, EcommerceTicket $ticket)
-    {
-        $this->authorizeTicket($request, $ticket);
-
-        $validated = $request->validate([
-            'note' => ['required', 'string'],
-        ]);
-
-        $note = $ticket->notes()->create([
-            'user_id' => $request->user()->id,
-            'note' => $validated['note'],
-            'visibility' => 'public',
-        ]);
-
-        $this->recordActivity($ticket, $request->user()->id, 'note_added', 'Note added', Str::limit($validated['note'], 140));
-
-        return response()->json([
-            'success' => true,
-            'data' => $this->notePayload($note->load('user:id,name,email')),
-        ], 201);
-    }
-
     private function storeUploadedAttachments(Request $request, EcommerceTicket $ticket, ?int $replyId = null)
     {
         $files = $request->file('attachments', []);

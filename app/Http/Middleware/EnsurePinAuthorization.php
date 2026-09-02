@@ -20,6 +20,15 @@ class EnsurePinAuthorization
             return $next($request);
         }
 
+        // Bypass PIN verification for profile updates unless email is being changed
+        if (($request->is('*/profile') || $request->is('profile')) && $request->isMethod('PUT') && ! $request->is('*/profile/password') && ! $request->is('*/profile/pin')) {
+            $newEmail = $request->input('email');
+            $currentEmail = $request->user()?->email;
+            if (! $newEmail || strtolower(trim($newEmail)) === strtolower(trim((string) $currentEmail))) {
+                return $next($request);
+            }
+        }
+
         $token = $request->header('X-Pin-Authorization')
             ?: $request->input('pin_authorization_token');
 

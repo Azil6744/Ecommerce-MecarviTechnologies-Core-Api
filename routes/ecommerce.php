@@ -20,6 +20,8 @@ Route::prefix('ecommerce')->group(function () {
     Route::get('/delivery-times', [\App\Http\Controllers\Api\Ecommerce\DeliveryTimeController::class, 'index']);
     Route::get('/subscription-plans', [\App\Http\Controllers\Api\Admin\AdminSubscriptionPlanController::class, 'publicIndex']);
     Route::get('/membership-benefits', [\App\Http\Controllers\Api\Admin\AdminMembershipBenefitController::class, 'publicIndex']);
+    Route::get('/memberships', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'index'])
+        ->middleware('central.auth:optional');
     Route::post('/pickup-locations/eligible', [\App\Http\Controllers\Api\Ecommerce\PublicPickupLocationController::class, 'getEligibleLocations']);
     Route::get('/products', [\App\Http\Controllers\Api\Ecommerce\ProductController::class, 'index']);
     Route::get('/coupons/validate', [\App\Http\Controllers\Api\Admin\EcommerceCouponController::class, 'validateCoupon']);
@@ -122,7 +124,7 @@ Route::prefix('ecommerce')->group(function () {
         Route::get('/compare-products', [\App\Http\Controllers\Api\Ecommerce\CompareProductController::class, 'index']);
         Route::post('/compare-products', [\App\Http\Controllers\Api\Ecommerce\CompareProductController::class, 'store']);
         Route::delete('/compare-products', [\App\Http\Controllers\Api\Ecommerce\CompareProductController::class, 'clear']);
-        Route::delete('/compare-products/{product}', [\App\Http\Controllers\Api\Ecommerce\CompareProductController::class, 'destroy']);
+        Route::delete('/compare-products/{productId}', [\App\Http\Controllers\Api\Ecommerce\CompareProductController::class, 'destroy']);
 
         // Checkout, Payments & Orders
         Route::post('/payment/process', [\App\Http\Controllers\Api\Ecommerce\PaymentController::class, 'process'])
@@ -132,18 +134,12 @@ Route::prefix('ecommerce')->group(function () {
         
         Route::get('/orders/stats', [\App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class, 'stats']);
         Route::get('/orders/track', [\App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class, 'track']);
-        Route::post('/orders/{order}/cancel', [\App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class, 'cancel'])
-            ->middleware('pin.verified:order_change');
+        Route::post('/orders/{order}/cancel', [\App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class, 'cancel']);
         Route::post('/orders/{order}/tip', [\App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class, 'tip'])
             ->middleware('pin.verified:checkout_payment');
         Route::get('/orders/{order}/invoice', [\App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class, 'invoice']);
-        Route::post('/orders/{order}/reorder', [\App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class, 'reorder'])
-            ->middleware('pin.verified:order_change');
-        Route::apiResource('orders', \App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class)
-            ->except(['index', 'show'])
-            ->middleware('pin.verified:order_change');
-        Route::apiResource('orders', \App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class)
-            ->only(['index', 'show']);
+        Route::post('/orders/{order}/reorder', [\App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class, 'reorder']);
+        Route::apiResource('orders', \App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class);
 
         // Account Profile & Addresses
         Route::get('/profile', [\App\Http\Controllers\Api\Ecommerce\ProfileController::class, 'show']);
@@ -154,13 +150,8 @@ Route::prefix('ecommerce')->group(function () {
         Route::put('/profile/pin', [\App\Http\Controllers\Api\Ecommerce\ProfileController::class, 'updatePin'])
             ->middleware('pin.verified:account_security_change');
         
-        Route::put('/addresses/{address}/default', [\App\Http\Controllers\Api\Ecommerce\AddressController::class, 'setDefault'])
-            ->middleware('pin.verified:account_security_change');
-        Route::apiResource('addresses', \App\Http\Controllers\Api\Ecommerce\AddressController::class)
-            ->except(['index', 'show'])
-            ->middleware('pin.verified:account_security_change');
-        Route::apiResource('addresses', \App\Http\Controllers\Api\Ecommerce\AddressController::class)
-            ->only(['index', 'show']);
+        Route::put('/addresses/{address}/default', [\App\Http\Controllers\Api\Ecommerce\AddressController::class, 'setDefault']);
+        Route::apiResource('addresses', \App\Http\Controllers\Api\Ecommerce\AddressController::class);
 
         Route::get('/payment-methods', [\App\Http\Controllers\Api\Ecommerce\PaymentMethodController::class, 'index']);
         Route::post('/payment-methods', [\App\Http\Controllers\Api\Ecommerce\PaymentMethodController::class, 'store'])
@@ -185,52 +176,26 @@ Route::prefix('ecommerce')->group(function () {
             ->only(['index', 'show']);
 
         // Other E-Commerce Features
-        Route::apiResource('quotations', \App\Http\Controllers\Api\Ecommerce\EcommerceQuotationController::class)
-            ->only(['update', 'destroy'])
-            ->middleware('pin.verified:order_change');
-        Route::apiResource('quotations', \App\Http\Controllers\Api\Ecommerce\EcommerceQuotationController::class)
-            ->only(['index', 'show']);
+        Route::apiResource('quotations', \App\Http\Controllers\Api\Ecommerce\EcommerceQuotationController::class);
         Route::post('memberships/{id}/{action}', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'action']);
         Route::get('membership-transactions', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'transactions']);
         Route::get('membership-transactions/{id}/receipt', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'receipt']);
         Route::apiResource('memberships', \App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class)
-            ->except(['index', 'show']);
-        Route::apiResource('memberships', \App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class)
-            ->only(['index', 'show']);
-        Route::apiResource('disputes', \App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class)
-            ->only(['update', 'destroy'])
-            ->middleware('pin.verified:support_identity_verification');
-        Route::apiResource('disputes', \App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class)
-            ->only(['index', 'show']);
-        Route::apiResource('tickets', \App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class)
-            ->except(['index', 'show'])
-            ->middleware('pin.verified:support_identity_verification');
-        Route::apiResource('tickets', \App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class)
-            ->only(['index', 'show']);
+            ->except(['index']);
+        Route::apiResource('disputes', \App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class);
+        Route::apiResource('tickets', \App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class);
         Route::post('tickets/{ticket}/reply', [\App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class, 'addReply']);
         Route::post('tickets/{ticket}/attachments', [\App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class, 'uploadAttachment']);
-        Route::get('tickets/{ticket}/notes', [\App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class, 'notes']);
-        Route::post('tickets/{ticket}/notes', [\App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class, 'addNote']);
         Route::get('conversations', [\App\Http\Controllers\Api\Ecommerce\EcommerceConversationController::class, 'index']);
-        Route::post('conversations', [\App\Http\Controllers\Api\Ecommerce\EcommerceConversationController::class, 'store'])
-            ->middleware('pin.verified:support_identity_verification');
+        Route::post('conversations', [\App\Http\Controllers\Api\Ecommerce\EcommerceConversationController::class, 'store']);
         Route::get('conversations/{conversation}', [\App\Http\Controllers\Api\Ecommerce\EcommerceConversationController::class, 'show']);
         Route::post('conversations/{conversation}/messages', [\App\Http\Controllers\Api\Ecommerce\EcommerceConversationController::class, 'addMessage']);
         Route::post('conversations/{conversation}/close', [\App\Http\Controllers\Api\Ecommerce\EcommerceConversationController::class, 'close']);
         Route::get('returns/stats', [\App\Http\Controllers\Api\Ecommerce\EcommerceReturnController::class, 'stats']);
-        Route::apiResource('returns', \App\Http\Controllers\Api\Ecommerce\EcommerceReturnController::class)
-            ->except(['index', 'show'])
-            ->middleware('pin.verified:order_change');
-        Route::apiResource('returns', \App\Http\Controllers\Api\Ecommerce\EcommerceReturnController::class)
-            ->only(['index', 'show']);
+        Route::apiResource('returns', \App\Http\Controllers\Api\Ecommerce\EcommerceReturnController::class);
         Route::post('/gift-cards/redeem-to-wallet', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'redeemToWallet']);
-        Route::post('/gift-cards/{id}/transfer', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'transfer'])
-            ->middleware('pin.verified:gift_card_change');
-        Route::apiResource('gift-cards', \App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class)
-            ->except(['index', 'show'])
-            ->middleware('pin.verified:gift_card_change');
-        Route::apiResource('gift-cards', \App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class)
-            ->only(['index', 'show']);
+        Route::post('/gift-cards/{id}/transfer', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'transfer']);
+        Route::apiResource('gift-cards', \App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class);
         Route::apiResource('reviews', \App\Http\Controllers\Api\Ecommerce\EcommerceReviewController::class);
         Route::get('affiliates/my/referrals', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'myReferrals']);
         Route::get('affiliates/my/commissions', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'myCommissions']);
@@ -248,12 +213,9 @@ Route::prefix('ecommerce')->group(function () {
         Route::get('/proofs/{id}', [\App\Http\Controllers\Api\Ecommerce\OrderProofController::class, 'show']);
         Route::get('/proofs/{id}/comments', [\App\Http\Controllers\Api\Ecommerce\OrderProofController::class, 'comments']);
         Route::post('/proofs/{id}/comments', [\App\Http\Controllers\Api\Ecommerce\OrderProofController::class, 'addComment']);
-        Route::post('/proofs/{id}/approve', [\App\Http\Controllers\Api\Ecommerce\OrderProofController::class, 'approve'])
-            ->middleware('pin.verified:order_change');
-        Route::post('/proofs/{id}/reject', [\App\Http\Controllers\Api\Ecommerce\OrderProofController::class, 'reject'])
-            ->middleware('pin.verified:order_change');
-        Route::post('/proofs/{id}/request-revision', [\App\Http\Controllers\Api\Ecommerce\OrderProofController::class, 'requestRevision'])
-            ->middleware('pin.verified:order_change');
+        Route::post('/proofs/{id}/approve', [\App\Http\Controllers\Api\Ecommerce\OrderProofController::class, 'approve']);
+        Route::post('/proofs/{id}/reject', [\App\Http\Controllers\Api\Ecommerce\OrderProofController::class, 'reject']);
+        Route::post('/proofs/{id}/request-revision', [\App\Http\Controllers\Api\Ecommerce\OrderProofController::class, 'requestRevision']);
 
         // Customer Downloads
         Route::get('/downloads', [\App\Http\Controllers\Api\Ecommerce\EcommerceDownloadController::class, 'index'])

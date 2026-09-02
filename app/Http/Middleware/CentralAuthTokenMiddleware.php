@@ -186,6 +186,11 @@ class CentralAuthTokenMiddleware
             return null;
         }
 
+        $expiration = config('sanctum.expiration');
+        if ($expiration && $accessToken->created_at && $accessToken->created_at->lte(now()->subMinutes((int) $expiration))) {
+            return null;
+        }
+
         return $accessToken->tokenable;
     }
 

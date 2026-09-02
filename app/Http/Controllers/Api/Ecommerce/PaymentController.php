@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Omnipay\Omnipay;
 use App\Models\EcommerceOrder;
 use App\Models\EcommerceGiftCardOrder;
+use App\Models\PaymentGateway;
 
 class PaymentController extends Controller
 {
@@ -19,16 +20,34 @@ class PaymentController extends Controller
             return;
         }
 
-        if (filled(config('services.stripe.secret'))) {
+        // Check Stripe Database Gateway first, then fallback to services.stripe config
+        $stripeModel = PaymentGateway::where('provider', 'stripe')->first();
+        $stripeSecret = ($stripeModel && $stripeModel->is_active && filled($stripeModel->secret_key))
+            ? $stripeModel->secret_key
+            : config('services.stripe.secret');
+
+        if (filled($stripeSecret)) {
             $this->stripeGateway = Omnipay::create('Stripe');
-            $this->stripeGateway->setApiKey(config('services.stripe.secret'));
+            $this->stripeGateway->setApiKey($stripeSecret);
         }
 
-        if (filled(config('services.paypal.client_id')) && filled(config('services.paypal.secret'))) {
+        // Check PayPal Database Gateway first, then fallback to services.paypal config
+        $paypalModel = PaymentGateway::where('provider', 'paypal')->first();
+        $paypalClientId = ($paypalModel && $paypalModel->is_active && filled($paypalModel->public_key))
+            ? $paypalModel->public_key
+            : config('services.paypal.client_id');
+        $paypalSecret = ($paypalModel && $paypalModel->is_active && filled($paypalModel->secret_key))
+            ? $paypalModel->secret_key
+            : config('services.paypal.secret');
+        $paypalMode = $paypalModel
+            ? ($paypalModel->is_test_mode ? 'sandbox' : 'live')
+            : config('services.paypal.mode', 'sandbox');
+
+        if (filled($paypalClientId) && filled($paypalSecret)) {
             $this->paypalGateway = Omnipay::create('PayPal_Rest');
-            $this->paypalGateway->setClientId(config('services.paypal.client_id'));
-            $this->paypalGateway->setSecret(config('services.paypal.secret'));
-            $this->paypalGateway->setTestMode(config('services.paypal.mode') === 'sandbox');
+            $this->paypalGateway->setClientId($paypalClientId);
+            $this->paypalGateway->setSecret($paypalSecret);
+            $this->paypalGateway->setTestMode($paypalMode === 'sandbox');
         }
     }
 
@@ -109,11 +128,14 @@ class PaymentController extends Controller
                 'subtotal' => round($subtotal, 2),
                 'shipping_amount' => (float) ($item->shipping_amount ?? 0),
                 'discount_amount' => (float) ($item->discount_amount ?? 0),
-                'tax_amount' => (float) ($item->tax_amount ?? 0),
+                'customer_name' => $item->customer_name,
+                'customer_email' => $item->customer_email,
+                'customer_phone' => $item->customer_phone,
                 'shipping_address' => $item->shipping_address,
                 'billing_address' => $item->billing_address,
                 'shipping_method' => $item->shipping_method,
                 'loyalty_points_earned' => (int) ($item->loyalty_points_earned ?? 0),
+                'tip_amount' => (float) ($item->tip_amount ?? 0),
                 'estimated_delivery_at' => optional($item->estimated_delivery_at)->toIso8601String(),
                 'created_at' => optional($item->created_at)->toIso8601String(),
                 'items' => $item->items,

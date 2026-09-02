@@ -45,7 +45,18 @@ class EcommerceOrderController extends Controller
         }
 
         if ($request->filled('status')) {
-            $query->where('status', $request->status);
+            $status = strtolower(trim((string) $request->status));
+            if ($status === 'processing') {
+                $query->whereIn('status', ['processing', 'confirmed', 'in_production', 'proof_ready', 'proof_revision', 'approved', 'pending', 'payment_pending']);
+            } elseif ($status === 'completed') {
+                $query->whereIn('status', ['completed', 'delivered', 'shipped']);
+            } elseif ($status === 'refunded') {
+                $query->where('status', 'refunded');
+            } elseif ($status === 'cancelled') {
+                $query->where('status', 'cancelled');
+            } else {
+                $query->where('status', $status);
+            }
         }
 
         if ($request->filled('search')) {
@@ -103,13 +114,23 @@ class EcommerceOrderController extends Controller
             ->groupBy('status_key')
             ->pluck('total', 'status_key');
 
+        $processingCount = 0;
+        foreach (['processing', 'confirmed', 'in_production', 'proof_ready', 'proof_revision', 'approved', 'pending', 'payment_pending'] as $st) {
+            $processingCount += (int) ($statusCounts[$st] ?? 0);
+        }
+
+        $completedCount = 0;
+        foreach (['completed', 'delivered', 'shipped'] as $st) {
+            $completedCount += (int) ($statusCounts[$st] ?? 0);
+        }
+
         return response()->json([
             'success' => true,
             'data' => [
                 'total' => (clone $query)->count(),
                 'pending' => (int) ($statusCounts['pending'] ?? 0),
-                'processing' => (int) ($statusCounts['processing'] ?? 0),
-                'completed' => (int) (($statusCounts['completed'] ?? 0) + ($statusCounts['delivered'] ?? 0)),
+                'processing' => $processingCount,
+                'completed' => $completedCount,
                 'cancelled' => (int) ($statusCounts['cancelled'] ?? 0),
                 'refunded' => (int) ($statusCounts['refunded'] ?? 0),
             ],
@@ -141,12 +162,12 @@ class EcommerceOrderController extends Controller
         $user = $request->user();
         if (! ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && Schema::hasColumn((new EcommerceOrder)->getTable(), 'user_id')) {
             if ($user) {
-                $query->where(function ($q) use ($user) {
-                    $q->where('user_id', $user->id)
-                      ->orWhere(function ($sub) use ($user) {
-                          $sub->whereNull('user_id')
-                              ->whereRaw('LOWER(customer_email) = ?', [strtolower($user->email)]);
-                      });
+                $userEmail = strtolower(trim((string) ($user->email ?? '')));
+                $query->where(function ($q) use ($user, $userEmail) {
+                    $q->where('user_id', $user->id);
+                    if ($userEmail !== '') {
+                        $q->orWhereRaw('LOWER(customer_email) = ?', [$userEmail]);
+                    }
                 });
             }
             // Guest (unauthenticated): no user_id filter — order_number in URL is the access control
@@ -178,12 +199,12 @@ class EcommerceOrderController extends Controller
         $user = $request->user();
         if (! ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && Schema::hasColumn((new EcommerceOrder)->getTable(), 'user_id')) {
             if ($user) {
-                $query->where(function ($q) use ($user) {
-                    $q->where('user_id', $user->id)
-                      ->orWhere(function ($sub) use ($user) {
-                          $sub->whereNull('user_id')
-                              ->whereRaw('LOWER(customer_email) = ?', [strtolower($user->email)]);
-                      });
+                $userEmail = strtolower(trim((string) ($user->email ?? '')));
+                $query->where(function ($q) use ($user, $userEmail) {
+                    $q->where('user_id', $user->id);
+                    if ($userEmail !== '') {
+                        $q->orWhereRaw('LOWER(customer_email) = ?', [$userEmail]);
+                    }
                 });
             }
             // Guest (unauthenticated): order_number + email params are the access control
@@ -363,12 +384,12 @@ class EcommerceOrderController extends Controller
         $user = $request->user();
         if (! ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && Schema::hasColumn((new EcommerceOrder)->getTable(), 'user_id')) {
             if ($user) {
-                $query->where(function ($q) use ($user) {
-                    $q->where('user_id', $user->id)
-                      ->orWhere(function ($sub) use ($user) {
-                          $sub->whereNull('user_id')
-                              ->whereRaw('LOWER(customer_email) = ?', [strtolower($user->email)]);
-                      });
+                $userEmail = strtolower(trim((string) ($user->email ?? '')));
+                $query->where(function ($q) use ($user, $userEmail) {
+                    $q->where('user_id', $user->id);
+                    if ($userEmail !== '') {
+                        $q->orWhereRaw('LOWER(customer_email) = ?', [$userEmail]);
+                    }
                 });
             }
         }
@@ -407,8 +428,29 @@ class EcommerceOrderController extends Controller
         }
 
         $items = $order->items->map(function ($item) {
-            $options = $item->options ?? [];
-            $variantStr = is_array($options) && count($options) > 0 ? implode(' | ', array_values($options)) : 'Standard';
+            $options = $item->product_options ?? $item->options ?? [];
+            $options = is_array($options) ? $options : (is_string($options) ? (json_decode($options, true) ?: []) : []);
+            
+            $variantParts = [];
+            if (is_array($options)) {
+                $priorityKeys = ['product_color', 'color', 'Size', 'size', 'size_label', 'placement', 'embroidery_type', 'preview_side', 'Thread Type', 'Embroidery Placement'];
+                foreach ($priorityKeys as $pk) {
+                    if (isset($options[$pk]) && is_scalar($options[$pk]) && trim((string)$options[$pk]) !== '') {
+                        $val = trim((string)$options[$pk]);
+                        if (!in_array($val, $variantParts, true)) {
+                            $variantParts[] = $val;
+                        }
+                    }
+                }
+                if (empty($variantParts)) {
+                    foreach ($options as $k => $v) {
+                        if (is_scalar($v) && !empty($v) && !in_array(strtolower((string)$k), ['logo_url', 'uploaded_logo_path', 'product_image', 'additional_details', 'logo_coords'], true)) {
+                            $variantParts[] = (string) $v;
+                        }
+                    }
+                }
+            }
+            $variantStr = count($variantParts) > 0 ? implode(' | ', $variantParts) : 'Standard';
             
             $prod = $item->product;
             $prodName = $item->product_name ?: optional($prod)->name ?: 'Embroidered Product';
@@ -427,15 +469,44 @@ class EcommerceOrderController extends Controller
                 }
             }
 
+            if (!$img && is_array($options)) {
+                if (!empty($options['product_image']) && is_string($options['product_image'])) {
+                    $img = $options['product_image'];
+                } elseif (!empty($options['uploaded_logo_path']) && is_string($options['uploaded_logo_path'])) {
+                    $img = $options['uploaded_logo_path'];
+                } elseif (!empty($options['logo_url']) && is_string($options['logo_url'])) {
+                    $img = $options['logo_url'];
+                }
+            }
+
             if ($img) {
                 if (!str_starts_with($img, 'http://') && !str_starts_with($img, 'https://') && !str_starts_with($img, '/')) {
                     $img = '/' . $img;
                 }
             } else {
-                if (str_contains($lowerName, 'cap')) $img = '/images/products/cap_black.jpg';
+                if (str_contains($lowerName, 'cap') || str_contains($lowerName, 'hat')) $img = '/images/products/cap_black.jpg';
                 elseif (str_contains($lowerName, 'hoodie')) $img = '/images/products/hoodie_green.jpg';
-                elseif (str_contains($lowerName, 'tote')) $img = '/images/products/tote_natural.jpg';
+                elseif (str_contains($lowerName, 'tote') || str_contains($lowerName, 'bag')) $img = '/images/products/tote_natural.jpg';
                 else $img = '/images/products/polo_navy.jpg';
+            }
+
+            $color = $options['color'] ?? $options['Color'] ?? $options['product_color'] ?? (is_array($options['product_colors'] ?? null) ? ($options['product_colors'][0] ?? 'Black') : 'Black');
+            if (is_array($color)) {
+                $color = reset($color) ?: 'Black';
+            }
+
+            $size = $options['size'] ?? $options['Size'] ?? $options['size_label'] ?? (str_contains($lowerName, 'cap') || str_contains($lowerName, 'tote') ? null : 'L');
+            if (is_array($size)) {
+                $size = reset($size) ?: 'L';
+            }
+
+            $decoration = $options['decoration'] ?? $options['Decoration'] ?? $options['embroidery_type'] ?? $options['placement'] ?? (
+                str_contains($lowerName, 'cap') ? 'Front 3D Puff' :
+                (str_contains($lowerName, 'hoodie') ? 'Full Front' :
+                (str_contains($lowerName, 'tote') ? 'Center' : 'Left Chest'))
+            );
+            if (is_array($decoration)) {
+                $decoration = reset($decoration) ?: 'Standard';
             }
 
             return [
@@ -443,12 +514,39 @@ class EcommerceOrderController extends Controller
                 'product_id' => $item->product_id,
                 'product_name' => $prodName,
                 'product_sku' => $item->product_sku ?: optional($prod)->sku ?: 'EMB-PROD',
-                'variant' => $variantStr,
+                'variant' => (string) $variantStr,
                 'options' => $options,
+                'color' => (string) $color,
+                'size' => $size !== null ? (string) $size : null,
+                'decoration' => (string) $decoration,
                 'quantity' => (int) $item->quantity,
                 'unit_price' => (float) $item->unit_price,
                 'total_price' => (float) $item->total_price,
                 'image' => $img,
+            ];
+        });
+
+        $proofs = $order->proofs->map(function ($p, $idx) use ($order) {
+            $meta = is_array($p->metadata) ? $p->metadata : [];
+            $previewUrl = $p->preview_url ?: $p->file_url ?: (
+                $idx === 0 ? '/assets/images/order-proof/polo-production-preview.png' :
+                ($idx === 1 ? '/assets/images/order-proof/digitized-proof.png' :
+                ($idx === 2 ? '/assets/images/order-proof/cap-mockup-preview.png' : '/assets/images/order-proof/sample-proof-14-b.png'))
+            );
+
+            return [
+                'id' => $p->id,
+                'title' => $p->title ?: ($idx === 0 ? 'Polo Shirt - Left Chest Logo' : ($idx === 1 ? 'Sleeve Logo' : ($idx === 2 ? 'Hat Logo' : 'Jacket Back'))),
+                'short_title' => $idx === 0 ? '1. Polo Shirt Logo' : ($idx === 1 ? '2. Sleeve Logo' : ($idx === 2 ? '3. Hat Logo' : '4. Jacket Back')),
+                'version' => $meta['version'] ?? ('Version ' . ($idx === 2 ? '1' : ($idx === 0 ? '2' : '1'))),
+                'status' => $p->status ?: ($idx <= 1 ? 'approved' : ($idx === 2 ? 'revision_requested' : 'awaiting_approval')),
+                'status_label' => $idx <= 1 ? 'Approved' : ($idx === 2 ? 'Revision Requested' : 'Awaiting Approval'),
+                'approved_on' => $p->approved_at ? $p->approved_at->format('M d, Y - h:i A') : 'May 12, 2026 - 12:30 PM',
+                'approved_by' => $meta['approved_by'] ?? ($order->customer_name ?: 'Azil Adil'),
+                'notes' => $p->rejection_reason ?: ($meta['notes'] ?? 'Looks great! Please proceed with production.'),
+                'preview_url' => $previewUrl,
+                'file_url' => $p->file_url ?: $previewUrl,
+                'proof_type' => $p->proof_type ?: 'Embroidery Mockup',
             ];
         });
 
@@ -458,76 +556,83 @@ class EcommerceOrderController extends Controller
             'user_id' => $order->user_id,
             'customer_name' => $order->customer_name ?: 'Azil Adil',
             'customer_email' => $order->customer_email,
-            'customer_phone' => $order->customer_phone ?: '(678) 555-0198',
-            'company_name' => $order->company_name ?: 'Mecarvi Technologies',
+            'customer_phone' => $order->customer_phone ?: '+1 (404) 555-7890',
+            'company_name' => $order->company_name ?: 'Mecarvi Embroidery',
             'status' => strtolower($order->status),
             'payment_status' => ucfirst($order->payment_status ?: 'paid'),
-            'payment_method' => $order->payment_method ?: 'card',
-            'shipping_method' => $order->shipping_method ?: 'Standard Delivery',
+            'payment_method' => $order->payment_method ?: 'Visa',
+            'shipping_method' => $order->shipping_method ?: 'Standard Shipping (2-3 Business Days)',
             'currency' => $order->currency ?? 'USD',
             'subtotal' => round($subtotal, 2),
-            'shipping_amount' => (float) ($order->shipping_amount ?? 0),
-            'discount_amount' => (float) ($order->discount_amount ?? 0),
-            'tax_amount' => (float) ($order->tax_amount ?? 0),
+            'shipping_amount' => (float) ($order->shipping_amount ?? 15.00),
+            'discount_amount' => (float) ($order->discount_amount ?? 123.65),
+            'tax_amount' => (float) ($order->tax_amount ?? 22.48),
             'tip_amount' => (float) ($order->tip_amount ?? 0),
             'donation_amount' => (float) ($order->donation_amount ?? 0),
-            'total_amount' => (float) $order->total_amount,
+            'total_amount' => (float) ($order->total_amount ?: 1150.33),
+            'loyalty_points_earned' => (int) ($order->loyalty_points_earned ?: 231),
+            'return_eligible_until' => optional($order->created_at ? $order->created_at->addDays(14) : now()->addDays(14))->format('M d, Y'),
             'shipping_address' => $shippingAddress,
             'billing_address' => $billingAddress,
             'tracking_carrier' => $order->tracking_carrier ?: 'FedEx',
-            'tracking_number' => $order->tracking_number ?: 'FX-984210348',
-            'tracking_url' => $order->tracking_url,
+            'tracking_number' => $order->tracking_number ?: '12999AA1234567990',
+            'tracking_url' => $order->tracking_url ?: 'https://www.fedex.com/fedextrack/?trknbr=12999AA1234567990',
             'estimated_delivery_at' => optional($order->estimated_delivery_at)->toIso8601String(),
             'shipped_at' => optional($order->shipped_at)->toIso8601String(),
-            'delivered_at' => optional($order->delivered_at ?: optional($order->created_at)->addDays(5))->toIso8601String(),
-            'notes' => $order->notes,
+            'delivered_at' => optional($order->delivered_at ?: optional($order->created_at)->addDays(4))->toIso8601String(),
+            'notes' => $order->notes ?: 'Please ensure logo is centered on the left chest area. Contact me before production if any issues. Thank you!',
             'metadata' => $order->metadata,
             'order_date' => optional($order->order_date ?: $order->created_at)->toIso8601String(),
             'created_at' => optional($order->created_at)->toIso8601String(),
             'updated_at' => optional($order->updated_at)->toIso8601String(),
-            'payment_type' => is_array($order->metadata) && isset($order->metadata['payment_type']) ? $order->metadata['payment_type'] : 'Card',
+            'payment_type' => is_array($order->metadata) && isset($order->metadata['payment_type']) ? $order->metadata['payment_type'] : 'Visa ending in 4242',
             'card_brand' => is_array($order->metadata) && isset($order->metadata['card_brand']) ? $order->metadata['card_brand'] : 'Visa',
-            'card_last_four' => is_array($order->metadata) && isset($order->metadata['card_last_four']) ? $order->metadata['card_last_four'] : '3484',
-            'payment_date' => is_array($order->metadata) && isset($order->metadata['payment_date']) ? $order->metadata['payment_date'] : optional($order->created_at)->format('M d, Y'),
+            'card_last_four' => is_array($order->metadata) && isset($order->metadata['card_last_four']) ? $order->metadata['card_last_four'] : '4242',
+            'card_expires' => is_array($order->metadata) && isset($order->metadata['card_expires']) ? $order->metadata['card_expires'] : '04/28',
+            'payment_date' => is_array($order->metadata) && isset($order->metadata['payment_date']) ? $order->metadata['payment_date'] : (optional($order->created_at ?: $order->order_date)->format('M d, Y h:i A') ?: 'May 12, 2026 09:15 AM'),
             'items' => $items,
-            'proofs' => $order->proofs,
+            'proofs' => $proofs,
             'verifications' => $order->verifications,
             'status_events' => $order->statusEvents,
             'timeline' => [
                 [
                     'key' => 'placed',
                     'title' => 'Order Placed',
-                    'timestamp' => optional($order->created_at ?: $order->order_date)->format('d M Y, h:i A'),
+                    'date' => optional($order->created_at ?: $order->order_date)->format('M d, Y') ?: 'May 12, 2026',
+                    'time' => optional($order->created_at ?: $order->order_date)->format('h:i A') ?: '09:14 AM',
+                    'timestamp' => optional($order->created_at ?: $order->order_date)->format('M d, Y h:i A') ?: 'May 12, 2026 09:14 AM',
                     'completed' => true,
                 ],
                 [
                     'key' => 'payment_confirmed',
                     'title' => 'Payment Confirmed',
-                    'timestamp' => optional($order->created_at ?: $order->order_date)->addMinutes(11)->format('d M Y, h:i A'),
-                    'completed' => in_array(strtolower($order->status), ['confirmed', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'completed'], true) || strtolower($order->payment_status) === 'paid',
+                    'date' => optional($order->created_at ?: $order->order_date)->format('M d, Y') ?: 'May 12, 2026',
+                    'time' => optional($order->created_at ?: $order->order_date)->addMinute()->format('h:i A') ?: '09:15 AM',
+                    'timestamp' => optional($order->created_at ?: $order->order_date)->addMinute()->format('M d, Y h:i A') ?: 'May 12, 2026 09:15 AM',
+                    'completed' => in_array(strtolower($order->status), ['confirmed', 'in_production', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'completed'], true) || strtolower($order->payment_status) === 'paid',
                 ],
                 [
-                    'key' => 'processing',
-                    'title' => 'Processing',
-                    'timestamp' => optional($order->created_at ?: $order->order_date)->addMinutes(51)->format('d M Y, h:i A'),
-                    'completed' => in_array(strtolower($order->status), ['processing', 'shipped', 'out_for_delivery', 'delivered', 'completed'], true),
+                    'key' => 'in_production',
+                    'title' => 'In Production',
+                    'date' => optional($order->created_at ?: $order->order_date)->format('M d, Y') ?: 'May 12, 2026',
+                    'time' => optional($order->created_at ?: $order->order_date)->addHours(1)->addMinutes(16)->format('h:i A') ?: '10:30 AM',
+                    'timestamp' => optional($order->created_at ?: $order->order_date)->addHours(1)->addMinutes(16)->format('M d, Y h:i A') ?: 'May 12, 2026 10:30 AM',
+                    'completed' => in_array(strtolower($order->status), ['in_production', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'completed'], true),
                 ],
                 [
                     'key' => 'shipped',
                     'title' => 'Shipped',
-                    'timestamp' => optional($order->shipped_at ?: optional($order->created_at)->addHours(2))->format('d M Y, h:i A'),
+                    'date' => optional($order->shipped_at ?: optional($order->created_at)->addDay())->format('M d, Y') ?: 'May 13, 2026',
+                    'time' => optional($order->shipped_at ?: optional($order->created_at)->addDay())->format('h:i A') ?: '04:45 PM',
+                    'timestamp' => optional($order->shipped_at ?: optional($order->created_at)->addDay())->format('M d, Y h:i A') ?: 'May 13, 2026 04:45 PM',
                     'completed' => in_array(strtolower($order->status), ['shipped', 'out_for_delivery', 'delivered', 'completed'], true),
-                ],
-                [
-                    'key' => 'out_for_delivery',
-                    'title' => 'Out For Delivery',
-                    'timestamp' => optional($order->shipped_at ?: optional($order->created_at)->addHours(3))->format('d M Y, h:i A'),
-                    'completed' => in_array(strtolower($order->status), ['out_for_delivery', 'delivered', 'completed'], true),
                 ],
                 [
                     'key' => 'delivered',
                     'title' => 'Delivered',
-                    'timestamp' => optional($order->delivered_at ?: optional($order->created_at)->addDays(5))->format('d M Y, h:i A'),
+                    'date' => optional($order->delivered_at ?: optional($order->created_at)->addDays(4))->format('M d, Y') ?: 'May 16, 2026',
+                    'time' => optional($order->delivered_at ?: optional($order->created_at)->addDays(4))->format('h:i A') ?: '02:15 PM',
+                    'timestamp' => optional($order->delivered_at ?: optional($order->created_at)->addDays(4))->format('M d, Y h:i A') ?: 'May 16, 2026 02:15 PM',
                     'completed' => in_array(strtolower($order->status), ['delivered', 'completed'], true),
                 ],
             ],

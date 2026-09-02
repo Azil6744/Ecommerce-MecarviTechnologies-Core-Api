@@ -116,7 +116,9 @@ class RegisterController extends Controller
                 }
             }
 
-            $token = $user->createToken('auth-token')->plainTextToken;
+            $expirationMinutes = (int) config('sanctum.expiration', 360);
+            $expiresAt = $expirationMinutes > 0 ? now()->addMinutes($expirationMinutes) : null;
+            $token = $user->createToken('auth-token', ['*'], $expiresAt)->plainTextToken;
 
             // Trigger Welcome / Registration Email Notification
             try {

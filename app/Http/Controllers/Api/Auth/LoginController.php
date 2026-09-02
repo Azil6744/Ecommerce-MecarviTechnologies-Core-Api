@@ -39,7 +39,9 @@ class LoginController extends Controller
             }
 
             // Generate a Sanctum token for the authenticated user
-            $token = $user->createToken('auth-token')->plainTextToken;
+            $expirationMinutes = (int) config('sanctum.expiration', 360);
+            $expiresAt = $expirationMinutes > 0 ? now()->addMinutes($expirationMinutes) : null;
+            $token = $user->createToken('auth-token', ['*'], $expiresAt)->plainTextToken;
 
             // Return success response with user data and token
             return response()->json([

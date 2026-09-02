@@ -13,7 +13,13 @@ class ShippingMethodController extends Controller
     {
         try {
             $methods = ShippingMethod::orderBy('sort_order')->get();
-            return response()->json(['success' => true, 'data' => ['methods' => $methods]]);
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'methods' => $methods,
+                    'shipping_methods' => $methods,
+                ]
+            ]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Failed to fetch shipping methods.'], 500);
         }

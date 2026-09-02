@@ -55,6 +55,28 @@ class EcommerceCouponController extends Controller
             $query->where('discount_type', $type);
         }
 
+        $promotionType = strtolower(trim((string) $request->query('promotion_type', '')));
+        if ($promotionType === 'deals' || $promotionType === 'deal' || $request->boolean('is_deal')) {
+            $query->where(function ($q) {
+                $q->where('metadata->is_deal', true)
+                    ->orWhere('metadata->is_bundle', true);
+            });
+        } elseif ($promotionType === 'coupons' || $promotionType === 'coupon') {
+            $query->where(function ($q) {
+                $q->where(function ($nested) {
+                    $nested->whereNull('metadata->is_deal')->orWhere('metadata->is_deal', false);
+                })->where(function ($nested) {
+                    $nested->whereNull('metadata->is_bundle')->orWhere('metadata->is_bundle', false);
+                });
+            });
+        }
+
+        if ($dealCategory = trim((string) $request->query('deal_category', ''))) {
+            if (strtolower($dealCategory) !== 'all' && strtolower($dealCategory) !== 'all deals') {
+                $query->where('metadata->deal_category', $dealCategory);
+            }
+        }
+
         match (strtolower((string) $request->query('sort', 'newest'))) {
             'oldest' => $query->orderBy('created_at'),
             'code_asc' => $query->orderBy('code'),
@@ -67,9 +89,41 @@ class EcommerceCouponController extends Controller
         $perPage = max(1, min(100, (int) $request->query('per_page', 12)));
         $coupons = $query->paginate($perPage)->appends($request->query());
 
+        $dealsQuery = fn () => EcommerceCoupon::query()->where(function ($q) {
+            $q->where('metadata->is_deal', true)->orWhere('metadata->is_bundle', true);
+        });
+
+        $couponsOnlyQuery = fn () => EcommerceCoupon::query()->where(function ($q) {
+            $q->where(function ($nested) {
+                $nested->whereNull('metadata->is_deal')->orWhere('metadata->is_deal', false);
+            })->where(function ($nested) {
+                $nested->whereNull('metadata->is_bundle')->orWhere('metadata->is_bundle', false);
+            });
+        });
+
         $stats = [
             'total' => EcommerceCoupon::count(),
+            'total_coupons' => $couponsOnlyQuery()->count(),
+            'total_deals' => $dealsQuery()->count(),
             'active' => EcommerceCoupon::query()
+                ->where('is_active', true)
+                ->where(function ($inner) {
+                    $inner->whereNull('starts_at')->orWhere('starts_at', '<=', now());
+                })
+                ->where(function ($inner) {
+                    $inner->whereNull('expires_at')->orWhere('expires_at', '>=', now());
+                })
+                ->count(),
+            'active_coupons' => $couponsOnlyQuery()
+                ->where('is_active', true)
+                ->where(function ($inner) {
+                    $inner->whereNull('starts_at')->orWhere('starts_at', '<=', now());
+                })
+                ->where(function ($inner) {
+                    $inner->whereNull('expires_at')->orWhere('expires_at', '>=', now());
+                })
+                ->count(),
+            'active_deals' => $dealsQuery()
                 ->where('is_active', true)
                 ->where(function ($inner) {
                     $inner->whereNull('starts_at')->orWhere('starts_at', '<=', now());
@@ -322,19 +376,44 @@ class EcommerceCouponController extends Controller
 
     public function publicIndex(Request $request)
     {
-        $coupons = \App\Models\EcommerceCoupon::query()
-            ->where('is_active', true)
-            ->where(function ($query) {
-                $query->whereNull('starts_at')->orWhere('starts_at', '<=', now());
-            })
-            ->where(function ($query) {
-                $query->whereNull('expires_at')->orWhere('expires_at', '>=', now());
-            })
-            ->where(function ($query) {
-                $query->whereNull('usage_limit')->orWhereColumn('used_count', '<', 'usage_limit');
-            })
-            ->orderBy('id')
-            ->get();
+        $query = \App\Models\EcommerceCoupon::query();
+
+        if ($request->boolean('only_active')) {
+            $query->where('is_active', true)
+                ->where(function ($q) {
+                    $q->whereNull('starts_at')->orWhere('starts_at', '<=', now());
+                })
+                ->where(function ($q) {
+                    $q->whereNull('expires_at')->orWhere('expires_at', '>=', now());
+                })
+                ->where(function ($q) {
+                    $q->whereNull('usage_limit')->orWhereColumn('used_count', '<', 'usage_limit');
+                });
+        }
+
+        $promotionType = strtolower(trim((string) $request->query('promotion_type', '')));
+        if ($promotionType === 'deals' || $promotionType === 'deal' || $request->boolean('is_deal')) {
+            $query->where(function ($q) {
+                $q->where('metadata->is_deal', true)
+                    ->orWhere('metadata->is_bundle', true);
+            });
+        } elseif ($promotionType === 'coupons' || $promotionType === 'coupon') {
+            $query->where(function ($q) {
+                $q->where(function ($nested) {
+                    $nested->whereNull('metadata->is_deal')->orWhere('metadata->is_deal', false);
+                })->where(function ($nested) {
+                    $nested->whereNull('metadata->is_bundle')->orWhere('metadata->is_bundle', false);
+                });
+            });
+        }
+
+        if ($dealCategory = trim((string) $request->query('deal_category', ''))) {
+            if (strtolower($dealCategory) !== 'all' && strtolower($dealCategory) !== 'all deals') {
+                $query->where('metadata->deal_category', $dealCategory);
+            }
+        }
+
+        $coupons = $query->orderBy('id')->get();
 
         return response()->json([
             'success' => true,

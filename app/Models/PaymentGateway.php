@@ -22,4 +22,23 @@ class PaymentGateway extends Model
     ];
 
     protected $hidden = ['secret_key'];
+
+    protected $appends = ['has_secret_key', 'masked_secret_key'];
+
+    public function getHasSecretKeyAttribute(): bool
+    {
+        return !empty($this->secret_key);
+    }
+
+    public function getMaskedSecretKeyAttribute(): ?string
+    {
+        if (empty($this->secret_key)) {
+            return null;
+        }
+        $len = strlen($this->secret_key);
+        if ($len <= 8) {
+            return '••••••••';
+        }
+        return substr($this->secret_key, 0, 4) . '••••••••' . substr($this->secret_key, -4);
+    }
 }

@@ -883,10 +883,12 @@ Route::prefix('v1')->group(function () {
         Route::delete('/admin/order-verifications/{orderVerification}', [\App\Http\Controllers\Api\Admin\OrderVerificationController::class, 'destroy']);
 
         // Customer Verifications
+        Route::get('/admin/customer-verifications/stats', [\App\Http\Controllers\Api\Admin\CustomerVerificationController::class, 'stats']);
         Route::get('/admin/customer-verifications', [\App\Http\Controllers\Api\Admin\CustomerVerificationController::class, 'index']);
         Route::get('/admin/customer-verifications/{id}', [\App\Http\Controllers\Api\Admin\CustomerVerificationController::class, 'show']);
         Route::put('/admin/customer-verifications/{id}/approve', [\App\Http\Controllers\Api\Admin\CustomerVerificationController::class, 'approve']);
         Route::put('/admin/customer-verifications/{id}/reject', [\App\Http\Controllers\Api\Admin\CustomerVerificationController::class, 'reject']);
+        Route::post('/admin/customer-verifications/{id}/notes', [\App\Http\Controllers\Api\Admin\CustomerVerificationController::class, 'addNote']);
 
         // Quotations
         Route::get('/admin/quotations', [AdminQuotationController::class, 'index']);
@@ -905,6 +907,13 @@ Route::prefix('v1')->group(function () {
         Route::post('/admin/customers', [UserController::class, 'storeCustomer']);
         Route::patch('/admin/customers/{id}/status', [UserController::class, 'updateCustomerStatus']);
         Route::post('/admin/customers/{id}/verify', [UserController::class, 'verifyCustomer']);
+        
+        // User Profile & Tabs API
+        Route::get('/admin/users/{id}/profile-details', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getProfileDetails']);
+        Route::get('/admin/users/{id}/reported-products', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getReportedProducts']);
+        Route::get('/admin/users/{id}/order-disputes', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getOrderDisputes']);
+        Route::get('/admin/users/{id}/downloads', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getDownloads']);
+        Route::get('/admin/customers/{id}/profile-details', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getProfileDetails']);
 
         // Sellers
         Route::get('/admin/sellers/business-stores', [UserController::class, 'sellerStores']);
@@ -942,6 +951,9 @@ Route::prefix('v1')->group(function () {
         // Payment Gateways
         Route::get('/admin/payment-gateways', [\App\Http\Controllers\Api\Admin\PaymentGatewayController::class, 'index']);
         Route::post('/admin/payment-gateways', [\App\Http\Controllers\Api\Admin\PaymentGatewayController::class, 'store']);
+        Route::post('/admin/payment-gateways/reorder', [\App\Http\Controllers\Api\Admin\PaymentGatewayController::class, 'reorder']);
+        Route::post('/admin/payment-gateways/{id}/toggle', [\App\Http\Controllers\Api\Admin\PaymentGatewayController::class, 'toggle']);
+        Route::post('/admin/payment-gateways/{id}/test', [\App\Http\Controllers\Api\Admin\PaymentGatewayController::class, 'testConnection']);
         Route::get('/admin/payment-gateways/{id}', [\App\Http\Controllers\Api\Admin\PaymentGatewayController::class, 'show']);
         Route::put('/admin/payment-gateways/{id}', [\App\Http\Controllers\Api\Admin\PaymentGatewayController::class, 'update']);
         Route::delete('/admin/payment-gateways/{id}', [\App\Http\Controllers\Api\Admin\PaymentGatewayController::class, 'destroy']);

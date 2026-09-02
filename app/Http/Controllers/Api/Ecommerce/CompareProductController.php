@@ -77,7 +77,7 @@ class CompareProductController extends Controller
         return $this->index($request);
     }
 
-    public function destroy(Request $request, Product $product)
+    public function destroy(Request $request, $productId)
     {
         $user = $request->user();
         if (!$user) {
@@ -89,7 +89,7 @@ class CompareProductController extends Controller
 
         EcommerceCompareItem::query()
             ->where('user_id', $user->id)
-            ->where('product_id', $product->id)
+            ->where('product_id', $productId)
             ->delete();
 
         return $this->index($request);
