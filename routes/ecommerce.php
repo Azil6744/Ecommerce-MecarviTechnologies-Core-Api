@@ -186,14 +186,16 @@ Route::prefix('ecommerce')->group(function () {
             ->only(['index', 'show']);
 
         // Other E-Commerce Features
-        Route::apiResource('quotations', \App\Http\Controllers\Api\Ecommerce\EcommerceQuotationController::class);
+        Route::apiResource('quotations', \App\Http\Controllers\Api\Ecommerce\EcommerceQuotationController::class)
+            ->except(['store']);
         Route::post('memberships/{id}/{action}', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'action']);
         Route::get('membership-transactions', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'transactions']);
         Route::get('membership-transactions/{id}/receipt', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'receipt']);
         Route::get('membership-savings', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'savings']);
         Route::apiResource('memberships', \App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class)
             ->except(['index']);
-        Route::apiResource('disputes', \App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class);
+        Route::apiResource('disputes', \App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class)
+            ->except(['store']);
         Route::apiResource('tickets', \App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class);
         Route::post('tickets/{ticket}/reply', [\App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class, 'addReply']);
         Route::post('tickets/{ticket}/attachments', [\App\Http\Controllers\Api\Ecommerce\EcommerceTicketController::class, 'uploadAttachment']);
