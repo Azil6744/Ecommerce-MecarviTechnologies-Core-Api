@@ -16,12 +16,12 @@ class RolePermissionController extends Controller
     private function isSuperAdmin($user): bool
     {
         // Check role column first
-        if ($user->role === 'super_admin') {
+        if (in_array($user->role, ['super_admin', 'admin'])) {
             return true;
         }
         // Try Spatie hasRole — may fail if tables/config don't exist
         try {
-            return $user->hasRole('super_admin');
+            return $user->hasAnyRole(['super_admin', 'admin']);
         } catch (\Exception $e) {
             return false;
         }

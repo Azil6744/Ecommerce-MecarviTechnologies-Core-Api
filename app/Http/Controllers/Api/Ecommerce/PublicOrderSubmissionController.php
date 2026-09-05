@@ -41,11 +41,12 @@ class PublicOrderSubmissionController extends Controller
         ]);
 
         $product = Product::where('is_active', true)->findOrFail($validated['product_id']);
+        $userId = optional($request->user())->id;
         $pricing = app(ProductCustomizationController::class)->calculatePrice($product, [
             'quantity' => $validated['quantity'],
             'selected_options' => $validated['customization'] ?? [],
             'coupon_code' => $validated['coupon_code'] ?? null,
-        ]);
+        ], $userId);
         $unitPrice = $pricing['unit_price'];
         $quantity = $pricing['quantity'];
         $total = $pricing['total_price'];
@@ -55,7 +56,7 @@ class PublicOrderSubmissionController extends Controller
             : null;
         $couponContext = [
             'product_ids' => [$product->id],
-            'user_id' => optional($request->user())->id,
+            'user_id' => $userId,
             'customer_email' => $validated['customer_email'],
         ];
 
@@ -70,10 +71,20 @@ class PublicOrderSubmissionController extends Controller
             $shippingAmount = max(0, $shippingAmount - $appliedCoupon->shippingDiscountFor($shippingAmount, (float) ($pricing['subtotal'] ?? $total + $pricing['discount_amount']), $couponContext));
         }
 
+        // Membership Free Delivery check
+        $membershipBenefits = $pricing['membership_benefits'] ?? null;
+        if (!empty($membershipBenefits['membership_benefit_usage'])) {
+            foreach ($membershipBenefits['membership_benefit_usage'] as $usage) {
+                if (in_array($usage['type'] ?? '', ['free_delivery', 'free_shipping'])) {
+                    $shippingAmount = 0.0;
+                }
+            }
+        }
+
         if (data_get($validated, 'page_context.intent') === 'quote') {
             $quote = EcommerceQuotation::create([
                 'quote_number' => 'QUO-' . now()->format('Y') . '-' . strtoupper(Str::random(6)),
-                'user_id' => optional($request->user())->id,
+                'user_id' => $userId,
                 'product_id' => $product->id,
                 'company_name' => $validated['company_name'] ?? null,
                 'customer_name' => $validated['customer_name'],
@@ -94,10 +105,10 @@ class PublicOrderSubmissionController extends Controller
                         'attributes' => $product->attributes ?? [],
                     ],
                 ],
-            'status' => 'pending',
-            'total_estimated' => $total,
-            'valid_until' => now()->addDays(14)->toDateString(),
-        ]);
+                'status' => 'pending',
+                'total_estimated' => $total,
+                'valid_until' => now()->addDays(14)->toDateString(),
+            ]);
 
             $emailService = app(EmailNotificationService::class);
             $quotePayload = [
@@ -114,9 +125,9 @@ class PublicOrderSubmissionController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Quote request submitted successfully.',
-            'data' => [
-                'quotation' => $quote,
-                'order' => [
+                'data' => [
+                    'quotation' => $quote,
+                    'order' => [
                         'id' => null,
                         'order_number' => $quote->quote_number,
                     ],
@@ -126,7 +137,7 @@ class PublicOrderSubmissionController extends Controller
 
         $order = EcommerceOrder::create([
             'order_number' => EcommerceOrder::generateOrderNumber(),
-            'user_id' => optional($request->user())->id,
+            'user_id' => $userId,
             'customer_name' => $validated['customer_name'],
             'company_name' => $validated['company_name'] ?? null,
             'customer_email' => $validated['customer_email'],
@@ -135,6 +146,11 @@ class PublicOrderSubmissionController extends Controller
             'payment_status' => 'unpaid',
             'notes' => $validated['notes'] ?? null,
             'discount_amount' => $pricing['discount_amount'],
+            'membership_id' => $membershipBenefits['membership_id'] ?? null,
+            'membership_plan_name' => $membershipBenefits['membership_plan_name'] ?? null,
+            'membership_discount_amount' => $pricing['membership_discount_amount'] ?? 0.0,
+            'membership_benefits_snapshot' => $membershipBenefits['membership_benefits_snapshot'] ?? null,
+            'membership_benefit_usage' => $membershipBenefits['membership_benefit_usage'] ?? null,
             'subtotal' => $pricing['subtotal'] ?? $total,
             'shipping_method' => $validated['shipping_method'] ?? null,
             'shipping_amount' => $shippingAmount,
@@ -148,7 +164,7 @@ class PublicOrderSubmissionController extends Controller
                     'attributes' => $product->attributes ?? [],
                 ],
             ],
-            'total_amount' => $total + $shippingAmount,
+            'total_amount' => max(0.00, round($total + $shippingAmount, 2)),
             'order_date' => Carbon::today(),
         ]);
         $order->statusEvents()->create([

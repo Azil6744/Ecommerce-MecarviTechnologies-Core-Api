@@ -29,16 +29,16 @@ class SubscriptionPlanSeeder extends Seeder
         EcommerceSubscriptionPlan::updateOrCreate(
             ['internal_code' => 'BASIC-PLAN'],
             [
-                'name' => 'basic',
+                'name' => 'Essentials Plan',
                 'account_type' => 'personal',
-                'price' => 19.98,
+                'price' => 19.99,
                 'billing_cycle' => 'Monthly',
                 'coverage_type' => 'universal',
                 'applicable_site' => 'all-sites',
                 'status' => 'Active',
-                'badge' => 'perfect for basic plan',
+                'badge' => 'Popular Choice',
                 'description' => 'Great for regular embroidery orders and digitizing.',
-                'features' => json_encode(['10% Site-wide Discount', 'Free Delivery on all orders', 'Email support']),
+                'features' => json_encode(['10% Site-wide Discount', 'Free Delivery on all orders', 'Email support', 'Early access to new designs']),
                 'benefit_config' => [
                     'percentage_discount' => 10,
                     'fixed_discount' => 0,

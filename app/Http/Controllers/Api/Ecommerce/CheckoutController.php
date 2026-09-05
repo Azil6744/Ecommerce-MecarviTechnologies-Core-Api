@@ -808,13 +808,16 @@ class CheckoutController extends Controller
             if ($local->count() > 0) {
                 $localMapped = $local->map(function ($m) {
                     $arr = $m->toArray();
-                    if (empty($arr['benefits_snapshot']) && empty($arr['benefits'])) {
-                        $plan = \App\Models\EcommerceSubscriptionPlan::where('name', $m->plan_name)
-                            ->orWhere('internal_code', $m->plan_name)
-                            ->first();
-                        if ($plan) {
+                    $plan = \App\Models\EcommerceSubscriptionPlan::where('name', $m->plan_name)
+                        ->orWhere('internal_code', $m->plan_name)
+                        ->first();
+                    if ($plan) {
+                        if (empty($arr['benefits_snapshot']) && empty($arr['benefits'])) {
                             $arr['benefits_snapshot'] = $plan->benefit_config ?: $plan->features;
                         }
+                        $arr['coverage_type'] = $arr['coverage_type'] ?? $plan->coverage_type;
+                        $arr['applicable_site'] = $arr['applicable_site'] ?? $plan->applicable_site;
+                        $arr['covered_sites'] = $arr['covered_sites'] ?? $plan->covered_sites;
                     }
                     return $arr;
                 })->toArray();

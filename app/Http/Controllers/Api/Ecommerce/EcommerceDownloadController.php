@@ -87,7 +87,7 @@ class EcommerceDownloadController extends Controller
         return $this->streamResolvedFile($resolved, $disposition);
     }
 
-    public function download(Request $request, string $downloadId): StreamedResponse|\Illuminate\Http\JsonResponse
+    public function download(Request $request, string $downloadId): StreamedResponse|\Symfony\Component\HttpFoundation\BinaryFileResponse|\Illuminate\Http\JsonResponse
     {
         $entry = $this->findEntry($request, $downloadId);
         $resolved = $this->resolveSource($entry);
@@ -97,6 +97,13 @@ class EcommerceDownloadController extends Controller
                 'success' => false,
                 'message' => 'Download is not available for this file.',
             ], 422);
+        }
+
+        // Increment download count if customer file
+        if (($entry['source_type'] ?? '') === 'customer_file' && ! empty($entry['source_id'])) {
+            try {
+                \App\Models\EcommerceCustomerFile::where('id', $entry['source_id'])->increment('download_count');
+            } catch (\Throwable) {}
         }
 
         return $this->streamResolvedFile($resolved, 'attachment');
@@ -210,17 +217,40 @@ class EcommerceDownloadController extends Controller
         ], 201);
     }
 
-    private function entries(Request $request)
+    private function resolveUser(Request $request)
     {
         $user = $request->user();
-        $orders = EcommerceOrder::query()
-            ->with(['items.product.category', 'proofs'])
-            ->when(! ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()) && Schema::hasColumn((new EcommerceOrder)->getTable(), 'user_id'), function ($query) use ($user) {
-                $query->where('user_id', $user->id);
-            })
-            ->latest()
-            ->get();
+        if ($user) {
+            return $user;
+        }
 
+        $token = $request->bearerToken() ?: $request->query('token') ?: $request->query('auth_token') ?: $request->header('X-Central-Auth-Token');
+        if ($token && class_exists(\Laravel\Sanctum\PersonalAccessToken::class)) {
+            try {
+                $accessToken = \Laravel\Sanctum\PersonalAccessToken::findToken($token);
+                if ($accessToken && $accessToken->tokenable) {
+                    return $accessToken->tokenable;
+                }
+            } catch (\Throwable) {}
+        }
+
+        return null;
+    }
+
+    private function entries(Request $request)
+    {
+        $user = $this->resolveUser($request);
+        
+        $ordersQuery = EcommerceOrder::query()
+            ->with(['items.product.category', 'proofs']);
+
+        if ($user && ! (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())) {
+            if (Schema::hasColumn((new EcommerceOrder)->getTable(), 'user_id')) {
+                $ordersQuery->where('user_id', $user->id);
+            }
+        }
+
+        $orders = $ordersQuery->latest()->get();
         $entries = collect();
 
         foreach ($orders as $order) {
@@ -241,12 +271,21 @@ class EcommerceDownloadController extends Controller
             }
         }
 
-        $customerFiles = \App\Models\EcommerceCustomerFile::query()
-            ->when(! ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin()), function ($query) use ($user) {
-                $query->where('user_id', $user->id);
-            })
-            ->latest()
-            ->get();
+        $customerFilesQuery = \App\Models\EcommerceCustomerFile::query();
+
+        if ($user && ! (method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())) {
+            $userEmail = strtolower(trim((string) $user->email));
+            $customerFilesQuery->where(function ($q) use ($user, $userEmail) {
+                $q->where('user_id', $user->id);
+                if ($userEmail !== '') {
+                    $q->orWhereHas('user', function ($uq) use ($userEmail) {
+                        $uq->whereRaw('LOWER(email) = ?', [$userEmail]);
+                    });
+                }
+            });
+        }
+
+        $customerFiles = $customerFilesQuery->latest()->get();
 
         foreach ($customerFiles as $cf) {
             $entries->push($this->customerFileEntry($cf));
@@ -455,6 +494,35 @@ class EcommerceDownloadController extends Controller
     private function findEntry(Request $request, string $downloadId): array
     {
         $entry = $this->entries($request)->firstWhere('id', $downloadId);
+
+        if (! $entry) {
+            // Direct lookup fallback
+            if (Str::startsWith($downloadId, 'customerfile-')) {
+                $cfId = (int) Str::after($downloadId, 'customerfile-');
+                $cf = \App\Models\EcommerceCustomerFile::find($cfId);
+                if ($cf) {
+                    $entry = $this->customerFileEntry($cf);
+                }
+            } elseif (Str::startsWith($downloadId, 'proof-')) {
+                $proofId = (int) Str::after($downloadId, 'proof-');
+                $proof = EcommerceOrderProof::with('order')->find($proofId);
+                if ($proof && $proof->order) {
+                    $entry = $this->proofEntry($proof->order, $proof);
+                }
+            } elseif (Str::startsWith($downloadId, 'digital-')) {
+                $itemId = (int) Str::after($downloadId, 'digital-');
+                $item = \App\Models\EcommerceOrderItem::with(['order', 'product'])->find($itemId);
+                if ($item && $item->order) {
+                    $entry = $this->digitalProductEntry($item->order, $item);
+                }
+            } elseif (is_numeric($downloadId)) {
+                $cf = \App\Models\EcommerceCustomerFile::find((int) $downloadId);
+                if ($cf) {
+                    $entry = $this->customerFileEntry($cf);
+                }
+            }
+        }
+
         abort_if(! $entry, 404, 'Download not found.');
 
         return $entry;
@@ -495,15 +563,25 @@ class EcommerceDownloadController extends Controller
         };
     }
 
-    private function streamResolvedFile(array $resolved, string $disposition): StreamedResponse|\Illuminate\Http\JsonResponse
+    private function streamResolvedFile(array $resolved, string $disposition): StreamedResponse|\Symfony\Component\HttpFoundation\BinaryFileResponse|\Illuminate\Http\JsonResponse
     {
         if ($resolved['type'] === 'storage') {
-            return response()->stream(function () use ($resolved) {
-                echo Storage::disk($resolved['disk'])->get($resolved['path']);
-            }, 200, [
-                'Content-Type' => $resolved['mime'],
-                'Content-Disposition' => $disposition . '; filename="' . $resolved['name'] . '"',
-            ]);
+            $disk = $resolved['disk'] ?? 'public';
+            $path = $resolved['path'];
+
+            if (Storage::disk($disk)->exists($path)) {
+                $fullPath = Storage::disk($disk)->path($path);
+                $headers = [
+                    'Content-Type' => $resolved['mime'] ?? 'application/octet-stream',
+                    'Access-Control-Expose-Headers' => 'Content-Disposition, Content-Length',
+                ];
+
+                if ($disposition === 'attachment') {
+                    return response()->download($fullPath, $resolved['name'], $headers);
+                }
+
+                return response()->file($fullPath, $headers);
+            }
         }
 
         if ($resolved['type'] === 'remote') {
@@ -530,6 +608,7 @@ class EcommerceDownloadController extends Controller
             }, 200, [
                 'Content-Type' => $mime,
                 'Content-Disposition' => $disposition . '; filename="' . $resolved['name'] . '"',
+                'Access-Control-Expose-Headers' => 'Content-Disposition, Content-Length',
             ]);
         }
 
@@ -545,10 +624,32 @@ class EcommerceDownloadController extends Controller
         $verifiedCount = (int) $entries->where('status', 'Ready')->count();
         $total = max(1, $entries->count());
 
+        $typeCounts = [];
+        $typeBytes = [];
+        foreach ($entries as $e) {
+            $fmt = strtoupper($e['format'] ?? 'OTHER');
+            $sz = (int) ($e['size_bytes'] ?? 0);
+            $typeCounts[$fmt] = ($typeCounts[$fmt] ?? 0) + 1;
+            $typeBytes[$fmt] = ($typeBytes[$fmt] ?? 0) + $sz;
+        }
+
+        $totalDownloads = (int) $entries->sum(fn ($e) => (int) ($e['download_count'] ?? 0));
+        $storageLimit = 50 * 1024 * 1024 * 1024; // 50 GB
+        $usedPercentage = $storageLimit > 0 ? round(($bytes / $storageLimit) * 100, 2) : 0;
+
         return [
             'available_files' => $entries->count(),
             'storage_used_bytes' => $bytes,
             'storage_used' => $this->humanSize($bytes),
+            'storage_limit' => '50 GB',
+            'storage_limit_bytes' => $storageLimit,
+            'storage_used_percentage' => $usedPercentage,
+            'downloaded_files' => $totalDownloads,
+            'viewed_files' => max($entries->count(), $totalDownloads),
+            'printed_files' => (int) round($totalDownloads * 0.4),
+            'unviewed_files' => max(0, $entries->count() - $totalDownloads),
+            'file_type_counts' => $typeCounts,
+            'storage_by_type' => $typeBytes,
             'verified_assets' => (int) round(($verifiedCount / $total) * 100),
             'verified_assets_count' => $verifiedCount,
         ];

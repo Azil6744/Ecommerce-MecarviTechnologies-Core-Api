@@ -8,6 +8,8 @@ use App\Models\User;
 use App\Models\SiteSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class EcommerceAdminDownloadController extends Controller
@@ -20,9 +22,12 @@ class EcommerceAdminDownloadController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('file_name', 'like', "%{$search}%")
+                  ->orWhere('category', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%")
                   ->orWhereHas('user', function ($u) use ($search) {
                       $u->where('name', 'like', "%{$search}%")
-                        ->orWhere('email', 'like', "%{$search}%");
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('username', 'like', "%{$search}%");
                   });
             });
         }
@@ -32,7 +37,26 @@ class EcommerceAdminDownloadController extends Controller
         }
 
         if ($request->has('file_type') && $request->file_type !== 'all') {
-            $query->where('file_type', $request->file_type);
+            $query->where('file_type', strtolower($request->file_type));
+        }
+
+        if ($request->has('recipient_type') && $request->recipient_type !== 'all') {
+            $type = strtolower($request->recipient_type);
+            $businessRoles = ['business', 'business_user', 'business-customer', 'company', 'seller'];
+            if ($type === 'business') {
+                $query->whereHas('user', function ($u) use ($businessRoles) {
+                    $u->whereIn('role', $businessRoles)
+                      ->orWhereHas('roles', fn($r) => $r->whereIn('name', $businessRoles));
+                });
+            } elseif ($type === 'customer') {
+                $query->whereHas('user', function ($u) use ($businessRoles) {
+                    $u->where('role', 'customer')
+                      ->orWhere(function ($sub) use ($businessRoles) {
+                          $sub->whereNotIn('role', $businessRoles)
+                              ->whereDoesntHave('roles', fn($r) => $r->whereIn('name', $businessRoles));
+                      });
+                });
+            }
         }
 
         $sort = $request->query('sort', 'newest');
@@ -52,27 +76,47 @@ class EcommerceAdminDownloadController extends Controller
                 break;
         }
 
-        $perPage = $request->query('per_page', 8);
+        $perPage = (int) $request->query('per_page', 8);
         $files = $query->paginate($perPage);
 
-        $files->getCollection()->transform(function ($file) {
+        $businessRoles = ['business', 'business_user', 'business-customer', 'company', 'seller'];
+
+        $files->getCollection()->transform(function ($file) use ($businessRoles) {
+            $user = $file->user;
+            $isBusiness = false;
+            if ($user) {
+                $isBusiness = in_array($user->role, $businessRoles, true)
+                    || ($user->relationLoaded('roles') && $user->roles->pluck('name')->intersect($businessRoles)->isNotEmpty());
+            }
+
+            $businessName = null;
+            if ($user) {
+                $businessName = $user->business_name ?? $user->company_name ?? ($isBusiness ? ($user->name ? $user->name . "'s Business" : "Business Account") : null);
+            }
+
             return [
                 'id' => $file->id,
+                'user_type' => $isBusiness ? 'business' : 'customer',
                 'customer' => [
                     'id' => $file->user_id,
-                    'name' => optional($file->user)->name,
-                    'email' => optional($file->user)->email,
-                    'avatar' => optional($file->user)->avatar,
+                    'name' => optional($user)->name ?? 'User #' . $file->user_id,
+                    'business_name' => $businessName,
+                    'email' => optional($user)->email ?? '',
+                    'avatar' => optional($user)->avatar ?? '',
+                    'role' => optional($user)->role ?? 'customer',
+                    'is_business' => $isBusiness,
                 ],
                 'file_details' => [
                     'name' => $file->file_name,
                     'description' => $file->description,
                 ],
-                'type' => strtoupper($file->file_type),
+                'category' => $file->category,
+                'notes' => $file->notes,
+                'type' => strtoupper($file->file_type ?: pathinfo($file->file_path, PATHINFO_EXTENSION)),
                 'size' => $this->humanSize($file->size_bytes),
-                'uploaded_on' => $file->created_at->format('M d, Y h:i A'),
-                'downloads' => $file->download_count,
-                'status' => $file->status,
+                'uploaded_on' => $file->created_at ? $file->created_at->format('M d, Y h:i A') : '',
+                'downloads' => $file->download_count ?? 0,
+                'status' => $file->status ?? 'Published',
                 'download_url' => url(Storage::url($file->file_path)),
             ];
         });
@@ -83,16 +127,72 @@ class EcommerceAdminDownloadController extends Controller
         ]);
     }
 
+    public function users(Request $request)
+    {
+        $search = $request->query('search', '');
+        $businessRoles = ['business', 'business_user', 'business-customer', 'company', 'seller'];
+
+        $query = User::query();
+        if (!empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhere('username', 'like', "%{$search}%");
+            });
+        }
+
+        $allUsers = $query->orderBy('name', 'asc')->limit(150)->get();
+
+        $customers = [];
+        $businesses = [];
+
+        foreach ($allUsers as $user) {
+            $isBiz = in_array($user->role, $businessRoles, true);
+            $bizName = $user->business_name ?? $user->company_name ?? ($isBiz ? ($user->name ? $user->name . "'s Business" : "Business Account") : null);
+
+            $payload = [
+                'id' => $user->id,
+                'name' => $user->name,
+                'business_name' => $bizName,
+                'email' => $user->email,
+                'role' => $user->role ?? ($isBiz ? 'business' : 'customer'),
+                'type' => $isBiz ? 'business' : 'customer',
+                'avatar' => $user->avatar ?? '',
+            ];
+
+            if ($isBiz) {
+                $businesses[] = $payload;
+            } else {
+                $customers[] = $payload;
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'customers' => $customers,
+                'businesses' => $businesses,
+                'all' => array_merge($customers, $businesses),
+            ],
+        ]);
+    }
+
     public function stats()
     {
         $totalFiles = EcommerceCustomerFile::count();
-        $totalCustomers = EcommerceCustomerFile::distinct('user_id')->count('user_id');
-        $storageUsed = EcommerceCustomerFile::sum('size_bytes');
-        $totalDownloads = EcommerceCustomerFile::sum('download_count');
+        $totalUsers = EcommerceCustomerFile::distinct('user_id')->count('user_id');
+        $businessRoles = ['business', 'business_user', 'business-customer', 'company', 'seller'];
+
+        $totalBusinesses = EcommerceCustomerFile::whereHas('user', function ($u) use ($businessRoles) {
+            $u->whereIn('role', $businessRoles);
+        })->distinct('user_id')->count('user_id');
+
+        $totalCustomers = max(0, $totalUsers - $totalBusinesses);
+        $storageUsed = EcommerceCustomerFile::sum('size_bytes') ?: 0;
+        $totalDownloads = EcommerceCustomerFile::sum('download_count') ?: 0;
         $storageLimit = 50 * 1024 * 1024 * 1024; // 50 GB
 
-        // Group by category to match chart data if needed (mocked categories for now based on types)
-        $categories = EcommerceCustomerFile::selectRaw('category, SUM(size_bytes) as total_size')
+        $categories = EcommerceCustomerFile::selectRaw('category, SUM(size_bytes) as total_size, COUNT(*) as file_count')
             ->groupBy('category')
             ->get();
 
@@ -100,16 +200,19 @@ class EcommerceAdminDownloadController extends Controller
             'success' => true,
             'data' => [
                 'total_files' => $totalFiles,
+                'total_users' => $totalUsers,
                 'total_customers' => $totalCustomers,
+                'total_businesses' => $totalBusinesses,
                 'storage_used' => $storageUsed,
                 'storage_used_formatted' => $this->humanSize($storageUsed),
                 'storage_limit' => $storageLimit,
                 'total_downloads' => $totalDownloads,
                 'categories' => $categories->map(function ($cat) {
                     return [
-                        'name' => $cat->category,
+                        'name' => $cat->category ?: 'General',
                         'size' => $cat->total_size,
                         'size_formatted' => $this->humanSize($cat->total_size),
+                        'count' => $cat->file_count,
                     ];
                 }),
             ],
@@ -173,30 +276,6 @@ class EcommerceAdminDownloadController extends Controller
 
     public function settings(Request $request)
     {
-        if ($request->isMethod('post')) {
-            $data = $request->validate([
-                'enable_downloads_page' => 'boolean',
-                'allow_search' => 'boolean',
-                'allow_sorting' => 'boolean',
-                'sorting_by' => 'string',
-                'show_file_size' => 'boolean',
-                'show_download_count' => 'boolean',
-                'allow_guest_access' => 'boolean',
-                'allowed_file_types' => 'array',
-                'max_file_size' => 'string',
-                'max_downloads_limit' => 'string',
-                'download_expiry' => 'string',
-            ]);
-
-            SiteSetting::updateOrCreate(
-                ['key' => 'ecommerce_downloads_settings'],
-                ['value' => json_encode($data)]
-            );
-
-            return response()->json(['success' => true, 'message' => 'Settings updated successfully.', 'data' => $data]);
-        }
-
-        $setting = SiteSetting::where('key', 'ecommerce_downloads_settings')->first();
         $defaultSettings = [
             'enable_downloads_page' => true,
             'allow_search' => true,
@@ -211,9 +290,68 @@ class EcommerceAdminDownloadController extends Controller
             'download_expiry' => '30',
         ];
 
+        if ($request->isMethod('post')) {
+            $data = $request->validate([
+                'enable_downloads_page' => 'nullable|boolean',
+                'allow_search' => 'nullable|boolean',
+                'allow_sorting' => 'nullable|boolean',
+                'sorting_by' => 'nullable|string',
+                'show_file_size' => 'nullable|boolean',
+                'show_download_count' => 'nullable|boolean',
+                'allow_guest_access' => 'nullable|boolean',
+                'allowed_file_types' => 'nullable|array',
+                'max_file_size' => 'nullable|string',
+                'max_downloads_limit' => 'nullable|string',
+                'download_expiry' => 'nullable|string',
+            ]);
+
+            $merged = array_merge($defaultSettings, $data);
+
+            try {
+                $siteSetting = SiteSetting::firstOrCreate([]);
+                if (Schema::hasColumn('site_settings', 'downloads_settings')) {
+                    $siteSetting->downloads_settings = json_encode($merged);
+                    $siteSetting->save();
+                }
+            } catch (\Throwable $e) {
+                // Ignore DB error, use cache fallback
+            }
+
+            Cache::forever('ecommerce_downloads_settings', $merged);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Settings updated successfully.',
+                'data' => $merged,
+            ]);
+        }
+
+        $cached = Cache::get('ecommerce_downloads_settings');
+        if ($cached && is_array($cached)) {
+            return response()->json([
+                'success' => true,
+                'data' => array_merge($defaultSettings, $cached),
+            ]);
+        }
+
+        try {
+            $siteSetting = SiteSetting::first();
+            if ($siteSetting && Schema::hasColumn('site_settings', 'downloads_settings') && !empty($siteSetting->downloads_settings)) {
+                $decoded = json_decode($siteSetting->downloads_settings, true);
+                if (is_array($decoded)) {
+                    return response()->json([
+                        'success' => true,
+                        'data' => array_merge($defaultSettings, $decoded),
+                    ]);
+                }
+            }
+        } catch (\Throwable $e) {
+            // DB fallback
+        }
+
         return response()->json([
             'success' => true,
-            'data' => $setting ? array_merge($defaultSettings, json_decode($setting->value, true)) : $defaultSettings,
+            'data' => $defaultSettings,
         ]);
     }
 

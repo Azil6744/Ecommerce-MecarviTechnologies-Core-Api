@@ -27,7 +27,7 @@ class ProductCustomizationController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $this->calculatePrice($product, $validated),
+            'data' => $this->calculatePrice($product, $validated, $request->user()?->id),
         ]);
     }
 
@@ -40,7 +40,7 @@ class ProductCustomizationController extends Controller
             'metadata' => ['nullable', 'array'],
         ]);
 
-        $pricing = $this->calculatePrice($product, $validated);
+        $pricing = $this->calculatePrice($product, $validated, $request->user()?->id);
         $draft = ProductCustomizationDraft::create([
             'product_id' => $product->id,
             'user_id' => optional($request->user())->id,
@@ -70,7 +70,7 @@ class ProductCustomizationController extends Controller
             'metadata' => ['nullable', 'array'],
         ]);
 
-        $pricing = $this->calculatePrice($draft->product, array_merge($draft->toArray(), $validated));
+        $pricing = $this->calculatePrice($draft->product, array_merge($draft->toArray(), $validated), $request->user()?->id ?: $draft->user_id);
         $draft->update([
             'selected_options' => $validated['selected_options'] ?? $draft->selected_options ?? [],
             'quantity' => $pricing['quantity'],
@@ -128,17 +128,24 @@ class ProductCustomizationController extends Controller
         return DB::transaction(function () use ($request, $draft, $validated) {
             $product = $draft->product;
             $customization = $this->customizationPayload($draft);
+            $userId = optional($request->user())->id ?? $draft->user_id;
             $shippingAmount = (float) ($validated['shipping_amount'] ?? 0);
+
+            $pricing = $this->calculatePrice($product, array_merge($draft->toArray(), [
+                'quantity' => $draft->quantity,
+                'coupon_code' => $draft->coupon_code,
+            ]), $userId);
+
             $appliedCoupon = $draft->coupon_code
                 ? EcommerceCoupon::where('code', $draft->coupon_code)->first()
                 : null;
             $couponContext = [
                 'product_ids' => [$product->id],
-                'user_id' => optional($request->user())->id ?? $draft->user_id,
+                'user_id' => $userId,
                 'customer_email' => $validated['customer_email'],
             ];
 
-            if ($draft->coupon_code && (! $appliedCoupon || ! $appliedCoupon->isUsableFor((float) ($draft->total_price + $draft->discount_amount), $couponContext))) {
+            if ($draft->coupon_code && (! $appliedCoupon || ! $appliedCoupon->isUsableFor((float) ($pricing['subtotal']), $couponContext))) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Coupon is not valid for this order.',
@@ -146,12 +153,22 @@ class ProductCustomizationController extends Controller
             }
 
             if ($appliedCoupon?->discount_type === 'free_shipping') {
-                $shippingAmount = max(0, $shippingAmount - $appliedCoupon->shippingDiscountFor($shippingAmount, (float) ($draft->total_price + $draft->discount_amount), $couponContext));
+                $shippingAmount = max(0, $shippingAmount - $appliedCoupon->shippingDiscountFor($shippingAmount, (float) ($pricing['subtotal']), $couponContext));
+            }
+
+            // Membership Free Delivery Waiver check
+            $membershipBenefits = $pricing['membership_benefits'] ?? null;
+            if (!empty($membershipBenefits['membership_benefit_usage'])) {
+                foreach ($membershipBenefits['membership_benefit_usage'] as $usage) {
+                    if (in_array($usage['type'] ?? '', ['free_delivery', 'free_shipping'])) {
+                        $shippingAmount = 0.0;
+                    }
+                }
             }
 
             $order = EcommerceOrder::create([
                 'order_number' => EcommerceOrder::generateOrderNumber(),
-                'user_id' => optional($request->user())->id ?? $draft->user_id,
+                'user_id' => $userId,
                 'customer_name' => $validated['customer_name'],
                 'company_name' => $validated['company_name'] ?? null,
                 'customer_email' => $validated['customer_email'],
@@ -162,17 +179,23 @@ class ProductCustomizationController extends Controller
                 'notes' => $validated['notes'] ?? null,
                 'shipping_method' => $validated['shipping_method'] ?? null,
                 'shipping_amount' => $shippingAmount,
+                'membership_id' => $membershipBenefits['membership_id'] ?? null,
+                'membership_plan_name' => $membershipBenefits['membership_plan_name'] ?? null,
+                'membership_discount_amount' => $pricing['membership_discount_amount'] ?? 0.0,
+                'membership_benefits_snapshot' => $membershipBenefits['membership_benefits_snapshot'] ?? null,
+                'membership_benefit_usage' => $membershipBenefits['membership_benefit_usage'] ?? null,
                 'metadata' => [
                     'customization' => $customization,
                     'draft_id' => $draft->id,
+                    'pricing_breakdown' => $pricing['breakdown'] ?? null,
                 ],
-                'total_amount' => $draft->total_price + $shippingAmount,
-                'subtotal' => $draft->total_price + $draft->discount_amount,
-                'discount_amount' => $draft->discount_amount,
+                'total_amount' => max(0.00, round($pricing['total_price'] + $shippingAmount, 2)),
+                'subtotal' => $pricing['subtotal'],
+                'discount_amount' => $pricing['discount_amount'],
                 'order_date' => Carbon::today(),
             ]);
             $order->statusEvents()->create([
-                'user_id' => optional($request->user())->id ?? $draft->user_id,
+                'user_id' => $userId,
                 'status' => 'pending',
                 'label' => 'Order submitted',
             ]);
@@ -182,9 +205,9 @@ class ProductCustomizationController extends Controller
                 'product_id' => $product->id,
                 'product_name' => $product->name,
                 'product_sku' => $product->sku,
-                'quantity' => $draft->quantity,
-                'unit_price' => $draft->unit_price,
-                'total_price' => $draft->total_price,
+                'quantity' => $pricing['quantity'],
+                'unit_price' => $pricing['unit_price'],
+                'total_price' => $pricing['total_price'],
                 'product_options' => $customization,
             ]);
 
@@ -297,7 +320,7 @@ class ProductCustomizationController extends Controller
         return response()->json(['success' => true, 'data' => $related]);
     }
 
-    public function calculatePrice(Product $product, array $payload): array
+    public function calculatePrice(Product $product, array $payload, ?int $userId = null): array
     {
         $quantity = max(1, (int) ($payload['quantity'] ?? 1));
         $unitPrice = (float) ($product->sale_price ?? $product->price ?? 0);
@@ -326,6 +349,43 @@ class ProductCustomizationController extends Controller
             }
         }
 
+        // Evaluate Membership Benefits (10% Essentials, 20% Business Pro, etc.)
+        $membershipDiscount = 0.0;
+        $membershipBenefits = null;
+        if ($userId) {
+            $memberships = \App\Models\EcommerceMembership::where('user_id', $userId)
+                ->whereIn('status', ['Active', 'active', 'trialing', 'pending_cancellation'])
+                ->get()
+                ->map(function ($m) {
+                    $arr = $m->toArray();
+                    if (empty($arr['benefits_snapshot']) && empty($arr['benefits'])) {
+                        $plan = ($m->plan_id ? \App\Models\EcommerceSubscriptionPlan::find($m->plan_id) : null)
+                            ?: \App\Models\EcommerceSubscriptionPlan::where('name', $m->plan_name)
+                                ->orWhere('internal_code', $m->plan_name)
+                                ->first();
+                        if ($plan) {
+                            $arr['benefits_snapshot'] = $plan->benefit_config ?: $plan->features;
+                        }
+                    }
+                    return $arr;
+                })->toArray();
+
+            if (!empty($memberships)) {
+                $membershipBenefits = app(\App\Services\MembershipBenefitService::class)->evaluate(
+                    $memberships,
+                    $subtotal,
+                    0.0,
+                    config('services.mccarvy_site.slug', 'embroidery'),
+                    $appliedCoupon !== null
+                );
+                if (!empty($membershipBenefits['membership_discount_amount'])) {
+                    $membershipDiscount = (float) $membershipBenefits['membership_discount_amount'];
+                }
+            }
+        }
+
+        $totalDiscount = round($discount + $membershipDiscount, 2);
+
         return [
             'quantity' => $quantity,
             'unit_price' => round($unitPrice, 2),
@@ -333,8 +393,10 @@ class ProductCustomizationController extends Controller
             'option_adjustments' => round($optionAdjustments['total'], 2),
             'pricing_rule_adjustments' => round($ruleAdjustments['total'], 2),
             'subtotal' => $subtotal,
-            'discount_amount' => round($discount, 2),
-            'total_price' => round(max(0, $subtotal - $discount), 2),
+            'discount_amount' => $totalDiscount,
+            'membership_discount_amount' => $membershipDiscount,
+            'membership_benefits' => $membershipBenefits,
+            'total_price' => round(max(0, $subtotal - $totalDiscount), 2),
             'coupon_code' => $appliedCoupon ? $appliedCoupon->code : null,
             'coupon' => $appliedCoupon ? $appliedCoupon->toPublicArray() : null,
             'breakdown' => [
@@ -342,7 +404,9 @@ class ProductCustomizationController extends Controller
                 'options' => $optionAdjustments['items'],
                 'rules' => $ruleAdjustments['items'],
                 'setup_fee' => round($setupFee, 2),
-                'discount' => round($discount, 2),
+                'coupon_discount' => round($discount, 2),
+                'membership_discount' => round($membershipDiscount, 2),
+                'discount' => $totalDiscount,
             ],
         ];
     }

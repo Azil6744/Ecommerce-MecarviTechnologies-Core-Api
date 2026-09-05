@@ -240,11 +240,28 @@ class EcommerceOrderController extends Controller
             ], 422);
         }
 
-        $order->update(['status' => 'cancelled']);
+        $reason = $request->input('reason') ?: 'Changed my mind';
+        $details = $request->input('details');
+
+        $metadata = is_array($order->metadata) ? $order->metadata : [];
+        $metadata['cancellation_reason'] = $reason;
+        if ($details) {
+            $metadata['cancellation_details'] = $details;
+        }
+        $metadata['cancelled_at'] = now()->toIso8601String();
+        $metadata['refund_status'] = 'Refund Initiated';
+        $metadata['refund_amount'] = (float) ($order->total_amount ?? 0);
+
+        $order->update([
+            'status' => 'cancelled',
+            'metadata' => $metadata,
+        ]);
+
         $order->statusEvents()->create([
             'user_id' => $request->user()->id,
             'status' => 'cancelled',
-            'label' => 'Cancelled by customer',
+            'label' => 'Order cancelled: ' . $reason,
+            'note' => $details,
         ]);
 
         app(EmailNotificationService::class)->sendOrderEvent('order_cancelled', $order->fresh('items'));
@@ -564,13 +581,17 @@ class EcommerceOrderController extends Controller
             'shipping_method' => $order->shipping_method ?: 'Standard Shipping (2-3 Business Days)',
             'currency' => $order->currency ?? 'USD',
             'subtotal' => round($subtotal, 2),
-            'shipping_amount' => (float) ($order->shipping_amount ?? 15.00),
-            'discount_amount' => (float) ($order->discount_amount ?? 123.65),
-            'tax_amount' => (float) ($order->tax_amount ?? 22.48),
+            'shipping_amount' => (float) ($order->shipping_amount ?? 0),
+            'discount_amount' => (float) ($order->discount_amount ?? 0),
+            'membership_discount_amount' => (float) ($order->membership_discount_amount ?? 0),
+            'membership_plan_name' => $order->membership_plan_name,
+            'membership_benefits_snapshot' => $order->membership_benefits_snapshot,
+            'membership_benefit_usage' => $order->membership_benefit_usage,
+            'tax_amount' => (float) ($order->tax_amount ?? 0),
             'tip_amount' => (float) ($order->tip_amount ?? 0),
             'donation_amount' => (float) ($order->donation_amount ?? 0),
-            'total_amount' => (float) ($order->total_amount ?: 1150.33),
-            'loyalty_points_earned' => (int) ($order->loyalty_points_earned ?: 231),
+            'total_amount' => (float) ($order->total_amount ?? round(max(0, $subtotal + ($order->shipping_amount ?? 0) - ($order->discount_amount ?? 0)), 2)),
+            'loyalty_points_earned' => (int) ($order->loyalty_points_earned ?? round($subtotal * 0.1)),
             'return_eligible_until' => optional($order->created_at ? $order->created_at->addDays(14) : now()->addDays(14))->format('M d, Y'),
             'shipping_address' => $shippingAddress,
             'billing_address' => $billingAddress,
@@ -640,6 +661,19 @@ class EcommerceOrderController extends Controller
             'can_return' => in_array(strtolower($order->status), ['delivered', 'completed'], true),
             'can_dispute' => ! in_array(strtolower($order->status), ['cancelled', 'refunded'], true),
             'can_reorder' => $items->isNotEmpty(),
+            'cancellation_reason' => is_array($order->metadata) && isset($order->metadata['cancellation_reason'])
+                ? $order->metadata['cancellation_reason']
+                : ($order->status === 'cancelled' ? 'Changed my mind' : null),
+            'cancellation_details' => is_array($order->metadata) && isset($order->metadata['cancellation_details'])
+                ? $order->metadata['cancellation_details']
+                : null,
+            'cancelled_at' => is_array($order->metadata) && isset($order->metadata['cancelled_at'])
+                ? $order->metadata['cancelled_at']
+                : ($order->status === 'cancelled' ? optional($order->updated_at)->toIso8601String() : null),
+            'refund_status' => is_array($order->metadata) && isset($order->metadata['refund_status'])
+                ? $order->metadata['refund_status']
+                : ($order->status === 'cancelled' ? 'Refund Initiated' : null),
+            'refund_amount' => (float) ($order->total_amount ?? 0),
             'invoice_url' => url('/api/ecommerce/orders/' . $order->id . '/invoice'),
         ];
     }

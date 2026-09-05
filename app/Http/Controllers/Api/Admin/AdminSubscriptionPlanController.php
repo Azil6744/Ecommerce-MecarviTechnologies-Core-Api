@@ -27,6 +27,7 @@ class AdminSubscriptionPlanController extends Controller
     public function publicIndex(Request $request)
     {
         $site = trim((string) ($request->input('site') ?: $request->input('website') ?: ''));
+        $accountType = trim((string) ($request->input('account_type') ?: $request->input('audience') ?: ''));
 
         $query = EcommerceSubscriptionPlan::query();
 
@@ -41,15 +42,24 @@ class AdminSubscriptionPlanController extends Controller
             $q->whereNull('retirement_date')->orWhere('retirement_date', '>', now());
         });
 
+        if ($accountType !== '') {
+            $accLower = strtolower($accountType);
+            $query->where(function ($q) use ($accLower) {
+                $q->whereNull('account_type')
+                  ->orWhereRaw('LOWER(account_type) = ?', [$accLower]);
+            });
+        }
+
         if ($site !== '') {
             $siteSlug = strtolower($site);
             $query->where(function ($q) use ($siteSlug) {
                 $q->whereNull('coverage_type')
-                  ->orWhereRaw('LOWER(coverage_type) IN (?, ?, ?)', ['universal', 'all', 'all-sites'])
+                  ->orWhereRaw('LOWER(coverage_type) IN (?, ?, ?, ?)', ['universal', 'all', 'all-sites', 'all_sites'])
                   ->orWhere(function ($sub) use ($siteSlug) {
                       $sub->where(function ($siteQ) use ($siteSlug) {
                           $siteQ->whereRaw('LOWER(applicable_site) = ?', [$siteSlug])
-                                ->orWhereRaw('LOWER(applicable_site) LIKE ?', ['%' . $siteSlug . '%']);
+                                ->orWhereRaw('LOWER(applicable_site) LIKE ?', ['%' . $siteSlug . '%'])
+                                ->orWhereRaw('LOWER(CAST(covered_sites AS TEXT)) LIKE ?', ['%' . $siteSlug . '%']);
                       });
                   });
             });
@@ -60,14 +70,64 @@ class AdminSubscriptionPlanController extends Controller
             ->get();
 
         if ($plans->isEmpty()) {
-            $plans = EcommerceSubscriptionPlan::where(function ($q) {
+            $fallbackQuery = EcommerceSubscriptionPlan::where(function ($q) {
                 $q->whereNull('status')->orWhereRaw('LOWER(status) IN (?, ?, ?)', ['active', 'featured', 'published']);
-            })->get();
+            });
+            if ($accountType !== '') {
+                $fallbackQuery->where(function ($q) use ($accountType) {
+                    $q->whereNull('account_type')->orWhereRaw('LOWER(account_type) = ?', [strtolower($accountType)]);
+                });
+            }
+            $plans = $fallbackQuery->orderBy('sort_order')->orderBy('price')->get();
         }
+
+        $formatted = $plans->map(function ($plan) {
+            $features = $plan->features;
+            if (is_string($features)) {
+                $decoded = json_decode($features, true);
+                if (is_array($decoded)) {
+                    $features = $decoded;
+                } else {
+                    $features = array_filter(array_map('trim', explode("\n", $features)));
+                }
+            }
+
+            if ((empty($features) || !is_array($features)) && !empty($plan->benefit_config['benefits_table']) && is_array($plan->benefit_config['benefits_table'])) {
+                $features = collect($plan->benefit_config['benefits_table'])
+                    ->filter(fn ($b) => ($b['status'] ?? true))
+                    ->map(function ($b) {
+                        $title = trim((string) ($b['title'] ?? ''));
+                        $details = trim((string) ($b['details'] ?? ''));
+                        return $details !== '' ? "{$title}: {$details}" : $title;
+                    })
+                    ->filter(fn ($s) => $s !== '')
+                    ->values()
+                    ->all();
+            }
+
+            $priceNum = (float) $plan->price;
+            $tierRank = 1;
+            if ($priceNum <= 0) {
+                $tierRank = 0;
+            } elseif ($priceNum < 30) {
+                $tierRank = 1;
+            } elseif ($priceNum < 70) {
+                $tierRank = 2;
+            } else {
+                $tierRank = 3;
+            }
+
+            $planData = $plan->toArray();
+            $planData['features'] = is_array($features) ? array_values($features) : [];
+            $planData['tier_rank'] = $tierRank;
+            $planData['formatted_price'] = '$' . number_format($priceNum, 2);
+
+            return $planData;
+        });
 
         return response()->json([
             'success' => true,
-            'data' => $plans
+            'data' => $formatted
         ]);
     }
 
@@ -158,7 +218,7 @@ class AdminSubscriptionPlanController extends Controller
             'covered_sites.*' => 'nullable|string|max:255',
             'include_future_sites' => 'nullable|boolean',
             'price' => "{$required}|numeric|min:0",
-            'billing_cycle' => 'nullable|string|in:Daily,Weekly,Monthly,Quarterly,Six Months,Yearly,Annually,Custom',
+            'billing_cycle' => 'nullable|string|in:Daily,Weekly,Monthly,Quarterly,Six Months,Semi-Annually,semi-annually,monthly,quarterly,annually,Yearly,Annually,Custom',
             'billing_interval_count' => 'nullable|integer|min:1|max:120',
             'setup_fee' => 'nullable|numeric|min:0',
             'currency' => 'nullable|string|max:10',

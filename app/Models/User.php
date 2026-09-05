@@ -60,13 +60,13 @@ class User extends Authenticatable
     ];
 
     /**
-     * Check if user is a super admin.
+     * Check if user is a super admin or has full admin privileges.
      *
      * @return bool
      */
     public function isSuperAdmin(): bool
     {
-        return $this->role === 'super_admin';
+        return in_array($this->role, ['super_admin', 'admin', 'editor']) || $this->hasAnyRole(['super_admin', 'admin', 'editor']);
     }
 
     /**
@@ -90,13 +90,13 @@ class User extends Authenticatable
     }
 
     /**
-     * Check if user has admin access (super_admin or editor).
+     * Check if user has admin access (super_admin, admin, or editor).
      *
      * @return bool
      */
     public function hasAdminAccess(): bool
     {
-        return $this->hasAnyRole(['super_admin', 'admin', 'editor']) || in_array($this->role, ['super_admin', 'admin', 'editor']);
+        return in_array($this->role, ['super_admin', 'admin', 'editor']) || $this->hasAnyRole(['super_admin', 'admin', 'editor']);
     }
 
     /**

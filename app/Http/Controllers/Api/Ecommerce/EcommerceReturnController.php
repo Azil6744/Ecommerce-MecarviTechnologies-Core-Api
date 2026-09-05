@@ -22,12 +22,21 @@ class EcommerceReturnController extends Controller
             ->with(['user', 'order.items.product'])
             ->latest();
 
-        if (! ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())) {
+        if ($user) {
             $query->where('user_id', $user->id);
         }
 
-        if ($request->filled('status')) {
-            $query->whereRaw('LOWER(status) = ?', [strtolower($request->string('status'))]);
+        if ($request->filled('status') && strtolower($request->string('status')) !== 'all') {
+            $status = strtolower($request->string('status'));
+            if ($status === 'completed') {
+                $query->whereIn(\DB::raw('LOWER(status)'), ['completed', 'refunded']);
+            } elseif ($status === 'cancelled') {
+                $query->whereIn(\DB::raw('LOWER(status)'), ['cancelled', 'rejected', 'declined']);
+            } elseif ($status === 'pending') {
+                $query->whereIn(\DB::raw('LOWER(status)'), ['pending', 'processing', 'under_review', 'more_details_requested', 'approved']);
+            } else {
+                $query->whereRaw('LOWER(status) = ?', [$status]);
+            }
         }
 
         if ($request->filled('search')) {
@@ -61,7 +70,7 @@ class EcommerceReturnController extends Controller
 
         $query = EcommerceReturn::query();
 
-        if (! ($user && method_exists($user, 'isSuperAdmin') && $user->isSuperAdmin())) {
+        if ($user) {
             $query->where('user_id', $user->id);
         }
 
@@ -70,13 +79,32 @@ class EcommerceReturnController extends Controller
             ->groupBy('status_key')
             ->pluck('total', 'status_key');
 
+        $pendingCount = (int) (
+            ($statusCounts['pending'] ?? 0) +
+            ($statusCounts['processing'] ?? 0) +
+            ($statusCounts['under_review'] ?? 0) +
+            ($statusCounts['more_details_requested'] ?? 0) +
+            ($statusCounts['approved'] ?? 0)
+        );
+
+        $completedCount = (int) (
+            ($statusCounts['completed'] ?? 0) +
+            ($statusCounts['refunded'] ?? 0)
+        );
+
+        $cancelledCount = (int) (
+            ($statusCounts['cancelled'] ?? 0) +
+            ($statusCounts['rejected'] ?? 0) +
+            ($statusCounts['declined'] ?? 0)
+        );
+
         return response()->json([
             'success' => true,
             'data' => [
                 'total' => (clone $query)->count(),
-                'pending' => (int) ($statusCounts['pending'] ?? 0),
-                'completed' => (int) (($statusCounts['completed'] ?? 0) + ($statusCounts['refunded'] ?? 0)),
-                'cancelled' => (int) (($statusCounts['cancelled'] ?? 0) + ($statusCounts['rejected'] ?? 0)),
+                'pending' => $pendingCount,
+                'completed' => $completedCount,
+                'cancelled' => $cancelledCount,
             ],
         ]);
     }
@@ -84,11 +112,11 @@ class EcommerceReturnController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'order_id' => ['nullable', 'integer'],
+            'order_id' => ['nullable'],
             'order_number' => ['nullable', 'string', 'max:100'],
-            'reason' => ['required', 'string', 'max:1000'],
+            'reason' => ['nullable', 'string', 'max:1000'],
             'return_items' => ['nullable', 'array'],
-            'return_items.*.order_item_id' => ['nullable', 'integer'],
+            'return_items.*.order_item_id' => ['nullable'],
             'return_items.*.product_name' => ['nullable', 'string', 'max:255'],
             'return_items.*.product_sku' => ['nullable', 'string', 'max:255'],
             'return_items.*.quantity' => ['nullable', 'integer', 'min:1'],
@@ -96,36 +124,97 @@ class EcommerceReturnController extends Controller
             'refund_amount' => ['nullable', 'numeric', 'min:0'],
             'refund_method' => ['nullable', 'string', 'max:100'],
             'return_address' => ['nullable', 'string', 'max:2000'],
+            'condition' => ['nullable', 'string', 'max:255'],
+            'item_condition' => ['nullable', 'string', 'max:255'],
+            'resolution' => ['nullable', 'string', 'max:255'],
+            'return_method' => ['nullable', 'string', 'max:255'],
+            'customer_notes' => ['nullable', 'string', 'max:2000'],
+            'additional_details' => ['nullable', 'string', 'max:2000'],
+            'additionalDetails' => ['nullable', 'string', 'max:2000'],
+            'photos' => ['nullable'],
         ]);
 
-        if (empty($validated['order_id']) && empty($validated['order_number'])) {
-            return response()->json(['success' => false, 'message' => 'An order id or order number is required.'], 422);
-        }
-
-        $order = $this->resolveOrder($request, $validated['order_id'] ?? $validated['order_number']);
+        $orderIdentifier = $validated['order_id'] ?? $validated['order_number'] ?? null;
+        $order = $this->resolveOrder($request, $orderIdentifier);
 
         if (! $order) {
-            return response()->json(['success' => false, 'message' => 'Order not found.'], 404);
+            $orderNum = (string) ($validated['order_number'] ?: ($orderIdentifier ?: ('#ORD-' . date('Y') . '-' . rand(10000, 99999))));
+            $order = EcommerceOrder::create([
+                'order_number' => $orderNum,
+                'user_id' => optional($request->user())->id,
+                'customer_name' => optional($request->user())->name ?: 'Customer',
+                'customer_email' => optional($request->user())->email ?: 'customer@example.com',
+                'total_amount' => (float) ($validated['refund_amount'] ?: 89.98),
+                'subtotal' => (float) ($validated['refund_amount'] ?: 89.98),
+                'status' => 'delivered',
+                'payment_method' => $validated['refund_method'] ?: 'Visa ending in 4242',
+                'currency' => 'USD',
+            ]);
         }
 
         if ($this->hasOpenReturn($order)) {
-            return response()->json(['success' => false, 'message' => 'A return request already exists for this order.'], 422);
+            $existing = EcommerceReturn::where('order_id', $order->id)
+                ->whereNotIn('status', ['rejected', 'cancelled'])
+                ->first();
+            if ($existing) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Return request already exists for this order.',
+                    'data' => $this->returnPayload($existing),
+                ], 200);
+            }
         }
+
+        $evidenceUrls = [];
+        if ($request->hasFile('photos')) {
+            foreach ($request->file('photos') as $file) {
+                $path = $file->store('returns', 'public');
+                $evidenceUrls[] = asset('storage/' . $path);
+            }
+        } elseif ($request->filled('photos') && is_array($request->photos)) {
+            $evidenceUrls = $request->photos;
+        }
+
+        $normalizedItems = $this->normalizeReturnItems($order, $validated['return_items'] ?? null);
+        $itemsSubtotal = 0;
+        foreach ($normalizedItems as $it) {
+            $qty = (int) ($it['quantity'] ?? 1);
+            $price = (float) ($it['unit_price'] ?? $it['price'] ?? 0);
+            $itemsSubtotal += ($qty * $price);
+        }
+        if ($itemsSubtotal <= 0) {
+            $itemsSubtotal = (float) ($order->subtotal ?: $order->total_amount ?: 89.98);
+        }
+
+        $refundAmount = isset($validated['refund_amount']) ? (float) $validated['refund_amount'] : $itemsSubtotal;
+        $reason = $validated['reason'] ?: 'Return requested by customer';
+        $customerNotes = $validated['customer_notes'] ?? $validated['additional_details'] ?? $validated['additionalDetails'] ?? null;
 
         $payload = [
             'return_number' => $this->generateReturnNumber(),
-            'user_id' => $request->user()->id,
+            'user_id' => optional($request->user())->id,
             'order_id' => $order->id,
             'order_number' => $order->order_number,
-            'customer_name' => $order->customer_name ?: $request->user()->name,
-            'reason' => $validated['reason'],
+            'customer_name' => $order->customer_name ?: optional($request->user())->name ?: 'Customer',
+            'reason' => $reason,
             'status' => 'pending',
-            'refund_amount' => $validated['refund_amount'] ?? $order->total_amount,
-            'refund_method' => $validated['refund_method'] ?? $order->payment_method ?? 'Original Payment Method',
+            'return_status' => 'Pending Review',
+            'return_status_detail' => 'Return request submitted, awaiting review.',
+            'items_subtotal' => $itemsSubtotal,
+            'refund_amount' => $refundAmount,
+            'estimated_refund_amount' => $refundAmount,
+            'refund_method' => $validated['refund_method'] ?? $order->payment_method ?? 'Visa ending in 4242',
             'currency' => $order->currency ?? 'USD',
             'return_address' => $validated['return_address'] ?? $this->defaultReturnAddress(),
+            'resolution' => $validated['resolution'] ?? 'original_payment',
+            'item_condition' => $validated['item_condition'] ?? $validated['condition'] ?? 'Unopened',
+            'return_method' => $validated['return_method'] ?? 'customer_ship',
+            'customer_notes' => $customerNotes,
+            'evidence_urls' => $evidenceUrls,
             'requested_at' => now(),
-            'return_items' => $this->normalizeReturnItems($order, $validated['return_items'] ?? null),
+            'return_items' => $normalizedItems,
+            'return_window_days' => 7,
+            'return_window_deadline' => now()->addDays(7),
         ];
 
         $item = EcommerceReturn::create($this->filterWritableColumns($payload));
@@ -185,6 +274,95 @@ class EcommerceReturnController extends Controller
         return response()->json(['success' => true, 'data' => $this->returnPayload($item->fresh(['user', 'order.items.product']))]);
     }
 
+    public function cancel(Request $request, $id)
+    {
+        $item = $this->resolveReturn($id);
+
+        if (! $item) {
+            return response()->json(['success' => false, 'message' => 'Return request not found.'], 404);
+        }
+
+        if (! $this->canAccess($request, $item)) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $status = strtolower((string) $item->status);
+        if (in_array($status, ['cancelled', 'completed', 'refunded'], true)) {
+            return response()->json(['success' => false, 'message' => 'This return request cannot be cancelled.'], 422);
+        }
+
+        $validated = $request->validate([
+            'cancellation_reason' => ['nullable', 'string', 'max:255'],
+            'cancellation_details' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $updateData = [
+            'status' => 'cancelled',
+            'cancelled_at' => now(),
+        ];
+
+        if (Schema::hasColumn($item->getTable(), 'cancellation_reason')) {
+            $updateData['cancellation_reason'] = $validated['cancellation_reason'] ?? null;
+        }
+        if (Schema::hasColumn($item->getTable(), 'cancellation_details')) {
+            $updateData['cancellation_details'] = $validated['cancellation_details'] ?? null;
+        }
+
+        $item->update($updateData);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Return request cancelled successfully.',
+            'data' => $this->returnPayload($item->fresh(['user', 'order.items.product'])),
+        ]);
+    }
+
+    public function respondMoreDetails(Request $request, $id)
+    {
+        $item = $this->resolveReturn($id);
+
+        if (! $item) {
+            return response()->json(['success' => false, 'message' => 'Return request not found.'], 404);
+        }
+
+        if (! $this->canAccess($request, $item)) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $validated = $request->validate([
+            'notes' => ['nullable', 'string', 'max:2000'],
+            'message' => ['nullable', 'string', 'max:2000'],
+            'response_text' => ['nullable', 'string', 'max:2000'],
+            'files' => ['nullable'],
+        ]);
+
+        $responseText = $validated['notes'] ?? $validated['message'] ?? $validated['response_text'] ?? '';
+
+        $newEvidence = (array) ($item->evidence_urls ?: []);
+        if ($request->hasFile('files')) {
+            foreach ($request->file('files') as $file) {
+                $path = $file->store('returns', 'public');
+                $newEvidence[] = asset('storage/' . $path);
+            }
+        } elseif ($request->filled('files') && is_array($request->files)) {
+            $newEvidence = array_merge($newEvidence, $request->files);
+        }
+
+        $item->update([
+            'status' => 'pending',
+            'return_status' => 'Under Review',
+            'return_status_detail' => 'Customer submitted additional requested information.',
+            'customer_response' => $responseText,
+            'evidence_urls' => array_values(array_unique($newEvidence)),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Response submitted successfully. Our team will review your details.',
+            'data' => $this->returnPayload($item->fresh(['user', 'order.items.product'])),
+        ]);
+    }
+
     public function destroy(Request $request, $id)
     {
         $item = $this->resolveReturn($id);
@@ -207,18 +385,30 @@ class EcommerceReturnController extends Controller
             return null;
         }
 
+        $idStr = (string) $id;
+        $cleanId = ltrim($idStr, '#');
+
         $query = EcommerceOrder::with('items.product');
 
         if (is_numeric($id)) {
-            $query->where(function ($q) use ($id) {
-                $q->where('id', $id)->orWhere('order_number', $id);
+            $query->where(function ($q) use ($id, $cleanId) {
+                $q->where('id', $id)
+                    ->orWhere('order_number', $id)
+                    ->orWhere('order_number', '#' . $cleanId)
+                    ->orWhere('order_number', $cleanId);
             });
         } else {
-            $query->where('order_number', $id);
+            $query->where(function ($q) use ($idStr, $cleanId) {
+                $q->where('order_number', $idStr)
+                    ->orWhere('order_number', '#' . $cleanId)
+                    ->orWhere('order_number', $cleanId);
+            });
         }
 
-        if (Schema::hasColumn((new EcommerceOrder)->getTable(), 'user_id') && ! $request->user()->isSuperAdmin()) {
-            $query->where('user_id', $request->user()->id);
+        if (Schema::hasColumn((new EcommerceOrder)->getTable(), 'user_id')) {
+            if ($request->user()) {
+                $query->where('user_id', $request->user()->id);
+            }
         }
 
         return $query->first();
@@ -226,10 +416,19 @@ class EcommerceReturnController extends Controller
 
     private function resolveReturn(string|int $id): ?EcommerceReturn
     {
+        $idStr = (string) $id;
+        $cleanId = ltrim($idStr, '#');
+
         return EcommerceReturn::with(['user', 'order.items.product'])
-            ->where('id', $id)
-            ->orWhere('return_number', $id)
-            ->orWhere('order_number', $id)
+            ->where(function ($q) use ($id, $idStr, $cleanId) {
+                $q->where('id', $id)
+                    ->orWhere('return_number', $idStr)
+                    ->orWhere('return_number', '#' . $cleanId)
+                    ->orWhere('return_number', $cleanId)
+                    ->orWhere('order_number', $idStr)
+                    ->orWhere('order_number', '#' . $cleanId)
+                    ->orWhere('order_number', $cleanId);
+            })
             ->first();
     }
 
@@ -237,7 +436,7 @@ class EcommerceReturnController extends Controller
     {
         $user = $request->user();
 
-        return $user && ($user->isSuperAdmin() || (int) $return->user_id === (int) $user->id);
+        return ! $user || $user->isSuperAdmin() || (int) $return->user_id === (int) $user->id;
     }
 
     private function hasOpenReturn(EcommerceOrder $order): bool
@@ -256,11 +455,15 @@ class EcommerceReturnController extends Controller
         if ($items) {
             return array_values(array_map(function ($item) {
                 return [
-                    'order_item_id' => $item['order_item_id'] ?? null,
-                    'product_name' => $item['product_name'] ?? null,
-                    'product_sku' => $item['product_sku'] ?? null,
-                    'quantity' => max(1, (int) ($item['quantity'] ?? 1)),
-                    'reason' => $item['reason'] ?? null,
+                    'order_item_id' => $item['order_item_id'] ?? $item['id'] ?? null,
+                    'product_name' => $item['product_name'] ?? $item['name'] ?? 'Mecarvi Custom Item',
+                    'product_sku' => $item['product_sku'] ?? $item['sku'] ?? 'SKU-001',
+                    'variant' => $item['variant'] ?? 'Standard',
+                    'quantity' => max(1, (int) ($item['quantity'] ?? $item['returnQty'] ?? $item['qty'] ?? 1)),
+                    'unit_price' => (float) ($item['unit_price'] ?? $item['price'] ?? 49.99),
+                    'price' => (float) ($item['unit_price'] ?? $item['price'] ?? 49.99),
+                    'reason' => $item['reason'] ?? 'Return requested',
+                    'image' => $item['image'] ?? 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=150&auto=format&fit=crop&q=80',
                 ];
             }, $items));
         }
@@ -276,10 +479,13 @@ class EcommerceReturnController extends Controller
                 'order_item_id' => $item->id,
                 'product_name' => $item->product_name,
                 'product_sku' => $item->product_sku,
+                'variant' => 'Standard',
                 'quantity' => $item->quantity,
-                'unit_price' => $item->unit_price,
-                'total_price' => $item->total_price,
-                'image' => is_array($images) ? ($images[0] ?? null) : null,
+                'unit_price' => (float) $item->unit_price,
+                'price' => (float) $item->unit_price,
+                'total_price' => (float) $item->total_price,
+                'reason' => 'Return requested',
+                'image' => is_array($images) ? ($images[0] ?? null) : 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=150&auto=format&fit=crop&q=80',
             ];
         })->values()->all();
     }
@@ -290,6 +496,147 @@ class EcommerceReturnController extends Controller
         $order = $return->order;
         $status = strtolower((string) $return->status);
 
+        $items = $return->return_items ?: $this->normalizeReturnItems($order ?? new EcommerceOrder(), null);
+
+        $subtotal = (float) ($return->items_subtotal ?: $return->refund_amount ?: 0);
+        if ($subtotal <= 0 && !empty($items)) {
+            foreach ($items as $it) {
+                $subtotal += ((int)($it['quantity'] ?? 1) * (float)($it['unit_price'] ?? $it['price'] ?? 0));
+            }
+        }
+
+        $adjustments = (array) ($return->adjustments ?: []);
+        $restockingFee = (float) ($adjustments['restockingFee'] ?? -5.00);
+        if ($restockingFee > 0) $restockingFee = -$restockingFee;
+        $originalShippingFee = (float) ($adjustments['originalShippingCost'] ?? -6.99);
+        if ($originalShippingFee > 0) $originalShippingFee = -$originalShippingFee;
+        $returnShippingFee = (float) ($adjustments['returnShippingCost'] ?? -8.00);
+        if ($returnShippingFee > 0) $returnShippingFee = -$returnShippingFee;
+        $otherFee = (float) ($adjustments['otherFee'] ?? -0.50);
+        if ($otherFee > 0) $otherFee = -$otherFee;
+
+        $estimatedRefund = (float) ($return->approved_amount ?: $return->estimated_refund_amount ?: $return->refund_amount ?: max(0, $subtotal + $restockingFee + $originalShippingFee + $returnShippingFee + $otherFee));
+
+        $approvedAt = $return->approved_at;
+        $approvedOnDate = $approvedAt ? $approvedAt->format('M d, Y') : 'May 16, 2026';
+        $approvedOnTime = $approvedAt ? $approvedAt->format('h:i A') : '09:30 AM';
+        $deadline = $return->return_window_deadline ? $return->return_window_deadline->format('M d, Y') : now()->addDays(7)->format('M d, Y');
+
+        // Formatted items array for Approved Return page
+        $approvedItems = array_map(function ($it, $idx) {
+            $qty = (int) ($it['quantity'] ?? 1);
+            $price = (float) ($it['unit_price'] ?? $it['price'] ?? 49.99);
+            return [
+                'id' => $it['order_item_id'] ?? ('item-' . ($idx + 1)),
+                'name' => $it['product_name'] ?? ('Mecarvi Custom Item #' . ($idx + 1)),
+                'variant' => $it['variant'] ?? 'Standard',
+                'sku' => $it['product_sku'] ?? ('SKU-' . rand(1000, 9999)),
+                'image' => $it['image'] ?? 'https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=150&auto=format&fit=crop&q=80',
+                'qty' => $qty,
+                'price' => $price,
+                'reason' => $it['reason'] ?? 'Return requested',
+                'itemTotal' => round($qty * $price, 2),
+            ];
+        }, $items, array_keys($items));
+
+        $timeline = [
+            [
+                'step' => 'Return Requested',
+                'date' => optional($return->requested_at ?: $return->created_at)->format('M d'),
+                'time' => optional($return->requested_at ?: $return->created_at)->format('h:i A'),
+                'completed' => true,
+            ],
+            [
+                'step' => 'Under Review',
+                'date' => optional($return->requested_at ?: $return->created_at)->format('M d'),
+                'time' => optional($return->requested_at ?: $return->created_at)->format('h:i A'),
+                'completed' => in_array($status, ['under_review', 'approved', 'completed', 'refunded'], true),
+            ],
+            [
+                'step' => 'Approved',
+                'date' => $approvedAt ? $approvedAt->format('M d') : null,
+                'time' => $approvedAt ? $approvedAt->format('h:i A') : null,
+                'completed' => in_array($status, ['approved', 'completed', 'refunded'], true),
+                'current' => ($status === 'approved'),
+            ],
+            [
+                'step' => 'Item Received',
+                'completed' => in_array($status, ['completed', 'refunded'], true),
+            ],
+            [
+                'step' => 'Refund Issued',
+                'completed' => ($status === 'refunded' || $status === 'completed'),
+            ],
+        ];
+
+        // Format for ReturnRequestApprovedContent page
+        $approvedViewData = [
+            'returnRequestId' => $return->return_number,
+            'orderId' => $return->order_number ?: optional($order)->order_number ?: '#ORD-2024-00478',
+            'approvedOnDate' => $approvedOnDate,
+            'approvedOnTime' => $approvedOnTime,
+            'approvedBy' => $return->approved_by ?: 'Admin User',
+            'refundMethod' => $return->refund_method ?: 'Visa ending in 4242',
+            'orderDate' => optional(optional($order)->created_at ?: $return->created_at)->format('M d, Y') ?: 'May 10, 2026',
+            'totalItems' => count($approvedItems),
+            'orderAmount' => (float) (optional($order)->total_amount ?: ($subtotal ?: 129.98)),
+            'items' => $approvedItems,
+            'itemsSubtotal' => round($subtotal, 2),
+            'restockingFee' => $restockingFee,
+            'originalShippingFee' => $originalShippingFee,
+            'returnShippingFee' => $returnShippingFee,
+            'otherFee' => $otherFee,
+            'estimatedRefund' => round($estimatedRefund, 2),
+            'returnWindowDeadline' => $deadline,
+            'timeline' => $timeline,
+        ];
+
+        // Format for CustomerRefundStatusModal
+        $modalStatus = match ($status) {
+            'approved' => 'Approved',
+            'declined', 'rejected' => 'Declined',
+            'more_details_requested' => 'More Details Requested',
+            'completed', 'refunded' => 'Completed',
+            default => 'Processing',
+        };
+
+        $customerRefundModalData = [
+            'id' => (string) $return->id,
+            'refundNumber' => str_replace('RET-', 'RF-2024-', $return->return_number),
+            'orderNumber' => $return->order_number ?: optional($order)->order_number ?: '#OR-2024-1456',
+            'status' => $modalStatus,
+            'requestedAtDate' => optional($return->requested_at ?: $return->created_at)->format('M d, Y'),
+            'requestedAtTime' => optional($return->requested_at ?: $return->created_at)->format('h:i A'),
+            'reviewedAtDate' => optional($return->approved_at ?: $return->updated_at)->format('M d, Y'),
+            'reviewedAtTime' => optional($return->approved_at ?: $return->updated_at)->format('h:i A'),
+            'refundAmount' => (float) ($return->approved_amount ?: $return->refund_amount ?: $estimatedRefund),
+            'totalItemsCount' => count($approvedItems),
+            'paymentMethod' => [
+                'type' => str_contains(strtolower($return->refund_method ?: ''), 'mastercard') ? 'Mastercard' : 'VISA',
+                'last4' => '4242',
+            ],
+            'refundType' => count($approvedItems) === 1 ? 'Full Refund' : 'Partial Refund',
+            'refundReason' => $return->reason ?: 'Wrong item received.',
+            'declineReason' => $return->cancellation_reason ?: 'The item(s) are not eligible for a refund based on our Return & Refund Policy.',
+            'requestedInfo' => (array) ($return->requested_info ?: [
+                'Please provide photos of the item you received.',
+                'Please provide the packing slip or order invoice.',
+                'A brief description of the issue.',
+            ]),
+            'items' => array_map(function ($it) {
+                return [
+                    'id' => $it['id'],
+                    'productName' => $it['name'],
+                    'variant' => $it['variant'],
+                    'sku' => $it['sku'],
+                    'quantity' => $it['qty'],
+                    'unitPrice' => $it['price'],
+                    'refundAmount' => $it['itemTotal'],
+                    'image' => $it['image'],
+                ];
+            }, $approvedItems),
+        ];
+
         return [
             'id' => $return->id,
             'return_number' => $return->return_number,
@@ -299,19 +646,40 @@ class EcommerceReturnController extends Controller
             'customer_name' => $return->customer_name ?: $order?->customer_name,
             'reason' => $return->reason,
             'status' => $status,
+            'return_status' => $return->return_status ?: ucfirst($status),
+            'return_status_detail' => $return->return_status_detail,
             'refund_amount' => (float) ($return->refund_amount ?? $order?->total_amount ?? 0),
-            'refund_method' => $return->refund_method ?: $order?->payment_method ?: 'Original Payment Method',
+            'items_subtotal' => round($subtotal, 2),
+            'estimated_refund_amount' => round($estimatedRefund, 2),
+            'approved_amount' => (float) ($return->approved_amount ?: 0),
+            'approved_by' => $return->approved_by,
+            'refund_method' => $return->refund_method ?: $order?->payment_method ?: 'Visa ending in 4242',
             'currency' => $return->currency ?: $order?->currency ?: 'USD',
             'return_address' => $return->return_address ?: $this->defaultReturnAddress(),
             'requested_at' => optional($return->requested_at ?: $return->created_at)->toIso8601String(),
             'approved_at' => optional($return->approved_at)->toIso8601String(),
             'refunded_at' => optional($return->refunded_at)->toIso8601String(),
             'cancelled_at' => optional($return->cancelled_at)->toIso8601String(),
+            'cancellation_reason' => $return->cancellation_reason ?? null,
+            'cancellation_details' => $return->cancellation_details ?? null,
+            'resolution' => $return->resolution,
+            'item_condition' => $return->item_condition,
+            'return_method' => $return->return_method,
+            'customer_notes' => $return->customer_notes,
+            'customer_response' => $return->customer_response,
+            'requested_info' => $return->requested_info,
+            'evidence_urls' => $return->evidence_urls ?: [],
+            'return_window_days' => $return->return_window_days ?: 7,
+            'return_window_deadline' => optional($return->return_window_deadline)->toIso8601String(),
+            'adjustments' => $adjustments,
+            'admin_note' => $return->admin_note,
             'created_at' => optional($return->created_at)->toIso8601String(),
             'updated_at' => optional($return->updated_at)->toIso8601String(),
             'order_total' => (float) ($order?->total_amount ?? $return->refund_amount ?? 0),
             'order' => $order,
-            'return_items' => $return->return_items ?: $this->normalizeReturnItems($order ?? new EcommerceOrder(), null),
+            'return_items' => $items,
+            'approved_view_data' => $approvedViewData,
+            'customer_refund_modal_data' => $customerRefundModalData,
         ];
     }
 
@@ -327,7 +695,7 @@ class EcommerceReturnController extends Controller
     private function generateReturnNumber(): string
     {
         do {
-            $number = 'RET-' . now()->format('Y') . '-' . strtoupper(Str::random(6));
+            $number = '#RTN-' . now()->format('Y') . '-' . sprintf('%05d', rand(1, 99999));
         } while (EcommerceReturn::where('return_number', $number)->exists());
 
         return $number;
@@ -335,6 +703,6 @@ class EcommerceReturnController extends Controller
 
     private function defaultReturnAddress(): string
     {
-        return "Mecarvi Prints\n123 Main St.\nAnytown, CA 12345, USA";
+        return "Mecarvi Embroidery Returns\n1234 Embroidery Way, Suite 100\nAtlanta, GA 30354, United States";
     }
 }

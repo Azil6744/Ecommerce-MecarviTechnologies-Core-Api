@@ -27,7 +27,24 @@ class MembershipBenefitService
         $result = $this->emptyResult();
         $result['membership_id'] = $membership['id'] ?? $membership['membership_id'] ?? null;
         $result['membership_plan_name'] = $membership['plan_name'] ?? $membership['membership_tier'] ?? null;
-        $result['membership_benefits_snapshot'] = $membership['benefits_snapshot'] ?? $membership['benefits'] ?? null;
+        $snapshot = $membership['benefits_snapshot'] ?? $membership['benefits'] ?? null;
+
+        if (empty($snapshot)) {
+            $plan = null;
+            if (!empty($membership['plan_id'])) {
+                $plan = \App\Models\EcommerceSubscriptionPlan::find($membership['plan_id']);
+            }
+            if (!$plan && !empty($result['membership_plan_name'])) {
+                $plan = \App\Models\EcommerceSubscriptionPlan::where('name', $result['membership_plan_name'])
+                    ->orWhere('internal_code', $result['membership_plan_name'])
+                    ->first();
+            }
+            if ($plan) {
+                $snapshot = $plan->benefit_config ?: $plan->features;
+            }
+        }
+
+        $result['membership_benefits_snapshot'] = $snapshot;
 
         $runningDiscount = 0.0;
         foreach ($this->extractBenefits($result['membership_benefits_snapshot']) as $benefit) {
@@ -118,7 +135,94 @@ class MembershipBenefitService
 
         // If snapshot is an associative object dictionary (e.g. benefit_config)
         $extracted = [];
-        if (!empty($snapshot['percentage_discount']) && (float)$snapshot['percentage_discount'] > 0) {
+
+        // Check if benefits_table is present from Admin Plan Wizard
+        if (!empty($snapshot['benefits_table']) && is_array($snapshot['benefits_table'])) {
+            $canCombine = true;
+            if (!empty($snapshot['discount_eligibility'])) {
+                $canCombine = !str_contains(strtolower((string) $snapshot['discount_eligibility']), 'not allow');
+            }
+
+            foreach ($snapshot['benefits_table'] as $b) {
+                // If explicitly disabled in wizard, skip
+                if (isset($b['status']) && $b['status'] === false) {
+                    continue;
+                }
+
+                $title = trim((string) ($b['title'] ?? ''));
+                $type = strtolower(trim((string) ($b['type'] ?? '')));
+                $details = trim((string) ($b['details'] ?? ''));
+                $minOrderStr = trim((string) ($b['min_order'] ?? ''));
+
+                $minOrderAmount = 0.0;
+                if (preg_match('/[\d\.]+/i', $minOrderStr, $minMatches)) {
+                    $minOrderAmount = (float) $minMatches[0];
+                }
+
+                $restrictions = array_merge($snapshot, [
+                    'minimum_order_amount' => $minOrderAmount,
+                    'can_combine_with_coupons' => $canCombine,
+                ]);
+
+                // 1. Percentage discount: "15% off" or details with %
+                if (str_contains($type, 'discount') || preg_match('/(\d+(?:\.\d+)?)%/i', $details, $pMatch)) {
+                    if (preg_match('/(\d+(?:\.\d+)?)%/i', $details, $pMatch)) {
+                        $val = (float) $pMatch[1];
+                        if ($val > 0) {
+                            $extracted[] = [
+                                'title' => $title ?: ($val . '% Member Discount'),
+                                'benefit_type' => 'percentage_discount',
+                                'benefit_value' => $val,
+                                'restrictions' => $restrictions,
+                            ];
+                            continue;
+                        }
+                    } elseif (preg_match('/\$\s*(\d+(?:\.\d+)?)/i', $details, $fMatch)) {
+                        $val = (float) $fMatch[1];
+                        if ($val > 0) {
+                            $extracted[] = [
+                                'title' => $title ?: ('$' . $val . ' Member Discount'),
+                                'benefit_type' => 'fixed_discount',
+                                'benefit_value' => $val,
+                                'restrictions' => $restrictions,
+                            ];
+                            continue;
+                        }
+                    }
+                }
+
+                // 2. Shipping: "Free shipping", "Free standard shipping"
+                if (str_contains($type, 'shipping') || str_contains(strtolower($details), 'free') || str_contains(strtolower($title), 'free shipping')) {
+                    $extracted[] = [
+                        'title' => $title ?: 'Free Member Delivery',
+                        'benefit_type' => 'free_delivery',
+                        'benefit_value' => 100,
+                        'restrictions' => $restrictions,
+                    ];
+                    continue;
+                }
+
+                // 3. Store credit: "$10 store credit"
+                if (str_contains($type, 'credit') || str_contains(strtolower($title), 'store credit')) {
+                    if (preg_match('/[\d\.]+/i', $details, $cMatch)) {
+                        $val = (float) $cMatch[0];
+                        if ($val > 0) {
+                            $extracted[] = [
+                                'title' => $title ?: ('$' . $val . ' Monthly Store Credit'),
+                                'benefit_type' => 'monthly_store_credit',
+                                'benefit_value' => $val,
+                                'restrictions' => $restrictions,
+                            ];
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Top-level percentage_discount if not already added
+        $hasPercentageDiscount = collect($extracted)->contains(fn ($item) => $item['benefit_type'] === 'percentage_discount');
+        if (!$hasPercentageDiscount && !empty($snapshot['percentage_discount']) && (float)$snapshot['percentage_discount'] > 0) {
             $extracted[] = [
                 'title' => ((float)$snapshot['percentage_discount']) . '% Member Discount',
                 'benefit_type' => 'percentage_discount',
@@ -127,7 +231,9 @@ class MembershipBenefitService
             ];
         }
 
-        if (!empty($snapshot['fixed_discount']) && (float)$snapshot['fixed_discount'] > 0) {
+        // Top-level fixed_discount if not already added
+        $hasFixedDiscount = collect($extracted)->contains(fn ($item) => $item['benefit_type'] === 'fixed_discount');
+        if (!$hasFixedDiscount && !empty($snapshot['fixed_discount']) && (float)$snapshot['fixed_discount'] > 0) {
             $extracted[] = [
                 'title' => '$' . ((float)$snapshot['fixed_discount']) . ' Member Discount',
                 'benefit_type' => 'fixed_discount',
@@ -136,7 +242,9 @@ class MembershipBenefitService
             ];
         }
 
-        if (!empty($snapshot['free_delivery']) || !empty($snapshot['free_shipping'])) {
+        // Top-level free_delivery if not already added
+        $hasFreeDelivery = collect($extracted)->contains(fn ($item) => in_array($item['benefit_type'], ['free_delivery', 'free_shipping']));
+        if (!$hasFreeDelivery && (!empty($snapshot['free_delivery']) || !empty($snapshot['free_shipping']))) {
             $extracted[] = [
                 'title' => 'Free Member Delivery',
                 'benefit_type' => 'free_delivery',
@@ -221,16 +329,32 @@ class MembershipBenefitService
         }
 
         $coverageType = strtolower((string) ($membership['coverage_type'] ?? ''));
-        if (in_array($coverageType, ['universal', 'global', 'all'], true)) {
+        if (in_array($coverageType, ['universal', 'global', 'all', 'all-sites', 'all_sites'], true)) {
             return true;
         }
+
+        $target = strtolower($siteSlug);
 
         $coveredSites = $membership['covered_sites'] ?? [];
         if (! is_array($coveredSites) || $coveredSites === []) {
-            return true;
+            $applicableSite = strtolower((string) ($membership['applicable_site'] ?? ''));
+            if ($applicableSite === '' || in_array($applicableSite, ['universal', 'global', 'all', 'all-sites', 'all_sites'], true)) {
+                return true;
+            }
+            return $applicableSite === $target || str_contains($applicableSite, $target) || str_contains($target, $applicableSite);
         }
 
-        return in_array($siteSlug, array_map('strval', $coveredSites), true);
+        foreach ($coveredSites as $site) {
+            $siteLower = strtolower((string) $site);
+            if (in_array($siteLower, ['universal', 'global', 'all', 'all-sites', 'all_sites'], true)) {
+                return true;
+            }
+            if ($siteLower === $target || str_contains($siteLower, $target) || str_contains($target, $siteLower)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function restrictionBag(array $benefit): array
@@ -249,9 +373,11 @@ class MembershipBenefitService
         $canCombine = $restrictions['can_combine_with_coupons']
             ?? $restrictions['combine_with_coupons']
             ?? $restrictions['stackable_with_coupons']
-            ?? true;
+            ?? (isset($restrictions['discount_eligibility'])
+                ? !str_contains(strtolower((string) $restrictions['discount_eligibility']), 'not allow')
+                : true);
 
-        if ($hasCoupon && filter_var($canCombine, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) === false) {
+        if ($hasCoupon && ! $canCombine) {
             return false;
         }
 

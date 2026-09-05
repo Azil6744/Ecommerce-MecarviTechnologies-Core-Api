@@ -128,6 +128,28 @@ class ProductReportController extends Controller
         ]);
     }
 
+    public function destroy($id)
+    {
+        $report = ProductReport::where('id', $id)
+            ->orWhere('report_code', $id)
+            ->orWhere('report_code', '#' . $id)
+            ->first();
+
+        if (!$report) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Product report not found',
+            ], 404);
+        }
+
+        $report->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Product report deleted successfully',
+        ]);
+    }
+
     public function submit(Request $request)
     {
         $validated = $request->validate([

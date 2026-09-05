@@ -33,4 +33,9 @@ class EcommerceReferral extends Model
     {
         return $this->belongsTo(User::class, 'referred_id');
     }
+
+    public function referredUser()
+    {
+        return $this->belongsTo(User::class, 'referred_id');
+    }
 }

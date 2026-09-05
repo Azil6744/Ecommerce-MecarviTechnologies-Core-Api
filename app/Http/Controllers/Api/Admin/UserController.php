@@ -24,8 +24,8 @@ class UserController extends Controller
     {
         try {
             $authUser = $request->user();
-            $isSuperAdmin = $authUser->role === 'super_admin';
-            try { $isSuperAdmin = $isSuperAdmin || $authUser->hasRole('super_admin'); } catch (\Exception $e) {}
+            $isSuperAdmin = in_array($authUser->role, ['super_admin', 'admin']);
+            try { $isSuperAdmin = $isSuperAdmin || $authUser->hasAnyRole(['super_admin', 'admin']); } catch (\Exception $e) {}
 
             if (!$isSuperAdmin) {
                 try {
@@ -104,8 +104,8 @@ class UserController extends Controller
     {
         try {
             $authUser = $request->user();
-            $isSuperAdmin = $authUser->role === 'super_admin';
-            try { $isSuperAdmin = $isSuperAdmin || $authUser->hasRole('super_admin'); } catch (\Exception $e) {}
+            $isSuperAdmin = in_array($authUser->role, ['super_admin', 'admin']);
+            try { $isSuperAdmin = $isSuperAdmin || $authUser->hasAnyRole(['super_admin', 'admin']); } catch (\Exception $e) {}
 
             if (!$isSuperAdmin) {
                 try {
@@ -200,8 +200,8 @@ class UserController extends Controller
     {
         try {
             $authUser = $request->user();
-            $isSuperAdmin = $authUser->role === 'super_admin';
-            try { $isSuperAdmin = $isSuperAdmin || $authUser->hasRole('super_admin'); } catch (\Exception $e) {}
+            $isSuperAdmin = in_array($authUser->role, ['super_admin', 'admin']);
+            try { $isSuperAdmin = $isSuperAdmin || $authUser->hasAnyRole(['super_admin', 'admin']); } catch (\Exception $e) {}
 
             if (!$isSuperAdmin) {
                 try {
@@ -262,9 +262,9 @@ class UserController extends Controller
         try {
             $authUser = $request->user();
 
-            // Allow super_admin by role column OR Spatie role, else check permission
-            $isSuperAdmin = $authUser->role === 'super_admin';
-            try { $isSuperAdmin = $isSuperAdmin || $authUser->hasRole('super_admin'); } catch (\Exception $e) {}
+            // Allow super_admin and admin by role column OR Spatie role, else check permission
+            $isSuperAdmin = in_array($authUser->role, ['super_admin', 'admin']);
+            try { $isSuperAdmin = $isSuperAdmin || $authUser->hasAnyRole(['super_admin', 'admin']); } catch (\Exception $e) {}
 
             if (!$isSuperAdmin) {
                 try {
@@ -362,8 +362,8 @@ class UserController extends Controller
     {
         try {
             $authUser = $request->user();
-            $isSuperAdmin = $authUser->role === 'super_admin';
-            try { $isSuperAdmin = $isSuperAdmin || $authUser->hasRole('super_admin'); } catch (\Exception $e) {}
+            $isSuperAdmin = in_array($authUser->role, ['super_admin', 'admin']);
+            try { $isSuperAdmin = $isSuperAdmin || $authUser->hasAnyRole(['super_admin', 'admin']); } catch (\Exception $e) {}
 
             if (!$isSuperAdmin) {
                 try {

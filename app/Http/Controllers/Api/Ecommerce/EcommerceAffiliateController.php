@@ -78,13 +78,18 @@ class EcommerceAffiliateController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        // Check if admin to return all, or just user
-        if ($user && $user->isSuperAdmin()) {
-            return response()->json(['success' => true, 'data' => EcommerceAffiliate::with('user')->get()]);
+        
+        // Check if admin or admin route to return all affiliates
+        if ($request->is('*admin/*') || ($user && ($user->hasAdminAccess() || $user->isSuperAdmin()))) {
+            return response()->json(['success' => true, 'data' => EcommerceAffiliate::with('user')->orderBy('created_at', 'desc')->get()]);
+        }
+        
+        if (!$user) {
+            return response()->json(['success' => true, 'data' => []]);
         }
         
         // Get by user_id if column exists, otherwise all
-        if(Schema::hasColumn((new EcommerceAffiliate)->getTable(), 'user_id')) {
+        if (Schema::hasColumn((new EcommerceAffiliate)->getTable(), 'user_id')) {
             $query = EcommerceAffiliate::where('user_id', $user->id)->with('user');
             return response()->json(['success' => true, 'data' => $query->get()]);
         }

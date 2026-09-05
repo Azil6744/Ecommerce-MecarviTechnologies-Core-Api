@@ -136,6 +136,9 @@ Route::prefix('v1')->group(function () {
     Route::post('/login', [LoginController::class, 'login'])
         ->name('api.v1.login');
 
+    Route::post('/auth/login', [LoginController::class, 'login'])
+        ->name('api.v1.auth.login');
+
     Route::post('/forgot-password', [LoginController::class, 'forgotPassword'])
         ->name('api.v1.forgot-password');
 
@@ -359,6 +362,14 @@ Route::prefix('v1')->group(function () {
     // Get Quote Form Fields (Public - for dynamic form rendering)
     Route::get('/quote-form-fields', [QuoteFormFieldController::class, 'publicIndex'])
         ->name('api.v1.quote-form-fields.public');
+
+    // Subscription Plans & Membership Benefits (Public)
+    Route::get('/admin/subscription-plans/public', [\App\Http\Controllers\Api\Admin\AdminSubscriptionPlanController::class, 'publicIndex']);
+    Route::get('/subscription-plans', [\App\Http\Controllers\Api\Admin\AdminSubscriptionPlanController::class, 'publicIndex']);
+    Route::get('/ecommerce/subscription-plans', [\App\Http\Controllers\Api\Admin\AdminSubscriptionPlanController::class, 'publicIndex']);
+    Route::get('/admin/membership-benefits/public', [\App\Http\Controllers\Api\Admin\AdminMembershipBenefitController::class, 'publicIndex']);
+    Route::get('/membership-benefits', [\App\Http\Controllers\Api\Admin\AdminMembershipBenefitController::class, 'publicIndex']);
+    Route::get('/ecommerce/membership-benefits', [\App\Http\Controllers\Api\Admin\AdminMembershipBenefitController::class, 'publicIndex']);
 
     // Get Hero Section Content (Public)
     Route::get('/hero-section', [HeroSectionController::class, 'index'])
@@ -876,11 +887,21 @@ Route::prefix('v1')->group(function () {
         Route::put('/admin/order-proofs/{orderProof}/status', [\App\Http\Controllers\Api\Admin\OrderProofController::class, 'updateStatus']);
         Route::delete('/admin/order-proofs/{orderProof}', [\App\Http\Controllers\Api\Admin\OrderProofController::class, 'destroy']);
 
-        // Order Verifications
+        // Order Verifications (Customer & Admin)
+        Route::get('/order-verifications', [\App\Http\Controllers\Api\Customer\OrderVerificationController::class, 'index']);
+        Route::get('/order-verifications/{id}', [\App\Http\Controllers\Api\Customer\OrderVerificationController::class, 'show']);
+        Route::post('/order-verifications/{id}/documents', [\App\Http\Controllers\Api\Customer\OrderVerificationController::class, 'uploadDocuments']);
+        Route::post('/order-verifications/{id}/notes', [\App\Http\Controllers\Api\Customer\OrderVerificationController::class, 'addNote']);
+
         Route::get('/admin/order-verifications', [\App\Http\Controllers\Api\Admin\OrderVerificationController::class, 'index']);
-        Route::get('/admin/order-verifications/{orderVerification}', [\App\Http\Controllers\Api\Admin\OrderVerificationController::class, 'show']);
-        Route::put('/admin/order-verifications/{orderVerification}/status', [\App\Http\Controllers\Api\Admin\OrderVerificationController::class, 'updateStatus']);
-        Route::delete('/admin/order-verifications/{orderVerification}', [\App\Http\Controllers\Api\Admin\OrderVerificationController::class, 'destroy']);
+        Route::post('/admin/order-verifications', [\App\Http\Controllers\Api\Admin\OrderVerificationController::class, 'store']);
+        Route::get('/admin/order-verifications/{id}', [\App\Http\Controllers\Api\Admin\OrderVerificationController::class, 'show']);
+        Route::put('/admin/order-verifications/{id}/status', [\App\Http\Controllers\Api\Admin\OrderVerificationController::class, 'updateStatus']);
+        Route::post('/admin/order-verifications/{id}/approve', [\App\Http\Controllers\Api\Admin\OrderVerificationController::class, 'approve']);
+        Route::post('/admin/order-verifications/{id}/decline', [\App\Http\Controllers\Api\Admin\OrderVerificationController::class, 'decline']);
+        Route::post('/admin/order-verifications/{id}/request-additional', [\App\Http\Controllers\Api\Admin\OrderVerificationController::class, 'requestAdditional']);
+        Route::post('/admin/order-verifications/{id}/notes', [\App\Http\Controllers\Api\Admin\OrderVerificationController::class, 'addNote']);
+        Route::delete('/admin/order-verifications/{id}', [\App\Http\Controllers\Api\Admin\OrderVerificationController::class, 'destroy']);
 
         // Customer Verifications
         Route::get('/admin/customer-verifications/stats', [\App\Http\Controllers\Api\Admin\CustomerVerificationController::class, 'stats']);
@@ -910,13 +931,32 @@ Route::prefix('v1')->group(function () {
         
         // User Profile & Tabs API
         Route::get('/admin/users/{id}/profile-details', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getProfileDetails']);
-        Route::get('/admin/users/{id}/reported-products', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getReportedProducts']);
+        Route::put('/admin/users/{id}/profile-details', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'updateProfile']);
+        Route::post('/admin/users/{id}/profile-details', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'updateProfile']);
+        Route::get('/admin/users/{id}/order-history', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getOrderHistory']);
+        Route::get('/admin/users/{id}/orders', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getOrderHistory']);
+        Route::get('/admin/users/{id}/login-history', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getLoginHistory']);
+        Route::get('/admin/users/{id}/admin-changes', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getAdminChanges']);
+        Route::get('/admin/users/{id}/messages', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getMessages']);
+        Route::post('/admin/users/{id}/messages', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'sendMessage']);
+        Route::get('/admin/users/{id}/financial-transactions', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getFinancialTransactions']);
+        Route::get('/admin/users/{id}/affiliate-history', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getAffiliateHistory']);
+        Route::get('/admin/users/{id}/membership-history', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getMembershipHistory']);
+        Route::get('/admin/users/{id}/loyalty-program', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getLoyaltyProgram']);
+        Route::post('/admin/users/{id}/loyalty-adjust', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'adjustLoyaltyPoints']);
+        Route::get('/admin/users/{id}/gift-card-history', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getGiftCardHistory']);
+        Route::get('/admin/users/{id}/support-tickets', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getSupportTickets']);
+        Route::post('/admin/users/{id}/support-tickets/{ticketId}/reply', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'replyTicket']);
+        Route::get('/admin/users/{id}/verification-history', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getVerificationHistory']);
         Route::get('/admin/users/{id}/order-disputes', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getOrderDisputes']);
+        Route::get('/admin/users/{id}/reported-products', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getReportedProducts']);
+        Route::get('/admin/users/{id}/coupons', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getCoupons']);
+        Route::get('/admin/users/{id}/donations', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getDonations']);
         Route::get('/admin/users/{id}/downloads', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getDownloads']);
         Route::get('/admin/customers/{id}/profile-details', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'getProfileDetails']);
+        Route::put('/admin/customers/{id}/profile-details', [\App\Http\Controllers\Api\Admin\AdminUserProfileController::class, 'updateProfile']);
 
         // Sellers
-        Route::get('/admin/sellers/business-stores', [UserController::class, 'sellerStores']);
         Route::get('/admin/sellers/verifications', [\App\Http\Controllers\Api\Admin\CustomerVerificationController::class, 'sellerIndex']);
 
         // Gift Cards & Gift Card Orders (Admin Only)
@@ -996,7 +1036,7 @@ Route::prefix('v1')->group(function () {
         // Marketing Campaigns
         Route::get('/admin/marketing-campaigns', [MarketingCampaignController::class, 'index']);
         Route::get('/admin/marketing-campaigns/compose/{channel}', [MarketingCampaignController::class, 'compose']);
-        Route::get('/admin/marketing-campaigns/{marketingCampaign}', [MarketingCampaignController::class, 'show']);
+        Route::get('/admin/marketing-campaigns/{marketingCampaign}', [MarketingCampaignController::class, 'show'])->whereNumber('marketingCampaign');
         Route::post('/admin/marketing-campaigns', [MarketingCampaignController::class, 'store']);
         Route::post('/admin/marketing-campaigns/send', [MarketingCampaignController::class, 'send']);
         Route::post('/admin/marketing-campaigns/test', [MarketingCampaignController::class, 'test']);
@@ -2813,3 +2853,30 @@ Route::prefix('v1')->group(function () {
 }); // End of v1 prefix group
 
 require base_path('routes/ecommerce.php');
+
+// Admin Returns & Refund Approval API Routes (Direct alias)
+Route::prefix('admin/returns')->middleware(['central.auth:optional'])->group(function () {
+    Route::get('/stats', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'stats']);
+    Route::get('/', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'index']);
+    Route::get('/{return}', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'show']);
+    Route::put('/{return}/status', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'updateStatus']);
+    Route::post('/{return}/approve', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'approve']);
+    Route::post('/{return}/decline', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'decline']);
+    Route::post('/{return}/request-info', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'requestInfo']);
+    Route::put('/{return}/note', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'updateNote']);
+});
+
+Route::prefix('admin/refunds')->middleware(['central.auth:optional'])->group(function () {
+    Route::get('/stats', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'stats']);
+    Route::get('/settings', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'getSettings']);
+    Route::post('/settings', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'saveSettings']);
+    Route::get('/', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'index']);
+    Route::get('/{return}', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'show']);
+    Route::put('/{return}/status', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'updateStatus']);
+    Route::post('/{return}/approve', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'approve']);
+    Route::post('/{return}/decline', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'decline']);
+    Route::post('/{return}/request-info', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'requestInfo']);
+    Route::put('/{return}/note', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'updateNote']);
+});
+
+

@@ -38,7 +38,9 @@ class EcommerceDisputeController extends Controller
             });
         }
 
-        if (!$user || !$user->isSuperAdmin()) {
+        $isAdmin = $request->is('*admin/*') || ($user && ($user->hasAdminAccess() || $user->isSuperAdmin()));
+
+        if (!$isAdmin) {
             if ($user) {
                 $query->where('user_id', $user->id);
             } else {

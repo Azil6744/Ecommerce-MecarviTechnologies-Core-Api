@@ -93,6 +93,16 @@ Route::prefix('ecommerce')->group(function () {
     Route::get('/orders/{order}', [\App\Http\Controllers\Api\Ecommerce\EcommerceOrderController::class, 'show'])
         ->middleware('central.auth:optional');
 
+    // Order Verifications (Customer Routes)
+    Route::get('/order-verifications', [\App\Http\Controllers\Api\Customer\OrderVerificationController::class, 'index'])
+        ->middleware('central.auth:optional');
+    Route::get('/order-verifications/{id}', [\App\Http\Controllers\Api\Customer\OrderVerificationController::class, 'show'])
+        ->middleware('central.auth:optional');
+    Route::post('/order-verifications/{id}/documents', [\App\Http\Controllers\Api\Customer\OrderVerificationController::class, 'uploadDocuments'])
+        ->middleware('central.auth:optional');
+    Route::post('/order-verifications/{id}/notes', [\App\Http\Controllers\Api\Customer\OrderVerificationController::class, 'addNote'])
+        ->middleware('central.auth:optional');
+
     // Guest Cart (Session/Cookie based cart could be handled here if needed,
     // but usually we force auth for b2b or manage via local storage on frontend)
 
@@ -180,6 +190,7 @@ Route::prefix('ecommerce')->group(function () {
         Route::post('memberships/{id}/{action}', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'action']);
         Route::get('membership-transactions', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'transactions']);
         Route::get('membership-transactions/{id}/receipt', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'receipt']);
+        Route::get('membership-savings', [\App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class, 'savings']);
         Route::apiResource('memberships', \App\Http\Controllers\Api\Ecommerce\EcommerceMembershipController::class)
             ->except(['index']);
         Route::apiResource('disputes', \App\Http\Controllers\Api\Ecommerce\EcommerceDisputeController::class);
@@ -192,6 +203,8 @@ Route::prefix('ecommerce')->group(function () {
         Route::post('conversations/{conversation}/messages', [\App\Http\Controllers\Api\Ecommerce\EcommerceConversationController::class, 'addMessage']);
         Route::post('conversations/{conversation}/close', [\App\Http\Controllers\Api\Ecommerce\EcommerceConversationController::class, 'close']);
         Route::get('returns/stats', [\App\Http\Controllers\Api\Ecommerce\EcommerceReturnController::class, 'stats']);
+        Route::post('returns/{id}/cancel', [\App\Http\Controllers\Api\Ecommerce\EcommerceReturnController::class, 'cancel']);
+        Route::post('returns/{id}/respond-details', [\App\Http\Controllers\Api\Ecommerce\EcommerceReturnController::class, 'respondMoreDetails']);
         Route::apiResource('returns', \App\Http\Controllers\Api\Ecommerce\EcommerceReturnController::class);
         Route::post('/gift-cards/redeem-to-wallet', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'redeemToWallet']);
         Route::post('/gift-cards/{id}/transfer', [\App\Http\Controllers\Api\Ecommerce\EcommerceGiftCardController::class, 'transfer']);
@@ -254,11 +267,27 @@ Route::prefix('ecommerce')->group(function () {
         Route::post('/admin/product-questions/{question}/replies', [\App\Http\Controllers\Api\Ecommerce\EcommerceProductQuestionController::class, 'addReply']);
         Route::delete('/admin/product-questions/{question}', [\App\Http\Controllers\Api\Ecommerce\EcommerceProductQuestionController::class, 'destroy']);
 
-        // Returns Management
+        // Returns & Refunds Management
+        Route::get('/admin/returns/stats', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'stats']);
         Route::get('/admin/returns', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'index']);
         Route::get('/admin/returns/{return}', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'show']);
         Route::put('/admin/returns/{return}/status', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'updateStatus']);
         Route::post('/admin/returns/{return}/approve', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'approve']);
+        Route::post('/admin/returns/{return}/decline', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'decline']);
+        Route::post('/admin/returns/{return}/request-info', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'requestInfo']);
+        Route::put('/admin/returns/{return}/note', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'updateNote']);
+
+        // Dedicated Refunds Routes
+        Route::get('/admin/refunds/stats', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'stats']);
+        Route::get('/admin/refunds/settings', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'getSettings']);
+        Route::post('/admin/refunds/settings', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'saveSettings']);
+        Route::get('/admin/refunds', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'index']);
+        Route::get('/admin/refunds/{return}', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'show']);
+        Route::put('/admin/refunds/{return}/status', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'updateStatus']);
+        Route::post('/admin/refunds/{return}/approve', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'approve']);
+        Route::post('/admin/refunds/{return}/decline', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'decline']);
+        Route::post('/admin/refunds/{return}/request-info', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'requestInfo']);
+        Route::put('/admin/refunds/{return}/note', [\App\Http\Controllers\Api\Admin\AdminReturnController::class, 'updateNote']);
 
         // Quotations Management
         Route::get('/admin/quotations', [\App\Http\Controllers\Api\Admin\AdminQuotationController::class, 'index']);
@@ -311,9 +340,14 @@ Route::prefix('ecommerce')->group(function () {
         // Admin Downloads Management
         Route::get('/admin/downloads', [\App\Http\Controllers\Api\Ecommerce\EcommerceAdminDownloadController::class, 'index']);
         Route::get('/admin/downloads/stats', [\App\Http\Controllers\Api\Ecommerce\EcommerceAdminDownloadController::class, 'stats']);
+        Route::get('/admin/downloads/users', [\App\Http\Controllers\Api\Ecommerce\EcommerceAdminDownloadController::class, 'users']);
         Route::post('/admin/downloads', [\App\Http\Controllers\Api\Ecommerce\EcommerceAdminDownloadController::class, 'store']);
         Route::delete('/admin/downloads/{id}', [\App\Http\Controllers\Api\Ecommerce\EcommerceAdminDownloadController::class, 'destroy']);
         Route::match(['get', 'post'], '/admin/downloads/settings', [\App\Http\Controllers\Api\Ecommerce\EcommerceAdminDownloadController::class, 'settings']);
+
+        // Aliases for Customers & Businesses under ecommerce prefix
+        Route::get('/admin/customers', [\App\Http\Controllers\Api\Admin\UserController::class, 'customers']);
+        Route::get('/admin/business-users', [\App\Http\Controllers\Api\Admin\UserController::class, 'businessUsers']);
 
         // Affiliates Management
         Route::get('/admin/affiliates', [\App\Http\Controllers\Api\Ecommerce\EcommerceAffiliateController::class, 'index']);
