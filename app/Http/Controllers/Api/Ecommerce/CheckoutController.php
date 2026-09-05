@@ -52,7 +52,7 @@ class CheckoutController extends Controller
             'item_packaging_configs' => 'nullable|array',
             'add_thank_you_card' => 'nullable|boolean',
             'add_extra_protection' => 'nullable|boolean',
-            'pickup_location_id' => 'nullable|integer|exists:store_pickup_locations,id',
+            'pickup_location_id' => 'nullable',
             'customer_name' => 'nullable|string|max:255',
             'customer_email' => 'nullable|email|max:255',
             'guest_shipping_address' => 'nullable|array',
@@ -427,6 +427,14 @@ class CheckoutController extends Controller
 
             $isWalletPayment = strtolower((string)($validated['payment_method'] ?? '')) === 'wallet';
 
+            $pickupLocationId = null;
+            if (!empty($validated['pickup_location_id']) && is_numeric($validated['pickup_location_id'])) {
+                $exists = \App\Models\StorePickupLocation::where('id', (int)$validated['pickup_location_id'])->exists();
+                if ($exists) {
+                    $pickupLocationId = (int)$validated['pickup_location_id'];
+                }
+            }
+
             $orderData = [
                 'user_id' => $user?->id,
                 'customer_name' => $user?->name ?? $validated['customer_name'] ?? 'Guest Customer',
@@ -453,7 +461,7 @@ class CheckoutController extends Controller
                 'billing_address' => EcommerceOrderController::formatAddress($billingAddress),
                 'payment_method' => $validated['payment_method'],
                 'shipping_method' => $validated['shipping_method'] ?? null,
-                'pickup_location_id' => $validated['pickup_location_id'] ?? null,
+                'pickup_location_id' => $pickupLocationId,
                 'notes' => $validated['notes'] ?? null,
                 'metadata' => [
                     'packaging_option' => $validated['packaging_option'] ?? null,
@@ -656,10 +664,14 @@ class CheckoutController extends Controller
                 $cart->items()->delete();
                 $cart->forceFill(['status' => 'converted', 'total_amount' => 0])->save();
             } else {
+                $requestedPids = $requestItems->pluck('product_id')->filter()->map(fn($id) => (int)$id)->all();
+                $validProductIds = !empty($requestedPids) ? \App\Models\Product::whereIn('id', $requestedPids)->pluck('id')->all() : [];
+
                 foreach ($requestItems as $item) {
+                    $pid = isset($item['product_id']) && is_numeric($item['product_id']) ? (int) $item['product_id'] : null;
                     EcommerceOrderItem::create([
                         'order_id' => $order->id,
-                        'product_id' => $item['product_id'] ?? null,
+                        'product_id' => ($pid && in_array($pid, $validProductIds)) ? $pid : null,
                         'product_name' => $item['product_name'] ?? $item['name'] ?? 'Product',
                         'product_sku' => $item['product_sku'] ?? $item['sku'] ?? null,
                         'quantity' => (int) ($item['quantity'] ?? 1),
@@ -673,7 +685,7 @@ class CheckoutController extends Controller
             // If paying with Wallet, verify balance and adjust centrally
             if (strtolower($validated['payment_method'] ?? '') === 'wallet') {
                 if (!$user) {
-                    throw new \Exception('Authentication required to pay with wallet.');
+                    throw new \Exception('Authentication required to pay with wallet. Please log in to your account or choose another payment method.');
                 }
 
                 // If there's an outstanding balance and it wasn't fully paid by gift cards
@@ -730,7 +742,7 @@ class CheckoutController extends Controller
                     ], $order->customer_email);
                 }
             } catch (\Throwable $e) {
-                Log::warning('Email notification failed: ' . $e->getMessage());
+                \Log::warning('Email notification failed: ' . $e->getMessage());
             }
 
             return response()->json([
@@ -742,6 +754,10 @@ class CheckoutController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
+            \Log::error('Checkout processing failed: ' . $e->getMessage(), [
+                'exception' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to process checkout: ' . $e->getMessage()
